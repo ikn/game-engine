@@ -1,0 +1,20 @@
+This is a template I use for Pygame games.
+
+    DEPENDENCIES
+
+Python (2.6 or later 2.x)
+Pygame (1.8 or later, probably; tested with 1.9.1)
+
+    RUNNING
+
+This should work wherever Pygame does.  On systems with a sh-compatible shell,
+do
+
+    ./run
+
+On other systems (Windows, for example), run game.py with your Python 2
+executable.
+
+    LICENSING
+
+Source code is available under the new BSD license (included).
