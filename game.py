@@ -1,5 +1,3 @@
-#! /usr/bin/python
-
 from sys import argv
 import os
 from time import time
