@@ -3,23 +3,26 @@ import os
 from time import time
 from random import choice
 
+d = os.path.dirname(argv[0])
+if d: # else current dir
+    os.chdir(d)
+
 import pygame
 from pygame.time import wait
 if os.name == 'nt':
     # for Windows freeze support
     import pygame._view
-d = os.path.dirname(argv[0])
-if d: # else current dir
-    os.chdir(d)
 from game.ext import evthandler as eh
 from game.ext.fonthandler import Fonts
 
 pygame.mixer.pre_init(buffer = 1024)
 pygame.init()
+
 from game.level import Level
 from game import conf
 
 ir = lambda x: int(round(x))
+
 
 class Game (object):
     """Handles backends.
@@ -54,7 +57,7 @@ backends: a list of previous (nested) backends, most 'recent' last.
 
 """
 
-    def __init__ (self, cls, *args):
+    def __init__ (self, cls, *args, **kwargs):
         self.running = False
         self.files = {}
         self.imgs = {}
@@ -68,15 +71,15 @@ backends: a list of previous (nested) backends, most 'recent' last.
         self.fonts = Fonts(conf.FONT_DIR)
         # start first backend
         self.backends = []
-        self.start_backend(cls, *args)
+        self.start_backend(cls, *args, **kwargs)
 
-    def start_backend (self, cls, *args):
+    def start_backend (self, cls, *args, **kwargs):
         """Start a new backend.
 
-start_backend(cls, *args) -> backend
+start_backend(cls, *args, **kwargs) -> backend
 
 cls: the backend class to instantiate.
-args: arguments to pass to the constructor.
+args, kwargs: positional and keyword arguments to pass to the constructor.
 
 backend: the new created instance of cls that is the new backend.
 
@@ -98,7 +101,7 @@ and should define a frame attribute, which is the length of one frame in
 seconds.
 
 A backend is constructed via
-cls(Game_instance, EventHandler_instance, *args), and will have
+cls(Game_instance, EventHandler_instance, *args, **kwargs), and will have
 EventHandler_instance stored in its event_handler attribute after
 initialisation.
 
@@ -118,7 +121,7 @@ initialisation.
         except AttributeError:
             pass
         # create new backend
-        self.backend = cls(self, event_handler, *args)
+        self.backend = cls(self, event_handler, *args, **kwargs)
         self.backend.dirty = True
         self.backend.event_handler = event_handler
         return self.backend
@@ -388,6 +391,7 @@ volume: float to scale volume by.
         """Callback to handle a window resize."""
         conf.RES_W = (event.w, event.h)
         self.refresh_display()
+
 
 if __name__ == '__main__':
     if conf.WINDOW_ICON is not None:
