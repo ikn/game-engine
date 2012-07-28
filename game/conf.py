@@ -49,5 +49,7 @@ EVENT_ENDMUSIC = pg.USEREVENT
 SOUNDS = {} # numbers of sound files
 SOUND_VOLUMES = {}
 
-# graphics
+# text rendering
 USE_FONTS = False
+# per-backend, each a {key: value} dict to update fonthandler.Fonts with
+REQUIRED_FONTS = dd({})

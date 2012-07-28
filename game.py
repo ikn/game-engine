@@ -18,7 +18,7 @@ pg.init()
 
 from game import conf
 from game.level import Level
-from game.util import ir
+from game.util import ir, convert_sfc
 from game.ext import evthandler as eh
 if conf.USE_FONTS:
     from game.ext.fonthandler import Fonts
@@ -48,6 +48,7 @@ start_backend
 get_backends
 quit_backend
 img
+render_text
 play_snd
 find_music
 play_music
@@ -61,13 +62,14 @@ minimise
     ATTRIBUTES
 
 running: set to False to exit the main loop (run method).
-imgs: image cache.
-files: loaded image cache (before resize).
-music: filenames for known music.
-fonts: a Fonts instance, or None if conf.USE_FONTS is False.
+frame: the current target duration of a frame, in seconds.
 backend: the current running backend.
 backends: a list of previous (nested) backends, most 'recent' last.
-frame: the current target duration of a frame, in seconds.
+files: loaded image cache (before resize).
+imgs: image cache.
+text: cache for rendered text.
+fonts: a fonthandler.Fonts instance, or None if conf.USE_FONTS is False.
+music: filenames for known music.
 
 """
 
@@ -75,6 +77,7 @@ frame: the current target duration of a frame, in seconds.
         self.running = False
         self.files = {}
         self.imgs = {}
+        self.text = {}
         # load display settings
         self.refresh_display()
         self.fonts = Fonts(conf.FONT_DIR) if conf.USE_FONTS else None
@@ -144,6 +147,10 @@ backend should use for input, and is stored in its event_handler attribute.
         self.frame = 1. / conf.FPS[i]
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
+        if conf.USE_FONTS:
+            fonts = self.fonts
+            for k, v in conf.REQUIRED_FONTS[i].iteritems():
+                fonts[k] = v
 
     def start_backend (self, *args, **kwargs):
         """Start a new backend.
@@ -209,62 +216,41 @@ If the running backend is the last (root) one, exit the game.
             self.select_backend(backend)
         self.quit_backend(depth - 1)
 
-    def convert_img (self, img):
-        """Convert an image for blitting."""
-        if img.get_alpha() is None and img.get_colorkey() is None:
-            img = img.convert()
-        else:
-            img = img.convert_alpha()
-        return img
+    def img (self, filename, size = None, cache = True):
+        """Load or scale an image, or retrieve it from cache.
 
-    def img (self, data, size = None):
-        """Load or render an image, or retrieve it from cache.
+img(filename[, size], cache = True) -> surface
 
-img(data[, size]) -> surface
-
-data: if rendering text, a tuple of args to pass to Fonts.text, else a filename
-      to load.
+data: a filename to load.
 size: scale the image.  Can be an (x, y) size, a rect (in which case its
-      dimension is used), or a number to scale by.  Ignored if rendering text.
-      If (x, y), either x or y can be None to scale to the other with aspect
-      ratio preserved.
+      dimension is used), or a number to scale by.  If (x, y), either x or y
+      can be None to scale to the other with aspect ratio preserved.
+cache: whether to store this image in the cache if not already stored.
 
 """
-        text = not isinstance(data, basestring)
-        if text:
-            data = tuple(tuple(x) if isinstance(x, list) else x for x in data)
+        # get standardised cache key
         if size is not None:
-            try:
+            if isinstance(size, (int, float)):
+                size = float(size)
+            else:
                 if len(size) == 4:
                     # rect
                     size = size[2:]
                 size = tuple(size)
-            except TypeError:
-                # number
-                pass
-        key = (data, size)
+        key = (filename, size)
         if key in self.imgs:
             return self.imgs[key]
-        got_size = size is not None and size != 1 and not text
         # else new: load/render
-        if text:
-            if self.fonts is None:
-                raise ValueError('conf.USE_FONTS is False: text rendering '
-                                 'isn\'t supported')
-            img, lines = self.fonts.text(*data)
-            img = img.convert_alpha()
+        filename = conf.IMG_DIR + filename
+        # also cache loaded images to reduce file I/O
+        if data in self.files:
+            img = self.files[filename]
         else:
-            # also cache loaded images to reduce file I/O
-            data = conf.IMG_DIR + data
-            if data in self.files:
-                img = self.files[data]
-            else:
-                img = pg.image.load(data)
-                # convert first
-                img = self.convert_img(img)
-                self.files[data] = img
+            img = convert_sfc(pg.image.load(filename))
+            if cache:
+                self.files[filename] = img
         # scale
-        if got_size:
+        if size is not None and size != 1:
             current_size = img.get_size()
             if not isinstance(size, tuple):
                 size = (ir(size * current_size[0]), ir(size * current_size[1]))
@@ -274,15 +260,39 @@ size: scale the image.  Can be an (x, y) size, a rect (in which case its
                     size = list(size)
                     scale = float(size[not i]) / current_size[not i]
                     size[i] = ir(current_size[i] * scale)
-                    size = tuple(size)
             img = pg.transform.smoothscale(img, size)
-        else:
             # speed up blitting (if not resized, this is already done)
-            img = self.convert_img(img)
-        result = (img, lines) if text else img
-        if got_size or text:
-            # add to cache (if not resized, this is in the file cache)
-            self.imgs[key] = result
+            img = convert_sfc(img)
+            if cache:
+                # add to cache (if not resized, this is in the file cache)
+                self.imgs[key] = img
+        return img
+
+    def render_text (self, *args, **kwargs):
+        """Render text and cache the result.
+
+Takes the same arguments as fonthandler.Fonts, plus a keyword-only 'cache'
+argument.  If passed, the text is cached under this hashable value, and can be
+retrieved from cache by calling this function with the same value for this
+argument.
+
+Returns the same value as fonthandler.Fonts
+
+"""
+        if self.fonts is None:
+            raise ValueError('conf.USE_FONTS is False: text rendering isn\'t'
+                             'supported')
+        cache = 'cache' in kwargs
+        if cache:
+            key = kwargs['cache']
+            if key in self.text:
+                return self.text[key]
+        # else new: render
+        img, lines = self.fonts.render(*args, **kwargs)
+        img = convert_sfc(img)
+        result = (img, lines)
+        if cache:
+            self.text[key] = result
         return result
 
     def play_snd (self, base_ID, volume = 1):

@@ -1,4 +1,4 @@
-"""Pygame event handler by J.
+"""Pygame event handler by Joseph Lansdowne.
 
 This module consists of the EventHandler class, which is used to assign
 callbacks to events and keypresses in Pygame.

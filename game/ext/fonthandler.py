@@ -1,9 +1,9 @@
-"""Font handler by J.
+"""Font handler by Joseph Lansdowne.
 
 The Fonts class in this module can serve as a font cache, but the real point of
-this is to render multiline text with alignment and shadow and stuff.
+this is to render multi-line text with alignment and shadow and stuff.
 
-Release: 2.
+Release: 3.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
@@ -11,62 +11,88 @@ included, you can find it here:
 
 """
 
+from os.path import isfile, abspath, sep as path_sep, join as join_path
+
 import pygame
 
-class Fonts (object):
+class Fonts (dict):
     """Collection of pygame.font.Font instances.
 
     CONSTRUCTOR
 
-Fonts(font_dir = '')
+Fonts(*font_dirs)
 
-font_dir: directory to find fonts - so you can just pass the font's filename
-          when adding a font.
+font_dirs: directories to find fonts - so you can just pass the font's filename
+           when adding a font.
+
+Use the dict interface to register fonts:
+
+    fonts['some name'] = (filename, size[, bold = False])
+
+where the arguments are as taken by pygame.font.Font.  All directories in
+font_dirs are searched for the filename, unless it contains a path separator.
+If so, or if the search yields no results, it is used as the whole path
+(absolute or relative).
+
+Retrieving the font again yields a pygame.font.Font instance.  Assigning two
+different names to the same set of arguments makes the same instance available
+under both without loading the file twice.
 
     METHODS
 
-add
-text
+render
 
     ATTRIBUTES
 
-font_dir: as given.
-fonts: (font: Font instance) dict of loaded fonts, where font is as given to
-       Fonts.add.
+font_dirs: as given.  You may alter this list directly.
 
 """
 
-    def __init__ (self, font_dir = ''):
-        self.font_dir = font_dir
-        self.fonts = {}
+    def __init__ (self, *font_dirs):
+        self.font_dirs = list(font_dirs)
+        self._fonts_by_args = {}
 
-    def add (self, font, force_reload = False):
-        """Load a font and add it to the collection.
+    def __setitem__ (self, name, data):
+        # standardise data so we can be sure whether we already have it
+        if len(data) == 2:
+            fn, size = data
+            bold = False
+        else:
+            fn, size, bold = data
+        size = int(size)
+        bold = bool(bold)
+        # find font file
+        orig_fn, fn = fn, None
+        temp_fn = None
+        if path_sep not in orig_fn:
+            # search registered dirs
+            for d in self.font_dirs:
+                temp_fn = join_path(d, orig_fn)
+                if isfile(temp_fn):
+                    fn = temp_fn
+                    break
+        if fn is None:
+            # wasn't in any registered dirs
+            fn = orig_fn
+        fn = abspath(fn)
+        # load this font if we haven't already
+        data = (fn, size, bold)
+        font = self._fonts_by_args.get(data, None)
+        if font is None:
+            font = pygame.font.Font(fn, size, bold = bold)
+            self._fonts_by_args[data] = font
+        # store
+        dict.__setitem__(self, name, font)
 
-add(font, force_reload = False) -> Font_instance
-
-font: (filename, size, is_bold) tuple, where the arguments are as taken by
-      pygame.font.Font and filename is appended to this Fonts instance's
-      font_dir attribute.
-
-Font_instance: the created pygame.font.Font instance.
-
-"""
-        font = tuple(font)
-        if force_reload or font not in self.fonts:
-            fn, size, bold = font
-            self.fonts[font] = pygame.font.Font(self.font_dir + fn, int(size),
-                                                bold = bold)
-        return self.fonts[font]
-
-    def text (self, font, text, colour, shadow = None, width = None, just = 0,
-              minimise = False, line_spacing = 0, aa = True, bg = None):
+    def render (self, font, text, colour, shadow = None, width = None,
+                just = 0, minimise = False, line_spacing = 0, aa = True,
+                bg = None):
         """Render text from a font.
 
-text(font, text, colour[, shadow][, width], just = 0, minimise = False,
-     line_spacing = 0, aa = True[, bg]) -> (surface, lines)
+render(font, text, colour[, shadow][, width], just = 0, minimise = False,
+       line_spacing = 0, aa = True[, bg]) -> (surface, lines)
 
-font: (font name, size, is_bold) tuple.
+font: name of a registered font.
 text: text to render.
 colour: (R, G, B[, A]) tuple.
 shadow: to draw a drop-shadow: (colour, offset) tuple, where offset is (x, y).
@@ -86,10 +112,8 @@ Newline characters split the text into lines (along with anything else caught
 by str.splitlines), as does the width restriction.
 
 """
-        font = tuple(font)
-        size = int(font[1])
-        self.add(font)
-        font, lines = self.fonts[font], []
+        font = self[font]
+        lines = []
         if shadow is None:
             offset = (0, 0)
         else:
@@ -135,11 +159,11 @@ by str.splitlines), as does the width restriction.
                 sfc = font.render(lines[0], True, colour, bg)
             return sfc, 1
         # else create surface to blit all the lines to
+        size = font.get_height()
         h = (line_spacing + size) * (len(lines) - 1) + font.size(lines[-1])[1]
         surface = pygame.Surface((width + offset[0], h + offset[1]))
-        if bg is None:
-            # to get transparency, need to be blitting to a converted surface
-            surface = surface.convert_alpha()
+        # to get transparency, need to be blitting to a converted surface
+        surface = surface.convert_alpha()
         surface.fill((0, 0, 0, 0) if bg is None else bg)
         # render and blit text
         todo = []
@@ -153,10 +177,7 @@ by str.splitlines), as does the width restriction.
             for line in lines:
                 if line:
                     num_lines += 1
-                    if bg is None:
-                        s = font.render(line, aa, colour)
-                    else:
-                        s = font.render(line, aa, colour, bg)
+                    s = font.render(line, aa, colour)
                     if just == 2:
                         surface.blit(s, (width - s.get_width() + o[0],
                                          h + o[1]))
@@ -166,4 +187,4 @@ by str.splitlines), as does the width restriction.
                     else:
                         surface.blit(s, (o[0], h + o[1]))
                 h += size + line_spacing
-        return surface, num_lines
+        return (surface, num_lines)

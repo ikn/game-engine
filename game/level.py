@@ -8,4 +8,8 @@ class Level (object):
         pass
 
     def draw (self, screen):
-        return True
+        if self.dirty:
+            self.dirty = False
+            return True
+        else:
+            return False
