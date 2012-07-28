@@ -51,11 +51,11 @@ fps: frames per second to aim for.
 run
 step
 stop
-get_fps
 set_fps
 
     ATTRIBUTES
 
+fps: the current target FPS.  Use the set_fps method to change it.
 t: the time at the last step, if using individual steps.
 
 """
@@ -85,7 +85,7 @@ seconds: number of seconds to run for; this can be a float, and is not wrapped
             wait(int(1000 * (frames * frame - seconds)))
         finite = frames is not None
         if finite:
-            frames = max(int(frames), 0)
+            frames = max(int(frames), 1)
         # main loop
         t0 = time()
         while not finite or frames:
@@ -101,8 +101,9 @@ seconds: number of seconds to run for; this can be a float, and is not wrapped
                 t0 = t
             if finite:
                 frames -= 1
-                if frames <= 0:
+                if frames == 0:
                     break
+                assert frames > 0
 
     def step (self):
         """Step forwards one frame."""
@@ -121,13 +122,9 @@ seconds: number of seconds to run for; this can be a float, and is not wrapped
     # the property builtin doesn't seem to be working for setters, which is a
     # shame...
 
-    def get_fps (self):
-        """Get the current target FPS."""
-        return self._fps
-
     def set_fps (self, fps):
         """Set the target FPS."""
-        self._fps = int(round(fps))
+        self.fps = int(round(fps))
         self._frame = 1. / fps
 
 
@@ -199,7 +196,7 @@ otherwise it is removed.
             repeat_frames = repeat_seconds * self.timer.fps
         elif repeat_frames is None:
             repeat_frames = frames
-        repeat_frames = max(int(repeat_frames), 0)
+        repeat_frames = max(int(repeat_frames), 1)
         self._cbs[self._max_id] = [frames, repeat_frames, cb, args]
         self._max_id += 1
         # ID is key in self._cbs

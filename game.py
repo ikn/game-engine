@@ -44,7 +44,6 @@ Takes the same arguments as the create_backend method and passes them to it.
     METHODS
 
 create_backend
-select_backend
 start_backend
 get_backends
 quit_backend
@@ -56,6 +55,7 @@ play_music
 run
 quit
 restart
+set_overlay
 refresh_display
 toggle_fullscreen
 minimise
@@ -65,6 +65,8 @@ minimise
 scheduler: sched.Scheduler instance for scheduling events.
 backend: the current running backend.
 backends: a list of previous (nested) backends, most 'recent' last.
+overlay: the current overlay (see Game.set_overlay).
+overlays: a list of overlays corresponding to backends in Game.backends.
 files: loaded image cache (before resize).
 imgs: image cache.
 text: cache for rendered text.
@@ -85,11 +87,28 @@ music: filenames for known music.
         self.fonts = Fonts(conf.FONT_DIR) if conf.USE_FONTS else None
         # start first backend
         self.backends = []
+        self.overlays = []
+        self._last_overlay = False
         self.start_backend(*args, **kwargs)
         # start playing music
         pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
         self.find_music()
         self.play_music()
+
+    def _select_backend (self, backend, overlay = False):
+        """Set the given backend as the current backend."""
+        self._update_again = True
+        self.backend = backend
+        backend.dirty = True
+        i = get_backend_id(backend)
+        # set some per-backend things
+        self.scheduler.timer.fps = conf.FPS[i]
+        if conf.USE_FONTS:
+            fonts = self.fonts
+            for k, v in conf.REQUIRED_FONTS[i].iteritems():
+                fonts[k] = v
+        pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
+        pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
 
     def create_backend (self, cls, *args, **kwargs):
         """Create a backend.
@@ -108,7 +127,9 @@ update(): handle input and make any necessary calculations.
 draw(screen) -> drawn: draw anything necessary to screen; drawn is True if the
                        whole display needs to be updated, something falsy if
                        nothing needs to be updated, else a list of rects to
-                       update the display in.
+                       update the display in.  This should not change the state
+                       of the backend, because it is not guaranteed to be
+                       called every frame.
 
 A pause method may optionally be defined, which takes no arguments and is
 called when the window loses focus to pause the game.
@@ -142,21 +163,6 @@ backend should use for input, and is stored in its event_handler attribute.
         backend.event_handler = event_handler
         return backend
 
-    def select_backend (self, backend):
-        """Set the given backend as the current backend."""
-        self.backend = backend
-        backend.dirty = True
-        self._update_again = True
-        i = get_backend_id(backend)
-        # set some per-backend things
-        self.scheduler.timer.fps = conf.FPS[i]
-        pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
-        pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
-        if conf.USE_FONTS:
-            fonts = self.fonts
-            for k, v in conf.REQUIRED_FONTS[i].iteritems():
-                fonts[k] = v
-
     def start_backend (self, *args, **kwargs):
         """Start a new backend.
 
@@ -168,11 +174,13 @@ Returns the started backend.
         # store current backend in history, if any
         try:
             self.backends.append(self.backend)
+            self.overlays.append(self.overlay)
         except AttributeError:
             pass
         # create backend
+        self.overlay = False
         backend = self.create_backend(*args, **kwargs)
-        self.select_backend(backend)
+        self._select_backend(backend)
         return backend
 
     def switch_backend (self, *args, **kwargs):
@@ -181,8 +189,9 @@ Returns the started backend.
 Takes the same arguments as create_backend and returns the created backend.
 
 """
+        self.overlay = False
         backend = self.create_backend(*args, **kwargs)
-        self.select_backend(backend)
+        self._select_backend(backend)
         return backend
 
     def get_backends (self, ident, current = True):
@@ -215,10 +224,12 @@ If the running backend is the last (root) one, exit the game.
             return
         try:
             backend = self.backends.pop()
+            overlay = self.overlays.pop()
         except IndexError:
             self.quit()
         else:
-            self.select_backend(backend)
+            self.overlay = overlay
+            self._select_backend(backend)
         self.quit_backend(depth - 1)
 
     def img (self, filename, size = None, cache = True):
@@ -357,8 +368,51 @@ volume: float to scale volume by.
             if not self._update_again:
                 self._update_again = False
                 self.backend.update()
-        # draw
-        draw = self.backend.draw(self.screen)
+        backend = self.backend
+        # check overlay
+        o0 = self._last_overlay
+        o = self.overlay
+        o_same = o == o0
+        draw = True
+        if isinstance(o, pg.Surface):
+            o_colour = False
+            if o.get_alpha() is None and o.get_colorkey() is None:
+                # opaque: don't draw
+                draw = False
+        elif o is not False:
+            o_colour = True
+            if len(o) == 3:
+                # opaque: don't draw
+                draw = False
+        s = self._overlay_sfc
+        # draw backend
+        screen = self.screen
+        if draw:
+            dirty = backend.dirty
+            draw = backend.draw(screen)
+            # if drew something but perhaps not everything, and we have an
+            # overlay (we know this will be transparent), draw everything
+            if o is not False and draw and not dirty:
+                backend.dirty = True
+                new_draw = backend.draw(screen)
+                # merge draw and new_draw
+                if True in (draw, new_draw):
+                    draw = True
+                else:
+                    # know draw != False and now draw != True so is rect list
+                    draw = list(draw) + (list(new_draw) if new_draw else [])
+        # update overlay surface if changed
+        if o not in (o0, False):
+            if o_colour:
+                s.fill(o)
+            else:
+                s = o
+        # draw overlay if changed or backend drew
+        if o is not False and (o != o0 or draw):
+            screen.blit(s, (0, 0))
+            draw = True
+        self._last_overlay = self.overlay
+        # update display
         if draw is True:
             pg.display.flip()
         elif draw:
@@ -378,6 +432,49 @@ volume: float to scale volume by.
         global restarting
         restarting = True
         self.quit()
+
+    def set_overlay (self, overlay, convert = True):
+        """Set up an overlay for the current backend.
+
+This draws over the screen every frame after the backend draws.  It takes a
+single argument, which is a Pygame-style colour tuple, with or without alpha,
+or a pygame.Surface, or False for no overlay.
+
+The overlay is for the current backend only: if another backend is started and
+then stopped, the overlay will be restored for the original backend.
+
+The backend's draw method will not be called at all if the overlay to be drawn
+this frame is opaque.
+
+"""
+        if isinstance(overlay, pg.Surface):
+            # surface
+            if convert:
+                overlay = convert_sfc(overlay)
+        else:
+            # colour
+            overlay = tuple(overlay)
+            # turn RGBA into RGB if no alpha
+            if len(overlay) == 4 and overlay[3] == 255:
+                overlay = overlay[:3]
+        self.overlay = overlay
+
+    def linear_fade (o_from, o_to, time, cb = None, *args, **kwargs):
+        """Fade an overlay on the current backend.
+
+linear_fade(o_from, o_to, time[, cb, *args, **kwargs])
+
+o_from, o_to: as taken by Game.set_overlay, or None for the current overlay.
+time: fade duration in seconds; this is rounded to the nearest frame.
+cb: a function to call when the fade is complete.
+args, kwargs: positional- and keyword- arguments to pass to
+              Game.scheduler.add_timeout for the callback.
+
+Calling Game.set_overlay during the fade will not have any effect.
+
+"""
+        pass
+        # self.set_overlay(overlay, False)
 
     def refresh_display (self, *args):
         """Update the display mode from conf, and notify the backend."""
@@ -400,6 +497,7 @@ volume: float to scale volume by.
             r[1] = min(r[1], r[0] / ratio)
         conf.RES = r
         self.screen = pg.display.set_mode(conf.RES, flags)
+        self._overlay_sfc = pg.Surface(conf.RES).convert_alpha()
         try:
             self.backend.dirty = True
         except AttributeError:
@@ -444,7 +542,7 @@ if __name__ == '__main__':
             t = int(argv[2])
         else:
             t = conf.DEFAULT_PROFILE_TIME
-        t *= conf.FPS
+        t *= conf.FPS[None]
         fn = conf.PROFILE_STATS_FILE
         run('Game(Level).run(t)', fn, locals())
         Stats(fn).strip_dirs().sort_stats('cumulative').print_stats(20)
