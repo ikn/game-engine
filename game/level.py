@@ -1,10 +1,8 @@
 import conf
 
-class Level:
+class Level (object):
     def __init__ (self, game, event_handler):
         self.game = game
-        self.event_handler = event_handler
-        self.frame = conf.FRAME
 
     def update (self):
         pass

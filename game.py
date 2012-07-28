@@ -6,23 +6,22 @@ from random import choice
 d = os.path.dirname(argv[0])
 if d: # else current dir
     os.chdir(d)
-from game import conf
 
-import pygame
+import pygame as pg
 from pygame.time import wait
 if os.name == 'nt':
     # for Windows freeze support
     import pygame._view
+
+pg.mixer.pre_init(buffer = 1024)
+pg.init()
+
+from game import conf
+from game.level import Level
+from game.util import ir
 from game.ext import evthandler as eh
 if conf.USE_FONTS:
     from game.ext.fonthandler import Fonts
-
-pygame.mixer.pre_init(buffer = 1024)
-pygame.init()
-
-from game.level import Level
-
-ir = lambda x: int(round(x))
 
 def get_backend_id (backend):
     """Return the computed identifier of the given backend.
@@ -76,17 +75,16 @@ frame: the current target duration of a frame, in seconds.
         self.running = False
         self.files = {}
         self.imgs = {}
-        # start playing music
-        pygame.mixer.music.set_volume(conf.MUSIC_VOLUME * .01)
-        pygame.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
-        self.find_music()
-        self.play_music()
         # load display settings
         self.refresh_display()
         self.fonts = Fonts(conf.FONT_DIR) if conf.USE_FONTS else None
         # start first backend
         self.backends = []
         self.start_backend(*args, **kwargs)
+        # start playing music
+        pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
+        self.find_music()
+        self.play_music()
 
     def create_backend (self, cls, *args, **kwargs):
         """Create a backend.
@@ -124,8 +122,8 @@ backend should use for input, and is stored in its event_handler attribute.
         # create event handler for this backend
         h = eh.MODE_HELD
         event_handler = eh.EventHandler({
-            pygame.ACTIVEEVENT: self._active_cb,
-            pygame.VIDEORESIZE: self._resize_cb,
+            pg.ACTIVEEVENT: self._active_cb,
+            pg.VIDEORESIZE: self._resize_cb,
             conf.EVENT_ENDMUSIC: self.play_music
         }, [
             (conf.KEYS_FULLSCREEN, self.toggle_fullscreen, eh.MODE_ONDOWN),
@@ -142,8 +140,10 @@ backend should use for input, and is stored in its event_handler attribute.
         backend.dirty = True
         self._update_again = True
         i = get_backend_id(backend)
-        pygame.mouse.set_visible(conf.MOUSE_VISIBLE[i])
+        # set some per-backend things
         self.frame = 1. / conf.FPS[i]
+        pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
+        pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
 
     def start_backend (self, *args, **kwargs):
         """Start a new backend.
@@ -259,7 +259,7 @@ size: scale the image.  Can be an (x, y) size, a rect (in which case its
             if data in self.files:
                 img = self.files[data]
             else:
-                img = pygame.image.load(data)
+                img = pg.image.load(data)
                 # convert first
                 img = self.convert_img(img)
                 self.files[data] = img
@@ -275,7 +275,7 @@ size: scale the image.  Can be an (x, y) size, a rect (in which case its
                     scale = float(size[not i]) / current_size[not i]
                     size[i] = ir(current_size[i] * scale)
                     size = tuple(size)
-            img = pygame.transform.smoothscale(img, size)
+            img = pg.transform.smoothscale(img, size)
         else:
             # speed up blitting (if not resized, this is already done)
             img = self.convert_img(img)
@@ -303,11 +303,11 @@ volume: float to scale volume by.
         ID = choice(IDs)
         # load sound
         snd = conf.SOUND_DIR + ID + '.ogg'
-        snd = pygame.mixer.Sound(snd)
+        snd = pg.mixer.Sound(snd)
         if snd.get_length() < 10 ** -3:
             # no way this is valid
             return
-        snd.set_volume(conf.SOUND_VOLUME * conf.SOUND_VOLUMES.get(base_ID, 1) * volume * .01)
+        snd.set_volume(conf.SOUND_VOLUME * conf.SOUND_VOLUMES.get(base_ID, 1) * volume)
         snd.play()
 
     def find_music (self):
@@ -325,11 +325,11 @@ volume: float to scale volume by.
         """Play next piece of music."""
         if self.music:
             f = choice(self.music)
-            pygame.mixer.music.load(f)
-            pygame.mixer.music.play()
+            pg.mixer.music.load(f)
+            pg.mixer.music.play()
         else:
             # stop currently playing music if there's no music to play
-            pygame.mixer.music.stop()
+            pg.mixer.music.stop()
 
     def quit (self, event = None):
         """Quit the game."""
@@ -347,9 +347,9 @@ volume: float to scale volume by.
         """Run the backend's draw method and update the screen."""
         draw = self.backend.draw(self.screen)
         if draw is True:
-            pygame.display.flip()
+            pg.display.flip()
         elif draw:
-            pygame.display.update(draw)
+            pg.display.update(draw)
 
     def run (self, n = 0):
         """Main loop."""
@@ -385,14 +385,14 @@ volume: float to scale volume by.
         # get resolution and flags
         flags = conf.FLAGS
         if conf.FULLSCREEN:
-            flags |= pygame.FULLSCREEN
+            flags |= pg.FULLSCREEN
             r = conf.RES_F
         else:
             w = max(conf.MIN_RES_W[0], conf.RES_W[0])
             h = max(conf.MIN_RES_W[1], conf.RES_W[1])
             r = (w, h)
         if conf.RESIZABLE:
-            flags |= pygame.RESIZABLE
+            flags |= pg.RESIZABLE
         ratio = conf.ASPECT_RATIO
         if ratio is not None:
             # lock aspect ratio
@@ -400,7 +400,7 @@ volume: float to scale volume by.
             r[0] = min(r[0], r[1] * ratio)
             r[1] = min(r[1], r[0] / ratio)
         conf.RES = r
-        self.screen = pygame.display.set_mode(conf.RES, flags)
+        self.screen = pg.display.set_mode(conf.RES, flags)
         try:
             self.backend.dirty = True
         except AttributeError:
@@ -416,7 +416,7 @@ volume: float to scale volume by.
 
     def minimise (self, *args):
         """Minimise the display."""
-        pygame.display.iconify()
+        pg.display.iconify()
 
     def _active_cb (self, event):
         """Callback to handle window focus loss."""
@@ -434,9 +434,9 @@ volume: float to scale volume by.
 
 if __name__ == '__main__':
     if conf.WINDOW_ICON is not None:
-        pygame.display.set_icon(pygame.image.load(conf.WINDOW_ICON))
+        pg.display.set_icon(pg.image.load(conf.WINDOW_ICON))
     if conf.WINDOW_TITLE is not None:
-        pygame.display.set_caption(conf.WINDOW_TITLE)
+        pg.display.set_caption(conf.WINDOW_TITLE)
     if len(argv) >= 2 and argv[1] == 'profile':
         # profile
         from cProfile import run
@@ -457,4 +457,4 @@ if __name__ == '__main__':
             restarting = False
             Game(Level).run()
 
-pygame.quit()
+pg.quit()
