@@ -19,6 +19,7 @@ pg.init()
 from game import conf
 from game.level import Level
 from game.util import ir, convert_sfc
+from game.ext.sched import Scheduler
 from game.ext import evthandler as eh
 if conf.USE_FONTS:
     from game.ext.fonthandler import Fonts
@@ -52,8 +53,8 @@ render_text
 play_snd
 find_music
 play_music
-quit
 run
+quit
 restart
 refresh_display
 toggle_fullscreen
@@ -61,8 +62,7 @@ minimise
 
     ATTRIBUTES
 
-running: set to False to exit the main loop (run method).
-frame: the current target duration of a frame, in seconds.
+scheduler: sched.Scheduler instance for scheduling events.
 backend: the current running backend.
 backends: a list of previous (nested) backends, most 'recent' last.
 files: loaded image cache (before resize).
@@ -74,7 +74,9 @@ music: filenames for known music.
 """
 
     def __init__ (self, *args, **kwargs):
-        self.running = False
+        self.scheduler = Scheduler()
+        self.scheduler.add_timeout(self._update, frames = 1, repeat_frames = 1)
+        # initialise caches
         self.files = {}
         self.imgs = {}
         self.text = {}
@@ -107,6 +109,9 @@ draw(screen) -> drawn: draw anything necessary to screen; drawn is True if the
                        whole display needs to be updated, something falsy if
                        nothing needs to be updated, else a list of rects to
                        update the display in.
+
+A pause method may optionally be defined, which takes no arguments and is
+called when the window loses focus to pause the game.
 
 A backend is also given a dirty attribute, which indicates whether its draw
 method should redraw everything (it should set it to False when it does so).
@@ -144,7 +149,7 @@ backend should use for input, and is stored in its event_handler attribute.
         self._update_again = True
         i = get_backend_id(backend)
         # set some per-backend things
-        self.frame = 1. / conf.FPS[i]
+        self.scheduler.timer.fps = conf.FPS[i]
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
         if conf.USE_FONTS:
@@ -341,48 +346,32 @@ volume: float to scale volume by.
             # stop currently playing music if there's no music to play
             pg.mixer.music.stop()
 
-    def quit (self, event = None):
-        """Quit the game."""
-        self.running = False
-
     def _update (self):
-        """Run the backend's update method."""
-        self.backend.event_handler.update()
-        # if a new backend was created during the above call, we'll end up
-        # updating twice before drawing
-        if not self._update_again:
-            self.backend.update()
-
-    def _draw (self):
-        """Run the backend's draw method and update the screen."""
+        """Update backends and draw."""
+        self._update_again = True
+        while self._update_again:
+            self._update_again = False
+            self.backend.event_handler.update()
+            # if a new backend was created during the above call, we'll end up
+            # updating twice before drawing
+            if not self._update_again:
+                self._update_again = False
+                self.backend.update()
+        # draw
         draw = self.backend.draw(self.screen)
         if draw is True:
             pg.display.flip()
         elif draw:
             pg.display.update(draw)
+        return True
 
-    def run (self, n = 0):
+    def run (self, n = None):
         """Main loop."""
-        self.running = True
-        update = self._update
-        draw = self._draw
-        t0 = time()
-        while self.running:
-            # update
-            self._update_again = False
-            update()
-            if self._update_again:
-                self._update_again = False
-                update()
-            # draw
-            draw()
-            # wait
-            t1 = time()
-            t0 = t1 + wait(int(1000 * (self.frame - t1 + t0))) / 1000.
-            # counter
-            n -= 1
-            if n == 0:
-                break
+        self.scheduler.run(n)
+
+    def quit (self, event = None):
+        """Quit the game."""
+        self.scheduler.timer.stop()
 
     def restart (self, *args):
         """Restart the game."""
@@ -433,7 +422,7 @@ volume: float to scale volume by.
         if event.state == 2 and not event.gain:
             try:
                 self.backend.pause()
-            except AttributeError:
+            except (AttributeError, TypeError):
                 pass
 
     def _resize_cb (self, event):
