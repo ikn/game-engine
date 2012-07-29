@@ -2,6 +2,7 @@ from sys import argv
 import os
 from time import time
 from random import choice
+from bisect import bisect
 
 d = os.path.dirname(argv[0])
 if d: # else current dir
@@ -56,6 +57,10 @@ run
 quit
 restart
 set_overlay
+fade
+cancel_fade
+colour_fade
+linear_fade
 refresh_display
 toggle_fullscreen
 minimise
@@ -69,6 +74,7 @@ backends: a list of previous (nested) backends, most 'recent' last.  Each is
           backend is active.  (For example, the 'backend' key gives the backend
           object itself.)
 overlay: the current overlay (see Game.set_overlay).
+fading: whether a fade is in progress (see Game.fade)
 files: loaded image cache (before resize).
 imgs: image cache.
 text: cache for rendered text.
@@ -80,7 +86,9 @@ music: filenames for known music.
     # attributes to store with backends, and their initial values
     _backend_attrs = {
         'backend': None,
-        'overlay': False
+        'overlay': False,
+        'fading': False,
+        '_fade_data': None
     }
 
     def __init__ (self, *args, **kwargs):
@@ -382,6 +390,25 @@ volume: float to scale volume by.
                 self._update_again = False
                 self.backend.update()
         backend = self.backend
+        # fade
+        if self.fading:
+            frame = self.scheduler.timer.frame
+            data = self._fade_data['core']
+            fn, duration, persist, t = data
+            if duration is None:
+                # cancel if returned overlay is None
+                o = fn(t)
+                cancel = o is None
+            else:
+                # cancel if time limit passed
+                cancel = t + .5 * frame > duration
+                if not cancel:
+                    o = fn(t)
+            if cancel:
+                self.cancel_fade(persist)
+            else:
+                self.set_overlay(o)
+                data[3] += frame
         # check overlay
         o0 = self._last_overlay
         o = self.overlay
@@ -393,10 +420,13 @@ volume: float to scale volume by.
                 # opaque: don't draw
                 draw = False
         elif o is not False:
-            o_colour = True
-            if len(o) == 3:
-                # opaque: don't draw
-                draw = False
+            if len(o) == 4 and o[3] == 0:
+                o = False
+            else:
+                o_colour = True
+                if len(o) == 3 or o[3] == 255:
+                    # opaque: don't draw
+                    draw = False
         s = self._overlay_sfc
         # draw backend
         screen = self.screen
@@ -407,7 +437,7 @@ volume: float to scale volume by.
             # everything), and we have an overlay (we know this will be
             # transparent), then draw everything (if dirty already drew
             # everything)
-            if o is not False and (draw or o != o0) and not dirty:
+            if (draw or o != o0) and not dirty:
                 backend.dirty = True
                 new_draw = backend.draw(screen)
                 # merge draw and new_draw
@@ -468,7 +498,7 @@ this frame is opaque.
             # surface
             if convert:
                 overlay = convert_sfc(overlay)
-        else:
+        elif overlay is not False:
             # colour
             overlay = tuple(overlay)
             # turn RGBA into RGB if no alpha
@@ -476,22 +506,140 @@ this frame is opaque.
                 overlay = overlay[:3]
         self.overlay = overlay
 
-    def linear_fade (o_from, o_to, time, cb = None, *args, **kwargs):
+    def fade (self, fn, time = None, persist = False):
         """Fade an overlay on the current backend.
 
-linear_fade(o_from, o_to, time[, cb, *args, **kwargs])
+fade(fn[, time], persist = False)
 
-o_from, o_to: as taken by Game.set_overlay, or None for the current overlay.
-time: fade duration in seconds; this is rounded to the nearest frame.
-cb: a function to call when the fade is complete.
-args, kwargs: positional- and keyword- arguments to pass to
-              Game.scheduler.add_timeout for the callback.
+fn: a function that takes the time since the fade started and returns the
+    overlay to use, as taken by Game.set_overlay.
+time: fade duration in seconds; this is rounded to the nearest frame.  If None
+      or not given, fade_fn may return None to end the fade.
+persist: whether to continue to show the current overlay when the fade ends
+         (else it is set to False).
 
-Calling Game.set_overlay during the fade will not have any effect.
+Calling this cancels any current fade, and calling Game.set_overlay during the
+fade will not have any effect.
 
 """
-        pass
-        # self.set_overlay(overlay, False)
+        self.fading = True
+        self._fade_data = {'core': [fn, time, persist, 0]}
+
+    def cancel_fade (self, persist = True):
+        """Cancel any running fade on the current backend.
+
+Takes the persist argument taken by Game.fade.
+
+"""
+        self.fading = False
+        self._fade_data = None
+        if not persist:
+            self.set_overlay(False)
+
+    def _colour_fade_fn (self, t):
+        """Fade function for Game.colour_fade."""
+        f, os, ts = self._fade_data['colour']
+        t = f(t)
+        # get waypoints we're between
+        i = bisect(ts, t)
+        if i == 0:
+            # before start
+            return os[0]
+        elif i == len(ts):
+            # past end
+            return os[-1]
+        o0, o1 = os[i - 1:i + 1]
+        t0, t1 = ts[i - 1:i + 1]
+        # get ratio of the way between waypoints
+        if t1 == t0:
+            r = 1
+        else:
+            r = float(t - t0) / (t1 - t0)
+        assert 0 <= r <= 1
+        o = []
+        for x0, x1 in zip(o0, o1):
+            # if one is no overlay, use the other's colours
+            if x0 is None:
+                if x1 is None:
+                    # both are no overlay: colour doesn't matter
+                    o.append(0)
+                o.append(x1)
+            elif x1 is None:
+                o.append(x0)
+            else:
+                o.append(x0 + r * (x1 - x0))
+        return o
+
+    def colour_fade (self, fn, time, *ws, **kwargs):
+        """Start a fade between colours on the current backend.
+
+colour_fade(fn, time, *waypoints, persist = False)
+
+fn: a function that takes the time since the fade started and returns the
+    'time' to use in bisecting the waypoints to determine the overlay to use.
+time: as taken by Game.fade.  This is the time as passed to fn, not as returned
+      by it.
+waypoints: two or more points to fade to, each (overlay, time).  overlay is as
+           taken by Game.set_overlay, but cannot be a surface, and time is the time in seconds at which that overlay should be reached.  Times must
+           be in order and all >= 0.
+
+           For the first waypoint, time is ignored and set to 0, and the
+           waypoint may just be the overlay.  For any waypoint except the first
+           or the last, time may be None, or the waypoint may just be the
+           overlay.  Any group of such waypoints are spaced evenly in time
+           between the previous and following waypoints.
+persist: keyword-only, as taken by Game.fade.
+
+See Game.fade for more details.
+
+"""
+        os, ts = zip(*((w, None) if w is False or len(w) > 2 else w \
+                     for w in ws))
+        os = list(os)
+        ts = list(ts)
+        ts[0] = 0
+        # get groups with time = None
+        groups = []
+        group = None
+        for i, (o, t) in enumerate(zip(os, ts)):
+            # sort into groups
+            if t is None:
+                if group is None:
+                    group = [i]
+                    groups.append(group)
+            else:
+                if group is not None:
+                    group.append(i)
+                group = None
+            # turn into RGBA
+            if o is False:
+                o = (None, None, None, 0)
+            else:
+                o = tuple(o)
+                if len(o) == 3:
+                    o += (255,)
+                else:
+                    o = o[:4]
+            os[i] = o
+        # assign times to waypoints in groups
+        for a, b in groups:
+            assert a != b
+            t0 = ts[a - 1]
+            dt = float(ts[b] - t0) / (b - (a - 1))
+            for i in xrange(a, b):
+                ts[i] = t0 + dt * (i - (a - 1))
+        # start fade
+        persist = kwargs.get('persist', False)
+        self.fade(self._colour_fade_fn, time, persist)
+        self._fade_data['colour'] = (fn, os, ts)
+
+    def linear_fade (self, *ws, **kwargs):
+        """Start a linear fade on the current backend.
+
+Takes the same arguments as Game.colour_fade, without fn and time.
+
+"""
+        self.colour_fade(lambda x: x, ws[-1][1], *ws, **kwargs)
 
     def refresh_display (self, *args):
         """Update the display mode from conf, and notify the backend."""

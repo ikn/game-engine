@@ -10,7 +10,7 @@ This function should take the number of milliseconds to wait for.  This will
 always be an integer.
 
 Python version: 2.
-Release: 5.
+Release: 6-dev.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
@@ -56,6 +56,7 @@ set_fps
     ATTRIBUTES
 
 fps: the current target FPS.  Use the set_fps method to change it.
+frame: the current length of a frame in seconds.
 t: the time at the last step, if using individual steps.
 
 """
@@ -78,7 +79,7 @@ seconds: number of seconds to run for; this can be a float, and is not wrapped
 
 """
         self.stopped = False
-        frame = self._frame
+        frame = self.frame
         if seconds is not None:
             frames = int(seconds / frame)
             # wait for remainder
@@ -108,7 +109,7 @@ seconds: number of seconds to run for; this can be a float, and is not wrapped
     def step (self):
         """Step forwards one frame."""
         t = time()
-        dt = self.t + self._frame - t
+        dt = self.t + self.frame - t
         if dt > 0:
             wait(int(1000 * dt))
             self.t = t + dt
@@ -125,7 +126,7 @@ seconds: number of seconds to run for; this can be a float, and is not wrapped
     def set_fps (self, fps):
         """Set the target FPS."""
         self.fps = int(round(fps))
-        self._frame = 1. / fps
+        self.frame = 1. / fps
 
 
 class Scheduler ():
