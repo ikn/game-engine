@@ -64,9 +64,11 @@ minimise
 
 scheduler: sched.Scheduler instance for scheduling events.
 backend: the current running backend.
-backends: a list of previous (nested) backends, most 'recent' last.
+backends: a list of previous (nested) backends, most 'recent' last.  Each is
+          actually a dict with keys the same as the attributes of Game when the
+          backend is active.  (For example, the 'backend' key gives the backend
+          object itself.)
 overlay: the current overlay (see Game.set_overlay).
-overlays: a list of overlays corresponding to backends in Game.backends.
 files: loaded image cache (before resize).
 imgs: image cache.
 text: cache for rendered text.
@@ -74,6 +76,12 @@ fonts: a fonthandler.Fonts instance, or None if conf.USE_FONTS is False.
 music: filenames for known music.
 
 """
+
+    # attributes to store with backends, and their initial values
+    _backend_attrs = {
+        'backend': None,
+        'overlay': False
+    }
 
     def __init__ (self, *args, **kwargs):
         self.scheduler = Scheduler()
@@ -87,13 +95,29 @@ music: filenames for known music.
         self.fonts = Fonts(conf.FONT_DIR) if conf.USE_FONTS else None
         # start first backend
         self.backends = []
-        self.overlays = []
         self._last_overlay = False
         self.start_backend(*args, **kwargs)
         # start playing music
         pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
         self.find_music()
         self.play_music()
+
+    def _init_backend (self):
+        """Set some default attributes for a new backend."""
+        for attr, val in self._backend_attrs.iteritems():
+            setattr(self, attr, val)
+
+    def _store_backend (self):
+        """Store the current backend in the backends list."""
+        if hasattr(self, 'backend') and self.backend is not None:
+            data = dict((attr, getattr(self, attr)) \
+                        for attr, val in self._backend_attrs.iteritems())
+            self.backends.append(data)
+
+    def _restore_backend (self, data):
+        """Restore a backend from the given data."""
+        self.__dict__.update(data)
+        self._select_backend(self.backend)
 
     def _select_backend (self, backend, overlay = False):
         """Set the given backend as the current backend."""
@@ -171,17 +195,8 @@ Takes the same arguments as create_backend; see that method for details.
 Returns the started backend.
 
 """
-        # store current backend in history, if any
-        try:
-            self.backends.append(self.backend)
-            self.overlays.append(self.overlay)
-        except AttributeError:
-            pass
-        # create backend
-        self.overlay = False
-        backend = self.create_backend(*args, **kwargs)
-        self._select_backend(backend)
-        return backend
+        self._store_backend()
+        return self.switch_backend(*args, **kwargs)
 
     def switch_backend (self, *args, **kwargs):
         """Close the current backend and start a new one.
@@ -189,7 +204,7 @@ Returns the started backend.
 Takes the same arguments as create_backend and returns the created backend.
 
 """
-        self.overlay = False
+        self._init_backend()
         backend = self.create_backend(*args, **kwargs)
         self._select_backend(backend)
         return backend
@@ -206,7 +221,9 @@ backends: the backend list, in order of time started, most recent last.
 
 """
         backends = []
-        for backend in self.backends + ([self.backend] if current else []):
+        current = [{'backend': self.backend}] if current else []
+        for data in self.backends + current:
+            backend = data['backend']
             if get_backend_id(backend) == ident:
                 backends.append(backend)
 
@@ -222,14 +239,10 @@ If the running backend is the last (root) one, exit the game.
 """
         if depth < 1:
             return
-        try:
-            backend = self.backends.pop()
-            overlay = self.overlays.pop()
-        except IndexError:
-            self.quit()
+        if self.backends:
+            self._restore_backend(self.backends.pop())
         else:
-            self.overlay = overlay
-            self._select_backend(backend)
+            self.quit()
         self.quit_backend(depth - 1)
 
     def img (self, filename, size = None, cache = True):
@@ -390,9 +403,11 @@ volume: float to scale volume by.
         if draw:
             dirty = backend.dirty
             draw = backend.draw(screen)
-            # if drew something but perhaps not everything, and we have an
-            # overlay (we know this will be transparent), draw everything
-            if o is not False and draw and not dirty:
+            # if (overlay changed or drew something but perhaps not
+            # everything), and we have an overlay (we know this will be
+            # transparent), then draw everything (if dirty already drew
+            # everything)
+            if o is not False and (draw or o != o0) and not dirty:
                 backend.dirty = True
                 new_draw = backend.draw(screen)
                 # merge draw and new_draw
@@ -411,6 +426,8 @@ volume: float to scale volume by.
         if o is not False and (o != o0 or draw):
             screen.blit(s, (0, 0))
             draw = True
+            if o != o0:
+                backend.dirty = True
         self._last_overlay = self.overlay
         # update display
         if draw is True:
