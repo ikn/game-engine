@@ -15,6 +15,7 @@ from os.path import isfile, abspath, sep as path_sep, join as join_path
 
 import pygame
 
+
 class Fonts (dict):
     """Collection of pygame.font.Font instances.
 

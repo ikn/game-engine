@@ -2,7 +2,9 @@ from collections import defaultdict
 
 import pygame as pg
 
+
 # abstract
+
 
 def dd (default, items = {}, **kwargs):
     """Create a collections.defaultdict with a static default.
@@ -19,11 +21,14 @@ default_dict: the created defaultdict.
     items.update(kwargs)
     return defaultdict(lambda: default, items)
 
+
 def ir (x):
     """Returns the argument rounded to the nearest integer."""
     return int(round(x))
 
+
 # graphics
+
 
 def position_sfc (sfc, dest, pos = 0, offset = (0, 0), rect = None,
                   dest_rect = None):
@@ -66,6 +71,7 @@ dest_rect: the rect within dest to align to, instead of the whole surface.
             p.append(dest_w - sfc_w + o)
     # blit
     dest.blit(sfc, p, rect)
+
 
 def convert_sfc (sfc):
     """Convert a surface for blitting."""

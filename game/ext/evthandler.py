@@ -26,9 +26,11 @@ MODE_ONPRESS_REPEAT = 2
 MODE_ONDOWN = 3
 MODE_ONDOWN_REPEAT = 4
 
+
 def quit (event):
     pygame.quit()
     sys.exit()
+
 
 class EventHandler:
     """Assign callbacks to events and keypresses.

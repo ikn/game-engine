@@ -17,13 +17,14 @@ if os.name == 'nt':
 pg.mixer.pre_init(buffer = 1024)
 pg.init()
 
-from game import conf
+from game.conf import conf
 from game.level import Level
 from game.util import ir, convert_sfc
 from game.ext.sched import Scheduler
 from game.ext import evthandler as eh
 if conf.USE_FONTS:
     from game.ext.fonthandler import Fonts
+
 
 def get_backend_id (backend):
     """Return the computed identifier of the given backend.

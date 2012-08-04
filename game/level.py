@@ -1,4 +1,5 @@
-import conf
+from conf import conf
+
 
 class Level (object):
     def __init__ (self, game, event_handler, stop = False):
