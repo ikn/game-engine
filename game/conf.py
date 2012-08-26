@@ -2,6 +2,7 @@ from platform import system
 import os
 from os.path import sep, expanduser, join as join_path
 from collections import defaultdict
+from glob import glob
 
 import pygame as pg
 
@@ -79,8 +80,20 @@ class Conf (object):
     MUSIC_VOLUME = dd(.5) # per-backend
     SOUND_VOLUME = .5
     EVENT_ENDMUSIC = pg.USEREVENT
-    SOUNDS = {} # numbers of sound files
     SOUND_VOLUMES = dd(1)
+    # generate SOUNDS = {ID: num_sounds}
+    SOUNDS = {}
+    ss = glob(join_path(SOUND_DIR, '*.ogg'))
+    base = len(join_path(SOUND_DIR, ''))
+    for fn in ss:
+        fn = fn[base:-4]
+        for i in xrange(len(fn)):
+            if fn[i:].isdigit():
+                # found a valid file
+                ident = fn[:i]
+                if ident:
+                    n = SOUNDS.get(ident, 0)
+                    SOUNDS[ident] = n + 1
 
     # text rendering
     # per-backend, each a {key: value} dict to update fonthandler.Fonts with
@@ -94,7 +107,7 @@ def translate_dd (d):
         # should be (default, dict)
         return dd(*d)
 conf = dict((k, v) for k, v in Conf.__dict__.iteritems()
-            if not k.startswith('__'))
+            if k.isupper() and not k.startswith('__'))
 types = {
     defaultdict: translate_dd
 }

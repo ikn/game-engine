@@ -1,7 +1,7 @@
 from sys import argv
 import os
 from time import time
-from random import choice
+from random import choice, randrange
 from bisect import bisect
 
 d = os.path.dirname(argv[0])
@@ -343,7 +343,7 @@ base_ID: the ID of the sound to play (we look for base_ID + i for a number i,
 volume: float to scale volume by.
 
 """
-        ID = choice(range(conf.SOUNDS[base_ID]))
+        ID = randrange(conf.SOUNDS[base_ID])
         # load sound
         snd = conf.SOUND_DIR + base_ID + str(ID) + '.ogg'
         snd = pg.mixer.Sound(snd)
