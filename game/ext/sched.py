@@ -120,8 +120,8 @@ seconds: number of seconds to run for; this can be a float, and is not wrapped
         """Stop any current call to Timer.run."""
         self.stopped = True
 
-    # the property builtin doesn't seem to be working for setters, which is a
-    # shame...
+    # we don't use the property builtin so there's no getter, to reduce
+    # overhead there
 
     def set_fps (self, fps):
         """Set the target FPS."""
@@ -191,7 +191,7 @@ otherwise it is removed.
 
 """
         if seconds is not None:
-            frames = seconds * self.time.fps
+            frames = seconds * self.timer.fps
         frames = max(int(frames), 1)
         if repeat_seconds is not None:
             repeat_frames = repeat_seconds * self.timer.fps
@@ -214,7 +214,8 @@ otherwise it is removed.
     def _update (self):
         """Handle callbacks this frame."""
         rm = []
-        for i, (remain, total, cb, args) in self._cbs.iteritems():
+        # cbs might add/remove cbs, so use items instead of iteritems
+        for i, (remain, total, cb, args) in self._cbs.items():
             remain -= 1
             if remain == 0:
                 # call callback

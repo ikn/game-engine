@@ -281,7 +281,7 @@ cache: whether to store this image in the cache if not already stored.
         # else new: load/render
         filename = conf.IMG_DIR + filename
         # also cache loaded images to reduce file I/O
-        if data in self.files:
+        if filename in self.files:
             img = self.files[filename]
         else:
             img = convert_sfc(pg.image.load(filename))
@@ -343,19 +343,15 @@ base_ID: the ID of the sound to play (we look for base_ID + i for a number i,
 volume: float to scale volume by.
 
 """
-        try:
-            n = conf.SOUNDS[base_ID]
-        except KeyError:
-            return
-        IDs = [base_ID + str(i) for i in xrange(n)]
-        ID = choice(IDs)
+        ID = choice(range(conf.SOUNDS[base_ID]))
         # load sound
-        snd = conf.SOUND_DIR + ID + '.ogg'
+        snd = conf.SOUND_DIR + base_ID + str(ID) + '.ogg'
         snd = pg.mixer.Sound(snd)
         if snd.get_length() < 10 ** -3:
             # no way this is valid
             return
-        snd.set_volume(conf.SOUND_VOLUME * conf.SOUND_VOLUMES.get(base_ID, 1) * volume)
+        volume *= conf.SOUND_VOLUME * conf.SOUND_VOLUMES[base_ID]
+        snd.set_volume(volume)
         snd.play()
 
     def find_music (self):
@@ -438,7 +434,7 @@ volume: float to scale volume by.
             # everything), and we have an overlay (we know this will be
             # transparent), then draw everything (if dirty already drew
             # everything)
-            if (draw or o != o0) and not dirty:
+            if (draw or o != o0) and o is not False and not dirty:
                 backend.dirty = True
                 new_draw = backend.draw(screen)
                 # merge draw and new_draw

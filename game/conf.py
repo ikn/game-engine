@@ -17,8 +17,7 @@ class Conf (object):
 
     # save data
     SAVE = ()
-
-    # configuration path: need to take care to get unicode path
+    # need to take care to get unicode path
     if system() == 'Windows':
         try:
             import ctypes
@@ -81,7 +80,7 @@ class Conf (object):
     SOUND_VOLUME = .5
     EVENT_ENDMUSIC = pg.USEREVENT
     SOUNDS = {} # numbers of sound files
-    SOUND_VOLUMES = {}
+    SOUND_VOLUMES = dd(1)
 
     # text rendering
     # per-backend, each a {key: value} dict to update fonthandler.Fonts with
@@ -92,7 +91,6 @@ def translate_dd (d):
     if isinstance(d, defaultdict):
         return defaultdict(d.default_factory, d)
     else:
-        print d
         # should be (default, dict)
         return dd(*d)
 conf = dict((k, v) for k, v in Conf.__dict__.iteritems()

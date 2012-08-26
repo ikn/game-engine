@@ -2,7 +2,7 @@ from conf import conf
 
 
 class Level (object):
-    def __init__ (self, game, event_handler, stop = False):
+    def __init__ (self, game, event_handler):
         self.game = game
 
     def update (self):

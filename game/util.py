@@ -27,14 +27,57 @@ def ir (x):
     return int(round(x))
 
 
+# random
+
+
+def randsgn ():
+    """Randomly return 1 or -1."""
+    return 2 * randrange(2) - 1
+
+
+def rand_in (a, b):
+    """Return a random number in a continuous range.
+
+rand_in(a, b) -> num
+
+where a <= num < b.
+
+"""
+    return a + random() * (b - a)
+
+
+def weighted_rand (ws):
+    """Return a weighted random choice.
+
+weighted_rand(ws) -> index
+
+ws: weightings, either a list of numbers to weight by or a {key: weighting}
+    dict for any keys.
+
+index: the chosen index in the list or key in the dict.
+
+"""
+    if isinstance(ws, dict):
+        indices, ws = zip(*ws.iteritems())
+    else:
+        indices = range(len(ws))
+    cumulative = []
+    last = 0
+    for w in ws:
+        last += w
+        cumulative.append(last)
+    index = min(bisect(cumulative, cumulative[-1] * random()), len(ws) - 1)
+    return indices[index]
+
+
 # graphics
 
 
 def position_sfc (sfc, dest, pos = 0, offset = (0, 0), rect = None,
-                  dest_rect = None):
+                  dest_rect = None, blit_flags = 0):
     """Blit a surface onto another in a relative manner.
 
-blit_centred(sfc, dest, pos = 0, offset = (0, 0))
+blit_centred(sfc, dest, pos = 0, offset = (0, 0)[, dest_rect], blit_flags = 0)
 
 sfc, dest: blit sfc onto dest.
 pos: where to position sfc relative to dest.  This is (x, y) for each axis,
@@ -49,6 +92,7 @@ rect: the rect within sfc to copy, defaulting to the whole surface.  If given,
 dest_rect: the rect within dest to align to, instead of the whole surface.
            This only affects alignment, not whether anything is blitted outside
            this rect.  This can be larger than dest.
+blit_flags: the special_flags argument taken by pygame.Surface.blit.
 
 """
     if rect is None:
@@ -70,7 +114,7 @@ dest_rect: the rect within dest to align to, instead of the whole surface.
             # bottom/right
             p.append(dest_w - sfc_w + o)
     # blit
-    dest.blit(sfc, p, rect)
+    dest.blit(sfc, p, rect, blit_flags)
 
 
 def convert_sfc (sfc):
