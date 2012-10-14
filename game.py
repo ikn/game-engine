@@ -336,23 +336,23 @@ Returns the same value as fonthandler.Fonts
             self.text_cache[key] = result
         return result
 
-def clear_caches (self, *caches):
-    """Clear image caches.
+    def clear_caches (self, *caches):
+        """Clear image caches.
 
-Takes any number of strings 'file', 'image' and 'text' as arguments, which
-determine whether to clear the file_cache, img_cache and text_cache
-attributes respectively (see class documentation).  If none is given, all
-caches are cleared.
+    Takes any number of strings 'file', 'image' and 'text' as arguments, which
+    determine whether to clear the file_cache, img_cache and text_cache
+    attributes respectively (see class documentation).  If none is given, all
+    caches are cleared.
 
-"""
-    if not caches:
-        caches = ('file', 'image', 'text')
-    if 'file' in caches:
-        self.file_cache = {}
-    if 'image' in caches:
-        self.img_cache = {}
-    if 'text' in caches:
-        self.text_cache = {}
+    """
+        if not caches:
+            caches = ('file', 'image', 'text')
+        if 'file' in caches:
+            self.file_cache = {}
+        if 'image' in caches:
+            self.img_cache = {}
+        if 'text' in caches:
+            self.text_cache = {}
 
     def play_snd (self, base_ID, volume = 1):
         """Play a sound.
