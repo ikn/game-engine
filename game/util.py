@@ -24,7 +24,9 @@ default_dict: the created defaultdict.
 
 def ir (x):
     """Returns the argument rounded to the nearest integer."""
-    return int(round(x))
+    # this is about twice as fast as int(round(x))
+    y = int(x)
+    return (y + (x - y >= .5)) if x > 0 else (y - (y - x >= .5))
 
 
 # random
@@ -33,6 +35,10 @@ def ir (x):
 def randsgn ():
     """Randomly return 1 or -1."""
     return 2 * randrange(2) - 1
+
+def rand0 ():
+    """Zero-centred random (-1 <= x < 1)."""
+    return 2 * random() - 1
 
 
 def rand_in (a, b):

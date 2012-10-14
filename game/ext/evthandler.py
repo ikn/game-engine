@@ -9,6 +9,45 @@ Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
     http://www.gnu.org/licenses/gpl-3.0.txt
 
+ - Event(*evts)
+    - evts is one or more pg.Events
+    - call cbs at most once per frame
+    - has .cb(cb, *args, **kwargs) - can do multiple times
+        - returns self, so can pass Event(...).cb(...) to EventHandler.add
+     - cbs get Event
+ - Button(type, device, btn, *mods)
+    - go to .type (kb, mouse, joy), .device (ie. joy number), .btn (key/btn id)
+    - key(btn, *mods), mouse(btn, *mods), joy(device, btn, *mods) return Button
+    - mods are zero or more Buttons or Button argument tuples
+    - mods taken by key, mouse, joy may be key/mouse/joy argument tuples
+ - ButtonEvent(*btns, evt = down), Event subclass
+    - buttons are Buttons or Button argument tuples
+    - evt is bitwise or of one or more of down, up, held
+    - has .held_delay = 1 (>= 0), .held_repeat_delay = 1 (> 0)
+    - key_event, mouse_event, joy_event return ButtonEvent and use key, mouse, joy instead of Button (but can take Buttons too)
+    - when call cb, set self.evt to one of down, held, up
+    - calls cbs at most once per frame per evt type
+ - can register new button types
+    - a function of the module
+    - need: name; pg event type and how to get device, btn from it for each of
+      down/up
+    - creates functions like key, mouse, joy and key_event, mouse_event,
+      joy_event in the module
+ - EventHandler.add(*evts), .rm(*evts), each arg an Event
+ - ControlScheme
+    - stores a number of schemes, without identifying devices in buttons
+    - schemes have string identifiers and priorities
+    - schemes are {action: ButtonEvent-like}
+    - has attr that determines device types that allow sharing
+        - defaults to {kb: True, None: False}, None the default
+    - .generate(n_players) chooses schemes to use for n_players if possible
+        - according to priorities
+        - returns [(scheme_id: [(type, device)])] for devices it uses for each
+          player
+    - .register(EventHandler, schemes) adds buttons to handler
+        - schemes are as returned by .generate
+    - .unregister(EventHandler)
+
 """
 
 # TODO:

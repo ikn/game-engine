@@ -123,10 +123,12 @@ save: a list containing the names of the settings to save to fn (others are
         if k in self._save:
             print 'info: saving setting: \'{0}\''.format(k)
             self._save[k] = v
-            self.dump()
+            self.dump(False)
 
-    def dump (self):
+    def dump (self, public = True):
         """Force saving all settings."""
+        if public:
+            print 'info: saving settings'
         try:
             with open(self._fn, 'w') as f:
                 json.dump(self._save, f, indent = 4, cls = JSONEncoder)

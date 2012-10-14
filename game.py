@@ -27,15 +27,17 @@ if conf.USE_FONTS:
 
 
 def get_backend_id (backend):
-    """Return the computed identifier of the given backend.
+    """Return the computed identifier of the given backend (or backend type).
 
 See Game.create_backend for details.
 
 """
-    try:
+    if hasattr(backend, 'id'):
         return backend.id
-    except AttributeError:
-        return type(backend).__name__.lower()
+    else:
+        if not isinstance(backend, type):
+            backend = type(backend)
+        return backend.__name__.lower()
 
 
 class Game (object):
@@ -51,6 +53,7 @@ get_backends
 quit_backend
 img
 render_text
+clear_caches
 play_snd
 find_music
 play_music
@@ -76,9 +79,9 @@ backends: a list of previous (nested) backends, most 'recent' last.  Each is
           object itself.)
 overlay: the current overlay (see Game.set_overlay).
 fading: whether a fade is in progress (see Game.fade)
-files: loaded image cache (before resize).
-imgs: image cache.
-text: cache for rendered text.
+file_cache, img_cache, text_cache: caches for loaded image cache (before
+                                   resize), images and rendered text
+                                   respectively.
 fonts: a fonthandler.Fonts instance, or None if conf.USE_FONTS is False.
 music: filenames for known music.
 
@@ -96,9 +99,9 @@ music: filenames for known music.
         self.scheduler = Scheduler()
         self.scheduler.add_timeout(self._update, frames = 1, repeat_frames = 1)
         # initialise caches
-        self.files = {}
-        self.imgs = {}
-        self.text = {}
+        self.file_cache = {}
+        self.img_cache = {}
+        self.text_cache = {}
         # load display settings
         self.refresh_display()
         self.fonts = Fonts(conf.FONT_DIR) if conf.USE_FONTS else None
@@ -164,8 +167,8 @@ draw(screen) -> drawn: draw anything necessary to screen; drawn is True if the
                        of the backend, because it is not guaranteed to be
                        called every frame.
 
-A pause method may optionally be defined, which takes no arguments and is
-called when the window loses focus to pause the game.
+A pause method may optionally be defined, which is called with no arguments
+when the window loses focus to pause the game.
 
 A backend is also given a dirty attribute, which indicates whether its draw
 method should redraw everything (it should set it to False when it does so).
@@ -276,17 +279,17 @@ cache: whether to store this image in the cache if not already stored.
                     size = size[2:]
                 size = tuple(size)
         key = (filename, size)
-        if key in self.imgs:
-            return self.imgs[key]
+        if key in self.img_cache:
+            return self.img_cache[key]
         # else new: load/render
         filename = conf.IMG_DIR + filename
         # also cache loaded images to reduce file I/O
-        if filename in self.files:
-            img = self.files[filename]
+        if filename in self.file_cache:
+            img = self.file_cache[filename]
         else:
             img = convert_sfc(pg.image.load(filename))
             if cache:
-                self.files[filename] = img
+                self.file_cache[filename] = img
         # scale
         if size is not None and size != 1:
             current_size = img.get_size()
@@ -303,16 +306,16 @@ cache: whether to store this image in the cache if not already stored.
             img = convert_sfc(img)
             if cache:
                 # add to cache (if not resized, this is in the file cache)
-                self.imgs[key] = img
+                self.img_cache[key] = img
         return img
 
     def render_text (self, *args, **kwargs):
         """Render text and cache the result.
 
-Takes the same arguments as fonthandler.Fonts, plus a keyword-only 'cache'
-argument.  If passed, the text is cached under this hashable value, and can be
-retrieved from cache by calling this function with the same value for this
-argument.
+Takes the same arguments as fonthandler.Fonts.render, plus a keyword-only
+'cache' argument.  If passed, the text is cached under this hashable value, and
+can be retrieved from cache by calling this function with the same value for
+this argument.
 
 Returns the same value as fonthandler.Fonts
 
@@ -323,15 +326,33 @@ Returns the same value as fonthandler.Fonts
         cache = 'cache' in kwargs
         if cache:
             key = kwargs['cache']
-            if key in self.text:
-                return self.text[key]
+            if key in self.text_cache:
+                return self.text_cache[key]
         # else new: render
         img, lines = self.fonts.render(*args, **kwargs)
         img = convert_sfc(img)
         result = (img, lines)
         if cache:
-            self.text[key] = result
+            self.text_cache[key] = result
         return result
+
+def clear_caches (self, *caches):
+    """Clear image caches.
+
+Takes any number of strings 'file', 'image' and 'text' as arguments, which
+determine whether to clear the file_cache, img_cache and text_cache
+attributes respectively (see class documentation).  If none is given, all
+caches are cleared.
+
+"""
+    if not caches:
+        caches = ('file', 'image', 'text')
+    if 'file' in caches:
+        self.file_cache = {}
+    if 'image' in caches:
+        self.img_cache = {}
+    if 'text' in caches:
+        self.text_cache = {}
 
     def play_snd (self, base_ID, volume = 1):
         """Play a sound.
@@ -577,7 +598,8 @@ fn: a function that takes the time since the fade started and returns the
 time: as taken by Game.fade.  This is the time as passed to fn, not as returned
       by it.
 waypoints: two or more points to fade to, each (overlay, time).  overlay is as
-           taken by Game.set_overlay, but cannot be a surface, and time is the time in seconds at which that overlay should be reached.  Times must
+           taken by Game.set_overlay, but cannot be a surface, and time is the
+           time in seconds at which that overlay should be reached.  Times must
            be in order and all >= 0.
 
            For the first waypoint, time is ignored and set to 0, and the
@@ -665,7 +687,7 @@ Takes the same arguments as Game.colour_fade, without fn and time.
         except AttributeError:
             pass
         # clear image cache (very unlikely we'll need the same sizes)
-        self.imgs = {}
+        self.img_cache = {}
 
     def toggle_fullscreen (self, *args):
         """Toggle fullscreen mode."""

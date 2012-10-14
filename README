@@ -17,6 +17,6 @@ executable.
 
     LICENSING
 
-Source code is available under the new BSD license (included).
+Source code is available under the GPL version 3 (included).
 
 Modules in game/ext/ have their own licenses, stated at the top of each file.
