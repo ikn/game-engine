@@ -1,4 +1,6 @@
+from random import random, randrange
 from collections import defaultdict
+from bisect import bisect
 
 import pygame as pg
 

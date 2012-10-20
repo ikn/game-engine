@@ -3,7 +3,7 @@
 The Fonts class in this module can serve as a font cache, but the real point of
 this is to render multi-line text with alignment and shadow and stuff.
 
-Release: 3.
+Release: 4.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
@@ -87,15 +87,16 @@ font_dirs: as given.  You may alter this list directly.
 
     def render (self, font, text, colour, shadow = None, width = None,
                 just = 0, minimise = False, line_spacing = 0, aa = True,
-                bg = None):
+                bg = None, pad = (0, 0, 0, 0)):
         """Render text from a font.
 
 render(font, text, colour[, shadow][, width], just = 0, minimise = False,
-       line_spacing = 0, aa = True[, bg]) -> (surface, lines)
+       line_spacing = 0, aa = True[, bg], pad = (0, 0, 0, 0))
+    -> (surface, num_lines)
 
 font: name of a registered font.
 text: text to render.
-colour: (R, G, B[, A]) tuple.
+colour: (R, G, B) tuple.
 shadow: to draw a drop-shadow: (colour, offset) tuple, where offset is (x, y).
 width: maximum width of returned surface (wrap text).  ValueError is raised if
        any words are too long to fit in this width.
@@ -105,9 +106,12 @@ minimise: if width is set, treat it as a minimum instead of absolute width
 line_spacing: space between lines, in pixels.
 aa: whether to anti-alias the text.
 bg: background colour; defaults to alpha.
+pad: (left, top, right, bottom) padding in pixels.  Can also be one number for
+     all sides or (left_and_right, top_and_bottom).  This treats shadow as part
+     of the text.
 
 surface: pygame.Surface containing the rendered text.
-lines: final number of lines of text.
+num_lines: final number of lines of text.
 
 Newline characters split the text into lines (along with anything else caught
 by str.splitlines), as does the width restriction.
@@ -119,6 +123,14 @@ by str.splitlines), as does the width restriction.
             offset = (0, 0)
         else:
             shadow_colour, offset = shadow
+        if isinstance(pad, int):
+            pad = (pad, pad, pad, pad)
+        elif len(pad) == 2:
+            pad = tuple(pad)
+            pad = pad + pad
+        else:
+            pad = tuple(pad)
+        width -= pad[0] + pad[2]
 
         # split into lines
         text = text.splitlines()
@@ -152,40 +164,43 @@ by str.splitlines), as does the width restriction.
         if minimise:
             width = max(font.size(line)[0] for line in lines)
 
-        # if just one line and no shadow, create and return that
-        if len(lines) == 1 and shadow is None:
+        # simple case: just one line and no shadow or padding and bg is opaque
+        # or fully transparent bg
+        if len(lines) == 1 and pad == (0, 0, 0, 0) and shadow is None \
+           and (bg is None or len(bg) == 3 or bg[3] in (0, 255)):
             if bg is None:
                 sfc = font.render(lines[0], True, colour)
             else:
                 sfc = font.render(lines[0], True, colour, bg)
-            return sfc, 1
+            return (sfc, 1)
         # else create surface to blit all the lines to
         size = font.get_height()
         h = (line_spacing + size) * (len(lines) - 1) + font.size(lines[-1])[1]
-        surface = pygame.Surface((width + offset[0], h + offset[1]))
+        sfc = pygame.Surface((width + abs(offset[0]) + pad[0] + pad[2],
+                             h + abs(offset[1]) + pad[1] + pad[3]))
         # to get transparency, need to be blitting to a converted surface
-        surface = surface.convert_alpha()
-        surface.fill((0, 0, 0, 0) if bg is None else bg)
+        sfc = sfc.convert_alpha()
+        sfc.fill((0, 0, 0, 0) if bg is None else bg)
         # render and blit text
         todo = []
         if shadow is not None:
             todo.append((shadow_colour, 1))
         todo.append((colour, -1))
-        num_lines = 0
+        n_lines = 0
         for colour, mul in todo:
-            o = (max(mul * offset[0], 0), max(mul * offset[1], 0))
+            o = (max(mul * offset[0] + pad[0], 0),
+                 max(mul * offset[1] + pad[1], 0))
             h = 0
             for line in lines:
                 if line:
-                    num_lines += 1
+                    n_lines += 1
                     s = font.render(line, aa, colour)
                     if just == 2:
-                        surface.blit(s, (width - s.get_width() + o[0],
-                                         h + o[1]))
+                        sfc.blit(s, (width - s.get_width() + o[0], h + o[1]))
                     elif just == 1:
-                        surface.blit(s, ((width - s.get_width()) / 2 + o[0],
-                                         h + o[1]))
+                        sfc.blit(s, ((width - s.get_width()) / 2 + o[0],
+                                     h + o[1]))
                     else:
-                        surface.blit(s, (o[0], h + o[1]))
+                        sfc.blit(s, (o[0], h + o[1]))
                 h += size + line_spacing
-        return (surface, num_lines)
+        return (sfc, n_lines)
