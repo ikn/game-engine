@@ -3,7 +3,7 @@
 The Fonts class in this module can serve as a font cache, but the real point of
 this is to render multi-line text with alignment and shadow and stuff.
 
-Release: 4.
+Release: 5.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
@@ -130,7 +130,8 @@ by str.splitlines), as does the width restriction.
             pad = pad + pad
         else:
             pad = tuple(pad)
-        width -= pad[0] + pad[2]
+        if width is not None:
+            width -= pad[0] + pad[2]
 
         # split into lines
         text = text.splitlines()
