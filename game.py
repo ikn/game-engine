@@ -326,6 +326,7 @@ Returns the same value as fonthandler.Fonts
         cache = 'cache' in kwargs
         if cache:
             key = kwargs['cache']
+            del kwargs['cache']
             if key in self.text_cache:
                 return self.text_cache[key]
         # else new: render
