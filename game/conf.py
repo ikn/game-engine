@@ -22,7 +22,8 @@ class Conf (object):
     if system() == 'Windows':
         try:
             import ctypes
-            n = ctypes.windll.kernel32.GetEnvironmentVariableW(u'APPDATA', None, 0)
+            n = ctypes.windll.kernel32.GetEnvironmentVariableW(u'APPDATA',
+                                                               None, 0)
             if n == 0:
                 raise ValueError()
         except Exception:
@@ -77,6 +78,7 @@ class Conf (object):
     KEYS_DIRN = (KEYS_LEFT, KEYS_UP, KEYS_RIGHT, KEYS_DOWN)
 
     # audio
+    MUSIC_AUTOPLAY = False # just pauses music
     MUSIC_VOLUME = dd(.5) # per-backend
     SOUND_VOLUME = .5
     EVENT_ENDMUSIC = pg.USEREVENT

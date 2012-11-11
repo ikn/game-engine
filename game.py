@@ -84,6 +84,7 @@ file_cache, img_cache, text_cache: caches for loaded image cache (before
                                    respectively.
 fonts: a fonthandler.Fonts instance, or None if conf.USE_FONTS is False.
 music: filenames for known music.
+screen: the main Pygame surface.
 
 """
 
@@ -113,6 +114,8 @@ music: filenames for known music.
         pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
         self.find_music()
         self.play_music()
+        if not conf.MUSIC_AUTOPLAY:
+            pg.mixer.music.pause()
 
     def _init_backend (self):
         """Set some default attributes for a new backend."""
