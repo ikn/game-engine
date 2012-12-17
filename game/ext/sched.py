@@ -216,6 +216,9 @@ otherwise it is removed.
         rm = []
         # cbs might add/remove cbs, so use items instead of iteritems
         for i, (remain, total, cb, args) in self._cbs.items():
+            if i not in self._cbs:
+                # removed since we called .items()
+                continue
             remain -= 1
             if remain == 0:
                 # call callback

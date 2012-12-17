@@ -141,7 +141,7 @@ screen: the main Pygame surface.
         backend.dirty = True
         i = get_backend_id(backend)
         # set some per-backend things
-        self.scheduler.timer.fps = conf.FPS[i]
+        self.scheduler.timer.set_fps(conf.FPS[i])
         if conf.USE_FONTS:
             fonts = self.fonts
             for k, v in conf.REQUIRED_FONTS[i].iteritems():
@@ -550,7 +550,7 @@ fade will not have any effect.
     def cancel_fade (self, persist = True):
         """Cancel any running fade on the current backend.
 
-Takes the persist argument taken by Game.fade.
+Takes the persist argument taken by Game.fade (defaults to True).
 
 """
         self.fading = False
@@ -585,7 +585,8 @@ Takes the persist argument taken by Game.fade.
                 if x1 is None:
                     # both are no overlay: colour doesn't matter
                     o.append(0)
-                o.append(x1)
+                else:
+                    o.append(x1)
             elif x1 is None:
                 o.append(x0)
             else:

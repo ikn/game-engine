@@ -82,8 +82,8 @@ font_dirs: as given.  You may alter this list directly.
         if font is None:
             font = pygame.font.Font(fn, size, bold = bold)
             self._fonts_by_args[data] = font
-        # store
-        dict.__setitem__(self, name, font)
+            # store
+            dict.__setitem__(self, name, font)
 
     def render (self, font, text, colour, shadow = None, width = None,
                 just = 0, minimise = False, line_spacing = 0, aa = True,

@@ -9,6 +9,7 @@ if [ $? -ne 0 ]; then
     fi
 fi
 if [ "$1" = "debug" ]; then
+    shift
     "$p" "`dirname $0`/game.py" "$@"
 else
     "$p" -O "`dirname $0`/game.py" "$@"
