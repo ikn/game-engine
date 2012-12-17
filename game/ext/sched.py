@@ -213,21 +213,19 @@ otherwise it is removed.
 
     def _update (self):
         """Handle callbacks this frame."""
-        rm = []
+        cbs = self._cbs
         # cbs might add/remove cbs, so use items instead of iteritems
-        for i, (remain, total, cb, args) in self._cbs.items():
-            if i not in self._cbs:
+        for i, (remain, total, cb, args) in cbs.items():
+            if i not in cbs:
                 # removed since we called .items()
                 continue
             remain -= 1
             if remain == 0:
                 # call callback
                 if cb(*args):
-                    self._cbs[i][0] = total
-                else:
-                    rm.append(i)
+                    cbs[i][0] = total
+                elif i in cbs: # else removed in above call
+                    del cbs[i]
             else:
                 assert remain > 0
-                self._cbs[i][0] = remain
-        for i in rm:
-            del self._cbs[i]
+                cbs[i][0] = remain
