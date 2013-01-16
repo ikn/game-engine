@@ -98,7 +98,7 @@ class Conf (object):
                     SOUNDS[ident] = n + 1
 
     # text rendering
-    # per-backend, each a {key: value} dict to update fonthandler.Fonts with
+    # per-backend, each a {key: value} dict to update Game.fonts with
     REQUIRED_FONTS = dd({})
 
 

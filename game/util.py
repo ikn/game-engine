@@ -38,20 +38,10 @@ def randsgn ():
     """Randomly return 1 or -1."""
     return 2 * randrange(2) - 1
 
+
 def rand0 ():
     """Zero-centred random (-1 <= x < 1)."""
     return 2 * random() - 1
-
-
-def rand_in (a, b):
-    """Return a random number in a continuous range.
-
-rand_in(a, b) -> num
-
-where a <= num < b.
-
-"""
-    return a + random() * (b - a)
 
 
 def weighted_rand (ws):
@@ -132,3 +122,11 @@ def convert_sfc (sfc):
     else:
         sfc = sfc.convert_alpha()
     return sfc
+
+
+def combine_drawn (*drawn):
+    """Combine the given drawn flags as returned by backend draw methods."""
+    if True in drawn:
+        return True
+    rects = sum((list(d) for d in drawn if d), [])
+    return rects if rects else False

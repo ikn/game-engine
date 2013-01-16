@@ -3,7 +3,7 @@
 The Fonts class in this module can serve as a font cache, but the real point of
 this is to render multi-line text with alignment and shadow and stuff.
 
-Release: 5.
+Release: 5-dev.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
@@ -166,9 +166,9 @@ by str.splitlines), as does the width restriction.
             width = max(font.size(line)[0] for line in lines)
 
         # simple case: just one line and no shadow or padding and bg is opaque
-        # or fully transparent bg
+        # or fully transparent bg and want to minimise
         if len(lines) == 1 and pad == (0, 0, 0, 0) and shadow is None \
-           and (bg is None or len(bg) == 3 or bg[3] in (0, 255)):
+           and (bg is None or len(bg) == 3 or bg[3] in (0, 255)) and minimise:
             if bg is None:
                 sfc = font.render(lines[0], True, colour)
             else:
