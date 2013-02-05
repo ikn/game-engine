@@ -31,6 +31,11 @@ def ir (x):
     return (y + (x - y >= .5)) if x > 0 else (y - (y - x >= .5))
 
 
+def sum_pos (*pos):
+    """Sum all give (x, y) positions component-wise."""
+    return (sum(x for x, y in pos), sum(y for x, y in pos))
+
+
 # random
 
 
@@ -130,3 +135,10 @@ def combine_drawn (*drawn):
         return True
     rects = sum((list(d) for d in drawn if d), [])
     return rects if rects else False
+
+
+def blank_sfc (size):
+    """Create a transparent surface with the given (width, height) size."""
+    sfc = pg.Surface(size).convert_alpha()
+    sfc.fill((0, 0, 0, 0))
+    return sfc

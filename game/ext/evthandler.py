@@ -9,6 +9,8 @@ Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
     http://www.gnu.org/licenses/gpl-3.0.txt
 
+ - input recording and playback would be good
+
  - Event(*evts)
     - evts is one or more pg.Events
     - call cbs at most once per frame
