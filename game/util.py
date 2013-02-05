@@ -1,3 +1,20 @@
+"""A number of utility functions.
+
+    FUNCTIONS
+
+dd
+ir
+sum_pos
+randsgn
+rand0
+weighted_rand
+position_sfc
+convert_sfc
+combine_drawn
+blank_sfc
+
+"""
+
 from random import random, randrange
 from collections import defaultdict
 from bisect import bisect

@@ -1,10 +1,16 @@
+"""Settings module.
+
+Use DummySettingsManager or SettingsManager (syncs to disk).
+
+"""
+
 import os
 from copy import deepcopy
 import json
 from collections import defaultdict
 
 
-class JSONEncoder (json.JSONEncoder):
+class _JSONEncoder (json.JSONEncoder):
     """Extended json.JSONEncoder with support for sets and defaultdicts."""
 
     def default (self, o):
@@ -131,6 +137,6 @@ save: a list containing the names of the settings to save to fn (others are
             print 'info: saving settings'
         try:
             with open(self._fn, 'w') as f:
-                json.dump(self._save, f, indent = 4, cls = JSONEncoder)
+                json.dump(self._save, f, indent = 4, cls = _JSONEncoder)
         except IOError:
             print 'warning: can\'t write to file: \'{0}\''.format(self._fn)

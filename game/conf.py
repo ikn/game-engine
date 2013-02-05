@@ -16,6 +16,9 @@ class Conf (object):
     USE_SAVEDATA = False
     USE_FONTS = False
 
+    # the Game instance; should only really be used to load media with caching
+    GAME = None
+
     # save data
     SAVE = ()
     # need to take care to get unicode path

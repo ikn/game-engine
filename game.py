@@ -97,6 +97,7 @@ screen: the main Pygame surface.
     }
 
     def __init__ (self, *args, **kwargs):
+        conf.GAME = self
         self.scheduler = Scheduler()
         self.scheduler.add_timeout(self._update, frames = 1, repeat_frames = 1)
         # initialise caches
