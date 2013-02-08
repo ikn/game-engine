@@ -45,10 +45,10 @@ rects: the resulting list of disjoint rects.
         for r in rs:
             x, y, w, h = r
             if w > 0 and h > 0:
-                i = edges0.index(x)
-                for row in grid[i:edges0[i:].index(x + w)]:
-                    j = edges1.index(x)
-                    for k in xrange(j, edges1[j:].index(y + h)):
+                j = edges1.index(y)
+                for row in grid[j:j + edges1[j:].index(y + h)]:
+                    i = edges0.index(x)
+                    for k in xrange(i, i + edges0[i:].index(x + w)):
                         if rtype == 0: # add
                             row[k] |= 2
                         else: # rm (rtype == 1)
@@ -97,8 +97,7 @@ layers: a list of layers that contain graphics, lowest first.
     def __init__ (self, *graphics, **kw):
         self.graphics = {}
         self.layers = []
-        self._dirty = {}
-        self._all_dirty = [] # dirty in every layer (not everywhere)
+        self._dirty = []
         self.surface = kw.get('surface')
         self.add(*graphics)
 
@@ -110,6 +109,7 @@ layers: a list of layers that contain graphics, lowest first.
     def surface (self, sfc):
         self._surface = sfc
         if sfc is not None:
+            self._rect = sfc.get_rect()
             self.dirty()
 
     def add (self, *graphics):
@@ -120,7 +120,6 @@ Takes any number of Graphic or GraphicsGroup instances.
 """
         all_gs = self.graphics
         ls = set(self.layers)
-        dirty = self._dirty
         graphics = list(graphics)
         for g in graphics:
             if isinstance(g, Graphic):
@@ -130,7 +129,6 @@ Takes any number of Graphic or GraphicsGroup instances.
                 else:
                     all_gs[l] = set((g,))
                     ls.add(l)
-                    dirty[l] = []
                 g.manager = self
             else: # GraphicsGroup
                 graphics.extend(g.contents)
@@ -144,7 +142,6 @@ Takes any number of Graphic or GraphicsGroup instances.
 """
         all_graphics = self.graphics
         ls = set(self.layers)
-        dirty = self._dirty
         graphics = list(graphics)
         for g in graphics:
             if isinstance(g, Graphic):
@@ -157,7 +154,6 @@ Takes any number of Graphic or GraphicsGroup instances.
                         if not all_gs:
                             del all_gs[l]
                             ls.remove(l)
-                            del dirty[l]
                 # else not added: fail silently
             else: # GraphicsGroup
                 graphics.extend(g.contents)
@@ -166,53 +162,17 @@ Takes any number of Graphic or GraphicsGroup instances.
     def dirty (self, *rects, **kw):
         """Force redrawing some or all of the screen.
 
-dirty(*rects, layer = None, layers = [])
-
-rects: rects to flag as dirty.  If none are given, the whole screen is flagged.
-layer, layers: keyword-only.  A specific layer or list of layers to restrict
-               dirtying to.  If neither is given, all layers are affected; both
-               may be given.
+Takes any number of rects to flag as dirty.  If none are given, the whole of
+the current surface is flagged.
 
 """
-        if self.surface is None:
+        if self._surface is None:
             # nothing to mark as dirty (happens in assigning a surface)
             return
-        whole_sfc = self.surface.get_rect()
-        layers = []
-        if 'layer' in kw:
-            layers.append(kw['layer'])
-        layers.extend(kw.get('layers', []))
-        if not layers:
-            # great hack: make a note in case layers are added before drawing
-            layers = ('_all_dirty',)
-            dirty = self.__dict__
+        if rects:
+            self._dirty += [Rect(r) for r in rects]
         else:
-            dirty = self._dirty
-        for l in layers:
-            if not rects:
-                # use whole rect
-                dirty[l] = [whole_sfc]
-            else:
-                dirty[l].extend(Rect(r) for r in rects)
-
-    def _dirty_match_opaque (self, want_opaque):
-        """Get dirty rects matching the given opacity.
-
-Returns rects in the same form as self._dirty, such that each is covered by a
-graphic with opacity the same as the given (boolean) argument in that region.
-
-"""
-        match = {}
-        dirty = self._dirty
-        for l, gs in self.graphics.iteritems():
-            this_dirty = dirty[l]
-            match[l] = this_match = []
-            for r in this_dirty:
-                for g in gs:
-                    r = r.clip(g.rect)
-                    if r and g.opaque_in(r) == want_opaque:
-                        this_match.append(r)
-        return match
+            self._dirty = [self._rect]
 
     def draw (self):
         """Update the display.
@@ -221,44 +181,40 @@ Returns a list of rects that cover changed parts of the surface, or False if
 nothing changed.
 
 """
+        layers = self.layers
+        sfc = self._surface
+        if not layers or sfc is None:
+            return False
         graphics = self.graphics
         dirty = self._dirty
-        all_dirty = self._all_dirty
-        layers = self.layers
-        sfc = self.surface
-        if not dirty or not layers or sfc is None:
-            return False
-        # get dirty rects for each layer
-        for l, gs in graphics.iteritems():
-            l_dirty = dirty[l]
+        # get dirty rects from graphics
+        for gs in graphics.itervalues():
             for g in gs:
                 for flag, bdy in ((g.was_visible, g.last_rect),
-                                (g.visible, g.rect)):
+                                  (g.visible, g.rect)):
                     if flag:
-                        l_dirty += [r.clip(bdy) for r in g.dirty]
-        # propagate dirtiness upwards
-        l_src = layers[-1] # have at least one layer
-        dirty_src = dirty[l_src]
-        for l_dest in reversed(layers[:-1]):
-            dirty_dest = dirty[l_dest]
-            dirty_dest += dirty_src
-            l_src = l_dest
-            dirty_src = dirty_dest
-        # propagate dirtiness downwards where non-opaque
-        dirty_nonopaque = self._dirty_match_opaque(False)
-        for i, l_src in enumerate(layers[1:]):
-            for l_dest in layers[:i]:
-                dirty[l_dest] += dirty_nonopaque[l_src]
-        # undirty below opaque graphics, add _all_dirty and make dirty rects
-        # disjoint
-        dirty_opaque = self._dirty_match_opaque(True)
+                        dirty += [r.clip(bdy) for r in g.dirty]
+                g.was_visible = g.visible
+        if not dirty:
+            return False
+        # get opaque regions of dirty rects by layer
+        dirty_opaque = {}
+        for l, gs in graphics.iteritems():
+            dirty_opaque[l] = l_dirty_opaque = []
+            for r in dirty:
+                for g in gs:
+                    r = r.clip(g.rect)
+                    if r and g.opaque_in(r):
+                        l_dirty_opaque.append(r)
+        # undirty below opaque graphics and make dirty rects disjoint
+        dirty_by_layer = {}
         dirty_opaque_sum = []
         for l in layers:
-            dirty[l] = _mk_disjoint(dirty[l] + all_dirty, dirty_opaque_sum)
+            dirty_by_layer[l] = _mk_disjoint(dirty, dirty_opaque_sum)
             dirty_opaque_sum += dirty_opaque[l]
         # redraw in dirty rects
         for l in reversed(layers):
-            rs = dirty[l]
+            rs = dirty_by_layer[l]
             for g in graphics[l]:
                 r = g.rect
                 this_rs = []
@@ -269,9 +225,8 @@ nothing changed.
                 if this_rs:
                     g.draw(sfc, this_rs)
                 g.dirty = []
-        self._dirty = dict((l, []) for l in layers)
-        self._all_dirty = []
-        return sum(dirty.itervalues(), [])
+        self._dirty = []
+        return sum(dirty_by_layer.itervalues(), [])
 
 
 class GraphicsGroup (object):
@@ -335,13 +290,28 @@ dirty: a list of rects that need to be updated; for internal use.
 """
 
     def __init__ (self, rect):
-        self.rect = Rect(rect)
+        self._rect = Rect(rect)
         self.last_rect = Rect(self.rect)
         self._layer = 0
         self.visible = True
         self.was_visible = False
         self.manager = None
         self.dirty = []
+
+    @property
+    def rect (self):
+        return self._rect
+
+    @rect.setter
+    def rect (self, rect):
+        # need to set dirty in old and new rects (if changed)
+        last = self._rect
+        rect = Rect(rect)
+        if rect != last:
+            self.dirty.append(last)
+            self.last_rect = last
+            self.dirty.append(rect)
+            self._rect = rect
 
     @property
     def layer (self):
@@ -399,6 +369,8 @@ rects: rects to flag as dirty.  If none are given, the whole (current) rect is
 class Colour (Graphic):
     """A solid rect of colour.
 
+The rect attribute may be set (but not altered) directly.
+
     CONSTRUCTOR
 
 Colour(rect, colour)
@@ -435,7 +407,7 @@ colour: as taken by constructor; set as necessary.
 
     def draw (self, sfc, rects):
         if self.opaque:
-            c = self.colour
+            c = self._colour
             for r in rects:
                 sfc.fill(c, r)
         else:
