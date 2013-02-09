@@ -69,6 +69,7 @@ minimise
     ATTRIBUTES
 
 scheduler: sched.Scheduler instance for scheduling events.
+fps: the current FPS (as in scheduler.timer.fps).
 world: the current running world.
 worlds: a list of previous (nested) worlds, most 'recent' last.
 file_cache, img_cache, text_cache: caches for loaded image cache (before
@@ -377,6 +378,14 @@ volume: float to scale volume by.
         elif drawn:
             pg.display.update(drawn)
         return True
+
+    @property
+    def fps (self):
+        return self.scheduler.timer.fps
+
+    @property.setter
+    def fps (self, fps):
+        self.scheduler.timer.fps = fps
 
     def run (self, n = None):
         """Main loop."""
