@@ -3,7 +3,7 @@
 The Fonts class in this module can serve as a font cache, but the real point of
 this is to render multi-line text with alignment and shadow and stuff.
 
-Release: 5-dev.
+Release: 5.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:

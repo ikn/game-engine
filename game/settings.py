@@ -22,7 +22,7 @@ class _JSONEncoder (json.JSONEncoder):
             return json.JSONEncoder.default(self, o)
 
 
-class DummySettingsManager:
+class DummySettingsManager (object):
     """An object for handling settings.
 
     CONSTRUCTOR

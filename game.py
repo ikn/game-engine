@@ -18,12 +18,13 @@ pg.mixer.pre_init(buffer = 1024)
 pg.init()
 
 from game.conf import conf
-from game.level import Level
-from game.util import ir, convert_sfc
 from game.ext.sched import Scheduler
 from game.ext import evthandler as eh
 if conf.USE_FONTS:
     from game.ext.fonthandler import Fonts
+from game.util import ir, convert_sfc
+from game.world import World
+from game.level import Level
 
 
 def get_world_id (world):
@@ -100,22 +101,6 @@ screen: the main Pygame surface.
         if not conf.MUSIC_AUTOPLAY:
             pg.mixer.music.pause()
 
-    def _select_world (self, world):
-        """Set the given world as the current world."""
-        self._update_again = True
-        self.world = world
-        world.graphics.surface = self.screen
-        world.graphics.dirty()
-        i = get_world_id(world)
-        # set some per-world things
-        self.scheduler.timer.set_fps(conf.FPS[i])
-        if conf.USE_FONTS:
-            fonts = self.fonts
-            for k, v in conf.REQUIRED_FONTS[i].iteritems():
-                fonts[k] = v
-        pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
-        pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
-
     def create_world (self, cls, *args, **kwargs):
         """Create a world.
 
@@ -124,7 +109,7 @@ create_world(cls, *args, **kwargs) -> world
 cls: the world class to instantiate.
 args, kwargs: positional- and keyword arguments to pass to the constructor.
 
-world: the created world; should be a world.World subclass.
+world: the created world; must be a world.World subclass.
 
 Optional world attributes:
 
@@ -154,24 +139,43 @@ class).
         world = cls(evthandler, *args)
         return world
 
+    def _select_world (self, world):
+        """Set the given world as the current world."""
+        self._update_again = True
+        self.world = world
+        world.graphics.surface = self.screen
+        world.graphics.dirty()
+        i = get_world_id(world)
+        # set some per-world things
+        self.scheduler.timer.fps = conf.FPS[i]
+        if conf.USE_FONTS:
+            fonts = self.fonts
+            for k, v in conf.REQUIRED_FONTS[i].iteritems():
+                fonts[k] = v
+        pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
+        pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
+
     def start_world (self, *args, **kwargs):
-        """Create and switch to a new world.
+        """Store the current world (if any) and switch to a new one.
 
-Takes the same arguments as create_world; see that method for details.
+Takes a World instance, or the same arguments as create_world to create a new
+one (see that method for details).
 
-Returns the created world.
+Returns the new current world.
 
 """
-        self.worlds.append(world)
+        if hasattr(self, 'world'):
+            self.worlds.append(self.world)
         return self.switch_world(*args, **kwargs)
 
-    def switch_world (self, *args, **kwargs):
+    def switch_world (self, world, *args, **kwargs):
         """Close the current world and start a new one.
 
-Takes the same arguments as create_world and returns the created world.
+Arguments and return value are the same as for start_world.
 
 """
-        world = self.create_world(*args, **kwargs)
+        if not isinstance(world, World):
+            world = self.create_world(world, *args, **kwargs)
         self._select_world(world)
         return world
 

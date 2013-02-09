@@ -73,7 +73,7 @@ def quit (event):
     sys.exit()
 
 
-class EventHandler:
+class EventHandler (object):
     """Assign callbacks to events and keypresses.
 
 EventHandler(event_handlers = {}, key_handlers = [], suppress_quit = False,

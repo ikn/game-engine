@@ -10,7 +10,7 @@ This function should take the number of milliseconds to wait for.  This will
 always be an integer.
 
 Python version: 2.
-Release: 6-dev.
+Release: 7.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
@@ -34,7 +34,7 @@ except ImportError:
         sleep(int(t * 1000))
 
 
-class Timer:
+class Timer (object):
     """Simple timer.
 
 Either call run once and stop if you need to, or step every time you've done
@@ -51,18 +51,17 @@ fps: frames per second to aim for.
 run
 step
 stop
-set_fps
 
     ATTRIBUTES
 
-fps: the current target FPS.  Use the set_fps method to change it.
+fps: the current target FPS.  Set this directly.
 frame: the current length of a frame in seconds.
 t: the time at the last step, if using individual steps.
 
 """
 
     def __init__ (self, fps = 60):
-        self.set_fps(fps)
+        self.fps = fps
         self.t = time()
 
     def run (self, cb, args = (), frames = None, seconds = None):
@@ -120,16 +119,17 @@ seconds: number of seconds to run for; this can be a float, and is not wrapped
         """Stop any current call to Timer.run."""
         self.stopped = True
 
-    # we don't use the property builtin so there's no getter, to reduce
-    # overhead there
+    @property
+    def fps (self):
+        return self._fps
 
-    def set_fps (self, fps):
-        """Set the target FPS."""
-        self.fps = int(round(fps))
+    @fps.setter
+    def fps (self, fps):
+        self._fps = int(round(fps))
         self.frame = 1. / fps
 
 
-class Scheduler ():
+class Scheduler (object):
     """Simple event scheduler.
 
     CONSTRUCTOR
