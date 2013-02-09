@@ -49,8 +49,11 @@ dump
         self._defaults = deepcopy(settings)
         self._types = ts = {}
         for k, v in self._settings.iteritems():
-            t = type(v)
-            ts[k] = types.get(t, t)
+            if v is None:
+                ts[k] = None
+            else:
+                t = type(v)
+                ts[k] = types.get(t, t)
 
     def __getattr__ (self, k):
         return self._settings[k]
@@ -61,13 +64,23 @@ dump
             self.__dict__[k] = v
             return (True, None)
         # ensure type
-        try:
-            v = self._types[k](v)
-        except (TypeError, ValueError):
-            # invalid: fall back to default
-            v = self._defaults[k]
+        t = self._types[k]
+        if t is None:
+            # default is None
+            t = type(v)
+            if t is not None:
+                # but new value isn't: use as new type
+                self._types[k] = t
+        else:
+            try:
+                v = t(v)
+            except (TypeError, ValueError):
+                # invalid: fall back to default
+                print 'warning: {0} has invalid type for \'{1}\'; falling ' \
+                      'back to default'.format(repr(v), k)
+                v = self._defaults[k]
         # check if different
-        if v == getattr(self, k):
+        if v == self._settings[k]:
             return (True, None)
         # store
         self._settings[k] = v

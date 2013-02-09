@@ -8,13 +8,13 @@ Graphic
 Colour
 
 TODO:
+ - GraphicsGroup
  - performance:
     - reduce number of rects created by _mk_disjoint
     - maybe write GraphicsManager.draw and _mk_disjoint in C
  - GraphicsManager.*fade* to replace Game.*fade*
- - Graphic.move_{by,to}
+ - Image.resize(w, h)
  - Graphic subclasses:
-Image(surface | filename[image])
 AnimatedImage(surface | filename[image])
 Tilemap
   (surface | filename[image])
@@ -34,7 +34,7 @@ import pygame as pg
 from pygame import Rect
 
 from conf import conf
-from util import blank_sfc
+from util import convert_sfc, blank_sfc
 
 
 def _mk_disjoint (add, rm = []):
@@ -282,10 +282,10 @@ Subclasses should implement:
 
     draw(surface, rects): draw the graphic.
         surface: surface to draw to.
-        rects: rects to draw in; guaranteed to be disjoint and contained by the
-               graphic's rect.
+        rects: rects to draw in; guaranteed to be disjoint pygame.Rect
+               instances that are contained by the graphic's rect.
 
-    opaque: whether this draws opaque pixels in the entire rect; do not change.
+    opaque: whether this draws opaque pixels in the entire rect.
 
     CONSTRUCTOR
 
@@ -295,7 +295,8 @@ rect: boundary rect that this graphic is contained in.
 
     METHODS
 
-move # TODO
+move_by
+move_to
 opaque_in
 
     ATTRIBUTES
@@ -424,16 +425,56 @@ size: the (width, height) size of the rect covered (this can only be set, not
             self._sfc = blank_sfc(self.rect.size)
             self._sfc.fill(colour)
 
-    def draw (self, sfc, rects):
+    def draw (self, dest, rects):
         if self.opaque:
             c = self._colour
+            fill = dest.fill
             for r in rects:
-                sfc.fill(c, r)
+                fill(c, r)
         else:
-            c_sfc = self._sfc
+            sfc = self._sfc
+            blit = dest.blit
             for r in rects:
-                sfc.blit(c_sfc, r, ((0, 0), r.size))
+                blit(sfc, r, ((0, 0), r.size))
 
+
+class Image (Graphic):
+    """A Pygame surface.
+
+    CONSTRUCTOR
+
+Image(pos, img)
+
+pos: (x, y) initial position.
+img: surface or filename (under conf.IMG_DIR) to load.
+
+    ATTRIBUTES
+
+surface: the surface that will be drawn.
+
+"""
+
+    def __init__ (self, pos, sfc):
+        if isinstance(sfc, basestring):
+            sfc = conf.GAME.img(sfc)
+        else:
+            sfc = convert_sfc(sfc)
+        self.surface = sfc
+        Graphic.__init__(self, (pos, sfc.get_size()))
+        self.opaque = sfc.get_alpha() is None and sfc.get_colorkey() is None
+        self._offset = (-self._rect[0], -self._rect[1])
+
+    @Graphic.rect.setter
+    def rect (self, rect):
+        Graphic.rect.fset(self, rect)
+        self._offset = (-self._rect[0], -self._rect[1])
+
+    def draw (self, dest, rects):
+        sfc = self.surface
+        blit = dest.blit
+        offset = self._offset
+        for r in rects:
+            blit(sfc, r, r.move(offset))
 
 
     #def fade (self, fn, time = None, persist = False):
