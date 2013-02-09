@@ -384,7 +384,7 @@ volume: float to scale volume by.
     def fps (self):
         return self.scheduler.timer.fps
 
-    @property.setter
+    fps.setter
     def fps (self, fps):
         self.scheduler.timer.fps = fps
 

@@ -8,8 +8,11 @@ Graphic
 Colour
 
 TODO:
- - integrate into Game
- - GraphicsManager.draw_all()
+ - performance:
+    - reduce number of rects created by _mk_disjoint
+    - maybe write GraphicsManager.draw and _mk_disjoint in C
+ - GraphicsManager.*fade* to replace Game.*fade*
+ - Graphic.move_{by,to}
  - Graphic subclasses:
 Image(surface | filename[image])
 AnimatedImage(surface | filename[image])
@@ -353,6 +356,29 @@ dirty: a list of rects that need to be updated; for internal use.
         """Whether this draws opaque pixels in the whole of the given rect."""
         return self.opaque and self.rect.contains(rect)
 
+    def move_by (self, dx = 0, dy = 0):
+        """Move by the given number of pixels.
+
+move_by(dx = 0, dy = 0)
+
+"""
+        self.rect = self.rect.move(dx, dy)
+
+    def move_to (self, x = None, y = None):
+        """Move to the given position.
+
+move_to([x][, y])
+
+Any co-ordinates not given are left unchanged.
+
+"""
+        r = Rect(self.rect)
+        if x is not None:
+            r[0] = x
+        if y is not None:
+            r[1] = y
+        self.rect = r
+
 
 class Colour (Graphic):
     """A solid rect of colour.
@@ -367,12 +393,19 @@ colour: a Pygame-style (R, G, B[, A = 255]) colour to draw.
     ATTRIBUTES
 
 colour: as taken by constructor; set as necessary.
+size: the (width, height) size of the rect covered (this can only be set, not
+      retrieved).
 
 """
 
     def __init__ (self, rect, colour):
         Graphic.__init__(self, rect)
         self.colour = colour
+
+    def _set_size (self, size):
+        self.rect = (self.rect.topleft, size)
+
+    size = property(None, _set_size)
 
     @property
     def colour (self):
