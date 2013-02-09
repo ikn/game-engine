@@ -1,17 +1,11 @@
 from conf import conf
+from world import World
 import gm
 
 
-class Level (object):
-    def __init__ (self, game, event_handler):
-        self.game = game
+class Level (World):
+    def __init__ (self, evthandler):
+        World.__init__(self, evthandler)
 
     def update (self):
         pass
-
-    def draw (self, screen):
-        if self.dirty:
-            self.dirty = False
-            return True
-        else:
-            return False

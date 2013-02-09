@@ -26,31 +26,32 @@ if conf.USE_FONTS:
     from game.ext.fonthandler import Fonts
 
 
-def get_backend_id (backend):
-    """Return the computed identifier of the given backend (or backend type).
+def get_world_id (world):
+    """Return the computed identifier of the given world (or world type).
 
-See Game.create_backend for details.
+See Game.create_world for details.
 
 """
-    if hasattr(backend, 'id'):
-        return backend.id
+    if hasattr(world, 'id'):
+        return world.id
     else:
-        if not isinstance(backend, type):
-            backend = type(backend)
-        return backend.__name__.lower()
+        if not isinstance(world, type):
+            world = type(world)
+        return world.__name__.lower()
 
 
 class Game (object):
-    """Handles backends.
+    """Handles worlds.
 
-Takes the same arguments as the create_backend method and passes them to it.
+Takes the same arguments as the create_world method and passes them to it.
+Only one game should ever exist, and it stores itself in conf.GAME.
 
     METHODS
 
-create_backend
-start_backend
-get_backends
-quit_backend
+create_world
+start_world
+get_worlds
+quit_world
 img
 render_text
 clear_caches
@@ -72,11 +73,10 @@ minimise
     ATTRIBUTES
 
 scheduler: sched.Scheduler instance for scheduling events.
-backend: the current running backend.
-backends: a list of previous (nested) backends, most 'recent' last.  Each is
-          actually a dict with keys the same as the attributes of Game when the
-          backend is active.  (For example, the 'backend' key gives the backend
-          object itself.)
+world: the current running world.
+worlds: a list of previous (nested) worlds, most 'recent' last.  Each is a dict
+        with 'world', 'overlay' and 'fading' keys the same as the game's
+        attributes when the world is active.
 overlay: the current overlay (see Game.set_overlay).
 fading: whether a fade is in progress (see Game.fade)
 file_cache, img_cache, text_cache: caches for loaded image cache (before
@@ -88,9 +88,9 @@ screen: the main Pygame surface.
 
 """
 
-    # attributes to store with backends, and their initial values
-    _backend_attrs = {
-        'backend': None,
+    # attributes to store with worlds, and their initial values
+    _world_attrs = {
+        'world': None,
         'overlay': False,
         'fading': False,
         '_fade_data': None
@@ -107,10 +107,10 @@ screen: the main Pygame surface.
         # load display settings
         self.refresh_display()
         self.fonts = Fonts(conf.FONT_DIR) if conf.USE_FONTS else None
-        # start first backend
-        self.backends = []
+        # start first world
+        self.worlds = []
         self._last_overlay = False
-        self.start_backend(*args, **kwargs)
+        self.start_world(*args, **kwargs)
         # start playing music
         pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
         self.find_music()
@@ -118,30 +118,31 @@ screen: the main Pygame surface.
         if not conf.MUSIC_AUTOPLAY:
             pg.mixer.music.pause()
 
-    def _init_backend (self):
-        """Set some default attributes for a new backend."""
-        for attr, val in self._backend_attrs.iteritems():
+    def _init_world (self):
+        """Set some default attributes for a new world."""
+        for attr, val in self._world_attrs.iteritems():
             setattr(self, attr, val)
 
-    def _store_backend (self):
-        """Store the current backend in the backends list."""
-        if hasattr(self, 'backend') and self.backend is not None:
+    def _store_world (self):
+        """Store the current world in the worlds list."""
+        if hasattr(self, 'world') and self.world is not None:
             data = dict((attr, getattr(self, attr)) \
-                        for attr, val in self._backend_attrs.iteritems())
-            self.backends.append(data)
+                        for attr, val in self._world_attrs.iteritems())
+            self.worlds.append(data)
 
-    def _restore_backend (self, data):
-        """Restore a backend from the given data."""
+    def _restore_world (self, data):
+        """Restore a world from the given data."""
         self.__dict__.update(data)
-        self._select_backend(self.backend)
+        self._select_world(self.world)
 
-    def _select_backend (self, backend, overlay = False):
-        """Set the given backend as the current backend."""
+    def _select_world (self, world, overlay = False):
+        """Set the given world as the current world."""
         self._update_again = True
-        self.backend = backend
-        backend.dirty = True
-        i = get_backend_id(backend)
-        # set some per-backend things
+        self.world = world
+        world.graphics.surface = self.screen
+        world.graphics.dirty()
+        i = get_world_id(world)
+        # set some per-world things
         self.scheduler.timer.set_fps(conf.FPS[i])
         if conf.USE_FONTS:
             fonts = self.fonts
@@ -150,47 +151,33 @@ screen: the main Pygame surface.
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
 
-    def create_backend (self, cls, *args, **kwargs):
-        """Create a backend.
+    def create_world (self, cls, *args, **kwargs):
+        """Create a world.
 
-create_backend(cls, *args, **kwargs) -> backend
+create_world(cls, *args, **kwargs) -> world
 
-cls: the backend class to instantiate.
+cls: the world class to instantiate.
 args, kwargs: positional- and keyword arguments to pass to the constructor.
 
-backend: the created backend.
+world: the created world; should be a world.World subclass.
 
-Backends handle pretty much everything, including drawing, and must have update
-and draw methods, as follows:
+Optional world attributes:
 
-update(): handle input and make any necessary calculations.
-draw(screen) -> drawn: draw anything necessary to screen; drawn is True if the
-                       whole display needs to be updated, something falsy if
-                       nothing needs to be updated, else a list of rects to
-                       update the display in.  This should not change the state
-                       of the backend, because it is not guaranteed to be
-                       called every frame.
+    pause(): called when the window loses focus to pause the game.
+    id: a unique identifier used for some settings in conf; if none is set,
+        type(world).__name__.lower() will be used.
 
-A pause method may optionally be defined, which is called with no arguments
-when the window loses focus to pause the game.
+A world is constructed by:
 
-A backend is also given a dirty attribute, which indicates whether its draw
-method should redraw everything (it should set it to False when it does so).
-It may define an id attribute, which is a unique identifier used for some
-settings in conf; if none is set, type(backend).__name__.lower() will be used
-(for this to make sense, the backend must be a new-style class).
+    cls(evthandler, *args, **kwargs)
 
-A backend is constructed via:
-
-    cls(game, event_handler, *args, **kwargs)
-
-game is this Game instance; event_handler is the EventHandler instance the
-backend should use for input, and is stored in its event_handler attribute.
+where evthandler is as taken by world.World (and should be passed to that base
+class).
 
 """
-        # create event handler for this backend
+        # create event handler for this world
         h = eh.MODE_HELD
-        event_handler = eh.EventHandler({
+        evthandler = eh.EventHandler({
             pg.ACTIVEEVENT: self._active_cb,
             pg.VIDEORESIZE: self._resize_cb,
             conf.EVENT_ENDMUSIC: self.play_music
@@ -199,67 +186,66 @@ backend should use for input, and is stored in its event_handler attribute.
             (conf.KEYS_MINIMISE, self.minimise, eh.MODE_ONDOWN)
         ], False, self.quit)
         # instantiate class
-        backend = cls(self, event_handler, *args)
-        backend.event_handler = event_handler
-        return backend
+        world = cls(evthandler, *args)
+        return world
 
-    def start_backend (self, *args, **kwargs):
-        """Start a new backend.
+    def start_world (self, *args, **kwargs):
+        """Create and switch to a new world.
 
-Takes the same arguments as create_backend; see that method for details.
+Takes the same arguments as create_world; see that method for details.
 
-Returns the started backend.
-
-"""
-        self._store_backend()
-        return self.switch_backend(*args, **kwargs)
-
-    def switch_backend (self, *args, **kwargs):
-        """Close the current backend and start a new one.
-
-Takes the same arguments as create_backend and returns the created backend.
+Returns the created world.
 
 """
-        self._init_backend()
-        backend = self.create_backend(*args, **kwargs)
-        self._select_backend(backend)
-        return backend
+        self._store_world()
+        return self.switch_world(*args, **kwargs)
 
-    def get_backends (self, ident, current = True):
-        """Get a list of running backends, filtered by ID.
+    def switch_world (self, *args, **kwargs):
+        """Close the current world and start a new one.
 
-get_backends(ident, current = True) -> backends
-
-ident: the backend identifier to look for (see create_backend for details).
-current: include the current backend in the search.
-
-backends: the backend list, in order of time started, most recent last.
+Takes the same arguments as create_world and returns the created world.
 
 """
-        backends = []
-        current = [{'backend': self.backend}] if current else []
-        for data in self.backends + current:
-            backend = data['backend']
-            if get_backend_id(backend) == ident:
-                backends.append(backend)
+        self._init_world()
+        world = self.create_world(*args, **kwargs)
+        self._select_world(world)
+        return world
 
-    def quit_backend (self, depth = 1):
-        """Quit the currently running backend.
+    def get_worlds (self, ident, current = True):
+        """Get a list of running worlds, filtered by ID.
 
-quit_backend(depth = 1)
+get_worlds(ident, current = True) -> worlds
 
-depth: quit this many (nested) backends.
+ident: the world identifier to look for (see create_world for details).
+current: include the current world in the search.
 
-If the running backend is the last (root) one, exit the game.
+worlds: the world list, in order of time started, most recent last.
+
+"""
+        worlds = []
+        current = [{'world': self.world}] if current else []
+        for data in self.worlds + current:
+            world = data['world']
+            if get_world_id(world) == ident:
+                worlds.append(world)
+
+    def quit_world (self, depth = 1):
+        """Quit the currently running world.
+
+quit_world(depth = 1)
+
+depth: quit this many (nested) worlds.
+
+If this quits the last (root) world, exit the game.
 
 """
         if depth < 1:
             return
-        if self.backends:
-            self._restore_backend(self.backends.pop())
+        if self.worlds:
+            self._restore_world(self.worlds.pop())
         else:
             self.quit()
-        self.quit_backend(depth - 1)
+        self.quit_world(depth - 1)
 
     def img (self, filename, size = None, cache = True):
         """Load or scale an image, or retrieve it from cache.
@@ -402,17 +388,25 @@ volume: float to scale volume by.
             pg.mixer.music.stop()
 
     def _update (self):
-        """Update backends and draw."""
+        """Update worlds and draw."""
         self._update_again = True
         while self._update_again:
             self._update_again = False
-            self.backend.event_handler.update()
-            # if a new backend was created during the above call, we'll end up
+            self.world.evthandler.update()
+            # if a new world was created during the above call, we'll end up
             # updating twice before drawing
             if not self._update_again:
                 self._update_again = False
-                self.backend.update()
-        backend = self.backend
+                self.world.update()
+        drawn = self.world.draw()
+        # update display
+        if drawn is True:
+            pg.display.flip()
+        elif drawn:
+            pg.display.update(drawn)
+        return True
+
+        world = self.world
         # fade
         if self.fading:
             frame = self.scheduler.timer.frame
@@ -451,18 +445,17 @@ volume: float to scale volume by.
                     # opaque: don't draw
                     draw = False
         s = self._overlay_sfc
-        # draw backend
-        screen = self.screen
+        # draw world
         if draw:
-            dirty = backend.dirty
-            draw = backend.draw(screen)
+            dirty = world.dirty
+            draw = world.draw()
             # if (overlay changed or drew something but perhaps not
             # everything), and we have an overlay (we know this will be
             # transparent), then draw everything (if dirty already drew
             # everything)
             if (draw or o != o0) and o is not False and not dirty:
-                backend.dirty = True
-                new_draw = backend.draw(screen)
+                world.dirty = True
+                new_draw = world.draw()
                 # merge draw and new_draw
                 if True in (draw, new_draw):
                     draw = True
@@ -475,12 +468,12 @@ volume: float to scale volume by.
                 s.fill(o)
             else:
                 s = o
-        # draw overlay if changed or backend drew
+        # draw overlay if changed or world drew
         if o is not False and (o != o0 or draw):
             screen.blit(s, (0, 0))
             draw = True
             if o != o0:
-                backend.dirty = True
+                world.dirty = True
         self._last_overlay = self.overlay
         # update display
         if draw is True:
@@ -504,16 +497,16 @@ volume: float to scale volume by.
         self.quit()
 
     def set_overlay (self, overlay, convert = True):
-        """Set up an overlay for the current backend.
+        """Set up an overlay for the current world.
 
-This draws over the screen every frame after the backend draws.  It takes a
+This draws over the screen every frame after the world draws.  It takes a
 single argument, which is a Pygame-style colour tuple, with or without alpha,
 or a pygame.Surface, or False for no overlay.
 
-The overlay is for the current backend only: if another backend is started and
-then stopped, the overlay will be restored for the original backend.
+The overlay is for the current world only: if another world is started and then
+stopped, the overlay will be restored for the original world.
 
-The backend's draw method will not be called at all if the overlay to be drawn
+The world's draw method will not be called at all if the overlay to be drawn
 this frame is opaque.
 
 """
@@ -530,7 +523,7 @@ this frame is opaque.
         self.overlay = overlay
 
     def fade (self, fn, time = None, persist = False):
-        """Fade an overlay on the current backend.
+        """Fade an overlay on the current world.
 
 fade(fn[, time], persist = False)
 
@@ -549,7 +542,7 @@ fade will not have any effect.
         self._fade_data = {'core': [fn, time, persist, 0]}
 
     def cancel_fade (self, persist = True):
-        """Cancel any running fade on the current backend.
+        """Cancel any running fade on the current world.
 
 Takes the persist argument taken by Game.fade (defaults to True).
 
@@ -595,7 +588,7 @@ Takes the persist argument taken by Game.fade (defaults to True).
         return o
 
     def colour_fade (self, fn, time, *ws, **kwargs):
-        """Start a fade between colours on the current backend.
+        """Start a fade between colours on the current world.
 
 colour_fade(fn, time, *waypoints, persist = False)
 
@@ -659,7 +652,7 @@ See Game.fade for more details.
         self._fade_data['colour'] = (fn, os, ts)
 
     def linear_fade (self, *ws, **kwargs):
-        """Start a linear fade on the current backend.
+        """Start a linear fade on the current world.
 
 Takes the same arguments as Game.colour_fade, without fn and time.
 
@@ -667,7 +660,7 @@ Takes the same arguments as Game.colour_fade, without fn and time.
         self.colour_fade(lambda x: x, ws[-1][1], *ws, **kwargs)
 
     def refresh_display (self, *args):
-        """Update the display mode from conf, and notify the backend."""
+        """Update the display mode from conf, and notify the world."""
         # get resolution and flags
         flags = conf.FLAGS
         if conf.FULLSCREEN:
@@ -688,10 +681,8 @@ Takes the same arguments as Game.colour_fade, without fn and time.
         conf.RES = r
         self.screen = pg.display.set_mode(conf.RES, flags)
         self._overlay_sfc = pg.Surface(conf.RES).convert_alpha()
-        try:
-            self.backend.dirty = True
-        except AttributeError:
-            pass
+        if hasattr(self, 'world'):
+            self.world.graphics.dirty()
         # clear image cache (very unlikely we'll need the same sizes)
         self.img_cache = {}
 
@@ -709,7 +700,7 @@ Takes the same arguments as Game.colour_fade, without fn and time.
         """Callback to handle window focus loss."""
         if event.state == 2 and not event.gain:
             try:
-                self.backend.pause()
+                self.world.pause()
             except (AttributeError, TypeError):
                 pass
 

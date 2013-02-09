@@ -5,6 +5,25 @@
 GraphicsManager
 GraphicsGroup
 Graphic
+Colour
+
+TODO:
+ - integrate into Game
+ - GraphicsManager.draw_all()
+ - Graphic subclasses:
+Image(surface | filename[image])
+AnimatedImage(surface | filename[image])
+Tilemap
+  (surface | filename[image])
+      uses colours to construct tiles
+  (tiles, data = None)
+      tiles: (size, surface) | (size, filename[image]) | list
+          list: (surface | filename[image] | colour)
+          size: tile (width, height) or width = height
+          surface/filename[image]: a spritemap
+      data: filename[text] | string | list | None (all first tile)
+          filename[text]/string: whitespace-delimited tiles indices; either also take width, or use \n\r for row delimiters, others for column delimiters
+          list: tiles indices; either also take width, or is list of rows
 
 """
 
@@ -98,6 +117,7 @@ layers: a list of layers that contain graphics, lowest first.
         self.graphics = {}
         self.layers = []
         self._dirty = []
+        self._surface = None
         self.surface = kw.get('surface')
         self.add(*graphics)
 
@@ -107,10 +127,11 @@ layers: a list of layers that contain graphics, lowest first.
 
     @surface.setter
     def surface (self, sfc):
-        self._surface = sfc
-        if sfc is not None:
-            self._rect = sfc.get_rect()
-            self.dirty()
+        if sfc is not self._surface:
+            self._surface = sfc
+            if sfc is not None:
+                self._rect = sfc.get_rect()
+                self.dirty()
 
     def add (self, *graphics):
         """Add graphics.
@@ -241,14 +262,14 @@ move
 
     ATTRIBUTES
 
-contents: a set of the graphics (Graphic instances) contained.
+graphics: a set of the Graphic instances contained.
 layer, visible: as for Graphic; these give a list of values for each graphic in
-                the contents attribute; set them to a single value to apply to
+                the graphics attribute; set them to a single value to apply to
                 all contained graphics.
 
 """
 
-    pass # TODO; layer, visible need setters
+    pass # TODO; layer, visible need getters, setters
 
 
 class Graphic (object):
@@ -319,63 +340,28 @@ dirty: a list of rects that need to be updated; for internal use.
 
     @layer.setter
     def layer (self, layer):
-        # change layer in gm by removing, setting attribute, then adding
-        m = self.manager
-        if m is not None:
-            m.rm(self)
-        self._layer = layer
-        if m is not None:
-            m.add(self)
+        if layer != self.layer:
+            # change layer in gm by removing, setting attribute, then adding
+            m = self.manager
+            if m is not None:
+                m.rm(self)
+            self._layer = layer
+            if m is not None:
+                m.add(self)
 
     def opaque_in (self, rect):
         """Whether this draws opaque pixels in the whole of the given rect."""
         return self.opaque and self.rect.contains(rect)
 
-    def _mk_dirty (self, *rects):
-        """Force redrawing.
-
-_mk_dirty(*rects)
-
-rects: rects to flag as dirty.  If none are given, the whole (current) rect is
-       flagged.
-
-"""
-
-        dirty = self._dirty
-        if rects:
-            dirty.extend(rects)
-        else:
-            dirty.append(self.rect)
-        dirty.extend(rects)
-        self._dirty = _mk_disjoint(dirty)
-
-
-# Colour(rect, colour)
-# Image(surface | filename[image])
-# AnimatedImage(surface | filename[image])
-# Tilemap
-#   (surface | filename[image])
-#       uses colours to construct tiles
-#   (tiles, data = None)
-#       tiles: (size, surface) | (size, filename[image]) | list
-#           list: (surface | filename[image] | colour)
-#           size: tile (width, height) or width = height
-#           surface/filename[image]: a spritemap
-#       data: filename[text] | string | list | None (all first tile)
-#           filename[text]/string: whitespace-delimited tiles indices; either also take width, or use \n\r for row delimiters, others for column delimiters
-#           list: tiles indices; either also take width, or is list of rows
-
 
 class Colour (Graphic):
     """A solid rect of colour.
-
-The rect attribute may be set (but not altered) directly.
 
     CONSTRUCTOR
 
 Colour(rect, colour)
 
-rect: as taken by Graphic.
+rect: as taken by Graphic; may be set directly (but not altered in-place).
 colour: a Pygame-style (R, G, B[, A = 255]) colour to draw.
 
     ATTRIBUTES
