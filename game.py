@@ -61,11 +61,6 @@ play_music
 run
 quit
 restart
-set_overlay
-fade
-cancel_fade
-colour_fade
-linear_fade
 refresh_display
 toggle_fullscreen
 minimise
@@ -74,11 +69,7 @@ minimise
 
 scheduler: sched.Scheduler instance for scheduling events.
 world: the current running world.
-worlds: a list of previous (nested) worlds, most 'recent' last.  Each is a dict
-        with 'world', 'overlay' and 'fading' keys the same as the game's
-        attributes when the world is active.
-overlay: the current overlay (see Game.set_overlay).
-fading: whether a fade is in progress (see Game.fade)
+worlds: a list of previous (nested) worlds, most 'recent' last.
 file_cache, img_cache, text_cache: caches for loaded image cache (before
                                    resize), images and rendered text
                                    respectively.
@@ -87,14 +78,6 @@ music: filenames for known music.
 screen: the main Pygame surface.
 
 """
-
-    # attributes to store with worlds, and their initial values
-    _world_attrs = {
-        'world': None,
-        'overlay': False,
-        'fading': False,
-        '_fade_data': None
-    }
 
     def __init__ (self, *args, **kwargs):
         conf.GAME = self
@@ -109,7 +92,6 @@ screen: the main Pygame surface.
         self.fonts = Fonts(conf.FONT_DIR) if conf.USE_FONTS else None
         # start first world
         self.worlds = []
-        self._last_overlay = False
         self.start_world(*args, **kwargs)
         # start playing music
         pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
@@ -118,24 +100,7 @@ screen: the main Pygame surface.
         if not conf.MUSIC_AUTOPLAY:
             pg.mixer.music.pause()
 
-    def _init_world (self):
-        """Set some default attributes for a new world."""
-        for attr, val in self._world_attrs.iteritems():
-            setattr(self, attr, val)
-
-    def _store_world (self):
-        """Store the current world in the worlds list."""
-        if hasattr(self, 'world') and self.world is not None:
-            data = dict((attr, getattr(self, attr)) \
-                        for attr, val in self._world_attrs.iteritems())
-            self.worlds.append(data)
-
-    def _restore_world (self, data):
-        """Restore a world from the given data."""
-        self.__dict__.update(data)
-        self._select_world(self.world)
-
-    def _select_world (self, world, overlay = False):
+    def _select_world (self, world):
         """Set the given world as the current world."""
         self._update_again = True
         self.world = world
@@ -197,7 +162,7 @@ Takes the same arguments as create_world; see that method for details.
 Returns the created world.
 
 """
-        self._store_world()
+        self.worlds.append(world)
         return self.switch_world(*args, **kwargs)
 
     def switch_world (self, *args, **kwargs):
@@ -206,7 +171,6 @@ Returns the created world.
 Takes the same arguments as create_world and returns the created world.
 
 """
-        self._init_world()
         world = self.create_world(*args, **kwargs)
         self._select_world(world)
         return world
@@ -228,24 +192,28 @@ worlds: the world list, in order of time started, most recent last.
             world = data['world']
             if get_world_id(world) == ident:
                 worlds.append(world)
+        return worlds
 
     def quit_world (self, depth = 1):
         """Quit the currently running world.
 
-quit_world(depth = 1)
+quit_world(depth = 1) -> worlds
 
 depth: quit this many (nested) worlds.
+
+worlds: a list of worlds that were quit.
 
 If this quits the last (root) world, exit the game.
 
 """
         if depth < 1:
-            return
+            return []
+        old_world == self.world
         if self.worlds:
-            self._restore_world(self.worlds.pop())
+            self._select_world(self.worlds.pop())
         else:
             self.quit()
-        self.quit_world(depth - 1)
+        return [old_world] + self.quit_world(depth - 1)
 
     def img (self, filename, size = None, cache = True):
         """Load or scale an image, or retrieve it from cache.
@@ -406,82 +374,6 @@ volume: float to scale volume by.
             pg.display.update(drawn)
         return True
 
-        world = self.world
-        # fade
-        if self.fading:
-            frame = self.scheduler.timer.frame
-            data = self._fade_data['core']
-            fn, duration, persist, t = data
-            if duration is None:
-                # cancel if returned overlay is None
-                o = fn(t)
-                cancel = o is None
-            else:
-                # cancel if time limit passed
-                cancel = t + .5 * frame > duration
-                if not cancel:
-                    o = fn(t)
-            if cancel:
-                self.cancel_fade(persist)
-            else:
-                self.set_overlay(o)
-                data[3] += frame
-        # check overlay
-        o0 = self._last_overlay
-        o = self.overlay
-        o_same = o == o0
-        draw = True
-        if isinstance(o, pg.Surface):
-            o_colour = False
-            if o.get_alpha() is None and o.get_colorkey() is None:
-                # opaque: don't draw
-                draw = False
-        elif o is not False:
-            if len(o) == 4 and o[3] == 0:
-                o = False
-            else:
-                o_colour = True
-                if len(o) == 3 or o[3] == 255:
-                    # opaque: don't draw
-                    draw = False
-        s = self._overlay_sfc
-        # draw world
-        if draw:
-            dirty = world.dirty
-            draw = world.draw()
-            # if (overlay changed or drew something but perhaps not
-            # everything), and we have an overlay (we know this will be
-            # transparent), then draw everything (if dirty already drew
-            # everything)
-            if (draw or o != o0) and o is not False and not dirty:
-                world.dirty = True
-                new_draw = world.draw()
-                # merge draw and new_draw
-                if True in (draw, new_draw):
-                    draw = True
-                else:
-                    # know draw != False and now draw != True so is rect list
-                    draw = list(draw) + (list(new_draw) if new_draw else [])
-        # update overlay surface if changed
-        if o not in (o0, False):
-            if o_colour:
-                s.fill(o)
-            else:
-                s = o
-        # draw overlay if changed or world drew
-        if o is not False and (o != o0 or draw):
-            screen.blit(s, (0, 0))
-            draw = True
-            if o != o0:
-                world.dirty = True
-        self._last_overlay = self.overlay
-        # update display
-        if draw is True:
-            pg.display.flip()
-        elif draw:
-            pg.display.update(draw)
-        return True
-
     def run (self, n = None):
         """Main loop."""
         self.scheduler.run(n)
@@ -495,169 +387,6 @@ volume: float to scale volume by.
         global restarting
         restarting = True
         self.quit()
-
-    def set_overlay (self, overlay, convert = True):
-        """Set up an overlay for the current world.
-
-This draws over the screen every frame after the world draws.  It takes a
-single argument, which is a Pygame-style colour tuple, with or without alpha,
-or a pygame.Surface, or False for no overlay.
-
-The overlay is for the current world only: if another world is started and then
-stopped, the overlay will be restored for the original world.
-
-The world's draw method will not be called at all if the overlay to be drawn
-this frame is opaque.
-
-"""
-        if isinstance(overlay, pg.Surface):
-            # surface
-            if convert:
-                overlay = convert_sfc(overlay)
-        elif overlay is not False:
-            # colour
-            overlay = tuple(overlay)
-            # turn RGBA into RGB if no alpha
-            if len(overlay) == 4 and overlay[3] == 255:
-                overlay = overlay[:3]
-        self.overlay = overlay
-
-    def fade (self, fn, time = None, persist = False):
-        """Fade an overlay on the current world.
-
-fade(fn[, time], persist = False)
-
-fn: a function that takes the time since the fade started and returns the
-    overlay to use, as taken by Game.set_overlay.
-time: fade duration in seconds; this is rounded to the nearest frame.  If None
-      or not given, fade_fn may return None to end the fade.
-persist: whether to continue to show the current overlay when the fade ends
-         (else it is set to False).
-
-Calling this cancels any current fade, and calling Game.set_overlay during the
-fade will not have any effect.
-
-"""
-        self.fading = True
-        self._fade_data = {'core': [fn, time, persist, 0]}
-
-    def cancel_fade (self, persist = True):
-        """Cancel any running fade on the current world.
-
-Takes the persist argument taken by Game.fade (defaults to True).
-
-"""
-        self.fading = False
-        self._fade_data = None
-        if not persist:
-            self.set_overlay(False)
-
-    def _colour_fade_fn (self, t):
-        """Fade function for Game.colour_fade."""
-        f, os, ts = self._fade_data['colour']
-        t = f(t)
-        # get waypoints we're between
-        i = bisect(ts, t)
-        if i == 0:
-            # before start
-            return os[0]
-        elif i == len(ts):
-            # past end
-            return os[-1]
-        o0, o1 = os[i - 1:i + 1]
-        t0, t1 = ts[i - 1:i + 1]
-        # get ratio of the way between waypoints
-        if t1 == t0:
-            r = 1
-        else:
-            r = float(t - t0) / (t1 - t0)
-        assert 0 <= r <= 1
-        o = []
-        for x0, x1 in zip(o0, o1):
-            # if one is no overlay, use the other's colours
-            if x0 is None:
-                if x1 is None:
-                    # both are no overlay: colour doesn't matter
-                    o.append(0)
-                else:
-                    o.append(x1)
-            elif x1 is None:
-                o.append(x0)
-            else:
-                o.append(x0 + r * (x1 - x0))
-        return o
-
-    def colour_fade (self, fn, time, *ws, **kwargs):
-        """Start a fade between colours on the current world.
-
-colour_fade(fn, time, *waypoints, persist = False)
-
-fn: a function that takes the time since the fade started and returns the
-    'time' to use in bisecting the waypoints to determine the overlay to use.
-time: as taken by Game.fade.  This is the time as passed to fn, not as returned
-      by it.
-waypoints: two or more points to fade to, each (overlay, time).  overlay is as
-           taken by Game.set_overlay, but cannot be a surface, and time is the
-           time in seconds at which that overlay should be reached.  Times must
-           be in order and all >= 0.
-
-           For the first waypoint, time is ignored and set to 0, and the
-           waypoint may just be the overlay.  For any waypoint except the first
-           or the last, time may be None, or the waypoint may just be the
-           overlay.  Any group of such waypoints are spaced evenly in time
-           between the previous and following waypoints.
-persist: keyword-only, as taken by Game.fade.
-
-See Game.fade for more details.
-
-"""
-        os, ts = zip(*((w, None) if w is False or len(w) > 2 else w \
-                     for w in ws))
-        os = list(os)
-        ts = list(ts)
-        ts[0] = 0
-        # get groups with time = None
-        groups = []
-        group = None
-        for i, (o, t) in enumerate(zip(os, ts)):
-            # sort into groups
-            if t is None:
-                if group is None:
-                    group = [i]
-                    groups.append(group)
-            else:
-                if group is not None:
-                    group.append(i)
-                group = None
-            # turn into RGBA
-            if o is False:
-                o = (None, None, None, 0)
-            else:
-                o = tuple(o)
-                if len(o) == 3:
-                    o += (255,)
-                else:
-                    o = o[:4]
-            os[i] = o
-        # assign times to waypoints in groups
-        for a, b in groups:
-            assert a != b
-            t0 = ts[a - 1]
-            dt = float(ts[b] - t0) / (b - (a - 1))
-            for i in xrange(a, b):
-                ts[i] = t0 + dt * (i - (a - 1))
-        # start fade
-        persist = kwargs.get('persist', False)
-        self.fade(self._colour_fade_fn, time, persist)
-        self._fade_data['colour'] = (fn, os, ts)
-
-    def linear_fade (self, *ws, **kwargs):
-        """Start a linear fade on the current world.
-
-Takes the same arguments as Game.colour_fade, without fn and time.
-
-"""
-        self.colour_fade(lambda x: x, ws[-1][1], *ws, **kwargs)
 
     def refresh_display (self, *args):
         """Update the display mode from conf, and notify the world."""
@@ -680,7 +409,6 @@ Takes the same arguments as Game.colour_fade, without fn and time.
             r[1] = min(r[1], r[0] / ratio)
         conf.RES = r
         self.screen = pg.display.set_mode(conf.RES, flags)
-        self._overlay_sfc = pg.Surface(conf.RES).convert_alpha()
         if hasattr(self, 'world'):
             self.world.graphics.dirty()
         # clear image cache (very unlikely we'll need the same sizes)
