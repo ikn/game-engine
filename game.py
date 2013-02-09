@@ -155,6 +155,7 @@ class).
                 fonts[k] = v
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
+        world.select()
 
     def start_world (self, *args, **kwargs):
         """Store the current world (if any) and switch to a new one.

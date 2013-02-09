@@ -19,6 +19,7 @@ evthandler: the evthandler.EventHandler instance this world should use for
 
     METHODS
 
+select
 update
 draw
 
@@ -32,6 +33,10 @@ graphics: a gm.GraphicsManager instance used for drawing by default.
     def __init__ (self, evthandler):
         self.evthandler = evthandler
         self.graphics = gm.GraphicsManager()
+
+    def select (self):
+        """Called when this becomes the active world."""
+        pass
 
     def update (self):
         """Called every frame to makes any necessary changes."""
