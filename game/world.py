@@ -12,8 +12,9 @@ class World (object):
 
     CONSTRUCTOR
 
-World(game, evthandler)
+World(scheduler, evthandler)
 
+scheduler: the sched.Scheduler instance this world should use for timing.
 evthandler: the evthandler.EventHandler instance this world should use for
             input.
 
@@ -25,12 +26,13 @@ draw
 
     ATTRIBUTES
 
-evthandler: as taken by the constructor.
+scheduler, evthandler: as taken by the constructor.
 graphics: a gm.GraphicsManager instance used for drawing by default.
 
 """
 
-    def __init__ (self, evthandler):
+    def __init__ (self, scheduler, evthandler):
+        self.scheduler = scheduler
         self.evthandler = evthandler
         self.graphics = gm.GraphicsManager()
 

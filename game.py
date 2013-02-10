@@ -68,7 +68,6 @@ minimise
 
     ATTRIBUTES
 
-scheduler: sched.Scheduler instance for scheduling events.
 world: the current running world.
 worlds: a list of previous (nested) worlds, most 'recent' last.
 file_cache, img_cache, text_cache: caches for loaded image cache (before
@@ -82,8 +81,8 @@ screen: the main Pygame surface.
 
     def __init__ (self, *args, **kwargs):
         conf.GAME = self
-        self.scheduler = Scheduler()
-        self.scheduler.add_timeout(self._update, frames = 1, repeat_frames = 1)
+        self._quit = False
+        self._update_again = False
         # initialise caches
         self.file_cache = {}
         self.img_cache = {}
@@ -100,6 +99,8 @@ screen: the main Pygame surface.
         self.play_music()
         if not conf.MUSIC_AUTOPLAY:
             pg.mixer.music.pause()
+
+    # world handling
 
     def create_world (self, cls, *args, **kwargs):
         """Create a world.
@@ -119,14 +120,14 @@ Optional world attributes:
 
 A world is constructed by:
 
-    cls(evthandler, *args, **kwargs)
+    cls(scheduler, evthandler, *args, **kwargs)
 
-where evthandler is as taken by world.World (and should be passed to that base
-class).
+where scheduler and evthandler are as taken by world.World (and should be
+passed to that base class).
 
 """
-        # create event handler for this world
-        h = eh.MODE_HELD
+        scheduler = Scheduler()
+        scheduler.add_timeout(self._update, frames = 1, repeat_frames = 1)
         evthandler = eh.EventHandler({
             pg.ACTIVEEVENT: self._active_cb,
             pg.VIDEORESIZE: self._resize_cb,
@@ -136,18 +137,20 @@ class).
             (conf.KEYS_MINIMISE, self.minimise, eh.MODE_ONDOWN)
         ], False, self.quit)
         # instantiate class
-        world = cls(evthandler, *args)
+        world = cls(scheduler, evthandler, *args)
+        scheduler.fps = conf.FPS[get_world_id(world)]
         return world
 
     def _select_world (self, world):
         """Set the given world as the current world."""
-        self._update_again = True
+        if hasattr(self, 'world'):
+            self._update_again = True
+            self.world.scheduler.stop()
         self.world = world
         world.graphics.surface = self.screen
         world.graphics.dirty()
         i = get_world_id(world)
         # set some per-world things
-        self.scheduler.fps = conf.FPS[i]
         if conf.USE_FONTS:
             fonts = self.fonts
             for k, v in conf.REQUIRED_FONTS[i].iteritems():
@@ -213,12 +216,14 @@ If this quits the last (root) world, exit the game.
 """
         if depth < 1:
             return []
-        old_world == self.world
+        old_world = self.world
         if self.worlds:
             self._select_world(self.worlds.pop())
         else:
             self.quit()
         return [old_world] + self.quit_world(depth - 1)
+
+    # media
 
     def img (self, filename, size = None, cache = True):
         """Load or scale an image, or retrieve it from cache.
@@ -360,38 +365,7 @@ volume: float to scale volume by.
             # stop currently playing music if there's no music to play
             pg.mixer.music.stop()
 
-    def _update (self):
-        """Update worlds and draw."""
-        self._update_again = True
-        while self._update_again:
-            self._update_again = False
-            self.world.evthandler.update()
-            # if a new world was created during the above call, we'll end up
-            # updating twice before drawing
-            if not self._update_again:
-                self._update_again = False
-                self.world.update()
-        drawn = self.world.draw()
-        # update display
-        if drawn is True:
-            pg.display.flip()
-        elif drawn:
-            pg.display.update(drawn)
-        return True
-
-    def run (self, n = None):
-        """Main loop."""
-        self.scheduler.run(seconds = n)
-
-    def quit (self, event = None):
-        """Quit the game."""
-        self.scheduler.stop()
-
-    def restart (self, *args):
-        """Restart the game."""
-        global restarting
-        restarting = True
-        self.quit()
+    # display
 
     def refresh_display (self, *args):
         """Update the display mode from conf, and notify the world."""
@@ -441,6 +415,43 @@ volume: float to scale volume by.
         """Callback to handle a window resize."""
         conf.RES_W = (event.w, event.h)
         self.refresh_display()
+
+    def _update (self):
+        """Update worlds and draw."""
+        self._update_again = True
+        while self._update_again:
+            self._update_again = False
+            self.world.evthandler.update()
+            # if a new world was created during the above call, we'll end up
+            # updating twice before drawing
+            if not self._update_again:
+                self._update_again = False
+                self.world.update()
+        drawn = self.world.draw()
+        # update display
+        if drawn is True:
+            pg.display.flip()
+        elif drawn:
+            pg.display.update(drawn)
+        return True
+
+    # running
+
+    def run (self, n = None):
+        """Main loop."""
+        while not self._quit:
+            self.world.scheduler.run(seconds = n)
+
+    def quit (self, *args):
+        """Quit the game."""
+        self.world.scheduler.stop()
+        self._quit = True
+
+    def restart (self, *args):
+        """Restart the game."""
+        global restarting
+        restarting = True
+        self.quit()
 
 
 if __name__ == '__main__':
