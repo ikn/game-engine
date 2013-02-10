@@ -69,7 +69,6 @@ minimise
     ATTRIBUTES
 
 scheduler: sched.Scheduler instance for scheduling events.
-fps: the current FPS (as in scheduler.timer.fps).
 world: the current running world.
 worlds: a list of previous (nested) worlds, most 'recent' last.
 file_cache, img_cache, text_cache: caches for loaded image cache (before
@@ -148,7 +147,7 @@ class).
         world.graphics.dirty()
         i = get_world_id(world)
         # set some per-world things
-        self.scheduler.timer.fps = conf.FPS[i]
+        self.scheduler.fps = conf.FPS[i]
         if conf.USE_FONTS:
             fonts = self.fonts
             for k, v in conf.REQUIRED_FONTS[i].iteritems():
@@ -380,21 +379,13 @@ volume: float to scale volume by.
             pg.display.update(drawn)
         return True
 
-    @property
-    def fps (self):
-        return self.scheduler.timer.fps
-
-    fps.setter
-    def fps (self, fps):
-        self.scheduler.timer.fps = fps
-
     def run (self, n = None):
         """Main loop."""
-        self.scheduler.run(n)
+        self.scheduler.run(seconds = n)
 
     def quit (self, event = None):
         """Quit the game."""
-        self.scheduler.timer.stop()
+        self.scheduler.stop()
 
     def restart (self, *args):
         """Restart the game."""
@@ -465,7 +456,6 @@ if __name__ == '__main__':
             t = int(argv[2])
         else:
             t = conf.DEFAULT_PROFILE_TIME
-        t *= conf.FPS[None]
         fn = conf.PROFILE_STATS_FILE
         run('Game(Level).run(t)', fn, locals())
         Stats(fn).strip_dirs().sort_stats('cumulative').print_stats(20)
