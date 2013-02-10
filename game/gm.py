@@ -6,6 +6,7 @@ GraphicsManager
 GraphicsGroup
 Graphic
 Colour
+Image
 
 TODO:
  - GraphicsGroup
@@ -13,7 +14,14 @@ TODO:
     - reduce number of rects created by _mk_disjoint
     - maybe write GraphicsManager.draw and _mk_disjoint in C
  - GraphicsManager.*fade* to replace Game.*fade*
- - Image.resize(w, h)
+ - GraphicsManager.offset to offset the viewing window
+    - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
+    - can set/unset a scroll function to call every draw
+    - implementation:
+        - in first loop, for each graphic, offset _rect by -offset
+        - when using, offset old graphic dirty rects by -last_offset, current by -offset
+        - after drawing, for each graphic, offset _rect by offset
+ - Image.resize(w, h) (no args for default)
  - Graphic subclasses:
 AnimatedImage(surface | filename[image])
 Tilemap
@@ -34,7 +42,7 @@ import pygame as pg
 from pygame import Rect
 
 from conf import conf
-from util import convert_sfc, blank_sfc
+from util import ir, convert_sfc, blank_sfc
 
 
 def _mk_disjoint (add, rm = []):
@@ -215,7 +223,7 @@ nothing changed.
         for gs in graphics.itervalues():
             for g in gs:
                 for flag, bdy in ((g.was_visible, g.last_rect),
-                                  (g.visible, g.rect)):
+                                  (g.visible, g._rect)):
                     if flag:
                         dirty += [r.clip(bdy) for r in g.dirty]
                 g.was_visible = g.visible
@@ -227,7 +235,7 @@ nothing changed.
             dirty_opaque[l] = l_dirty_opaque = []
             for r in dirty:
                 for g in gs:
-                    r = r.clip(g.rect)
+                    r = r.clip(g._rect)
                     if r and g.opaque_in(r):
                         l_dirty_opaque.append(r)
         # undirty below opaque graphics and make dirty rects disjoint
@@ -240,7 +248,7 @@ nothing changed.
         for l in reversed(layers):
             rs = dirty_by_layer[l]
             for g in graphics[l]:
-                r = g.rect
+                r = g._rect
                 this_rs = []
                 for d in rs:
                     d = r.clip(d)
@@ -316,7 +324,7 @@ dirty: a list of rects that need to be updated; for internal use.
 
     def __init__ (self, rect):
         self._rect = Rect(rect)
-        self.last_rect = Rect(self.rect)
+        self.last_rect = Rect(self._rect)
         self._layer = 0
         self.visible = True
         self.was_visible = False
@@ -355,7 +363,7 @@ dirty: a list of rects that need to be updated; for internal use.
 
     def opaque_in (self, rect):
         """Whether this draws opaque pixels in the whole of the given rect."""
-        return self.opaque and self.rect.contains(rect)
+        return self.opaque and self._rect.contains(rect)
 
     def move_by (self, dx = 0, dy = 0):
         """Move by the given number of pixels.
@@ -363,7 +371,7 @@ dirty: a list of rects that need to be updated; for internal use.
 move_by(dx = 0, dy = 0)
 
 """
-        self.rect = self.rect.move(dx, dy)
+        self.rect = self._rect.move(dx, dy)
 
     def move_to (self, x = None, y = None):
         """Move to the given position.
@@ -373,7 +381,7 @@ move_to([x][, y])
 Any co-ordinates not given are left unchanged.
 
 """
-        r = Rect(self.rect)
+        r = Rect(self._rect)
         if x is not None:
             r[0] = x
         if y is not None:
@@ -404,7 +412,7 @@ size: the (width, height) size of the rect covered (this can only be set, not
         self.colour = colour
 
     def _set_size (self, size):
-        self.rect = (self.rect.topleft, size)
+        self.rect = (self._rect.topleft, size)
 
     size = property(None, _set_size)
 
@@ -422,7 +430,7 @@ size: the (width, height) size of the rect covered (this can only be set, not
         else:
             # have to use a surface: can't fill an alpha colour to a non-alpha
             # surface directly
-            self._sfc = blank_sfc(self.rect.size)
+            self._sfc = blank_sfc(self._rect.size)
             self._sfc.fill(colour)
 
     def draw (self, dest, rects):
@@ -448,9 +456,15 @@ Image(pos, img)
 pos: (x, y) initial position.
 img: surface or filename (under conf.IMG_DIR) to load.
 
+    METHODS
+
+resize
+
     ATTRIBUTES
 
 surface: the surface that will be drawn.
+base_surface: the original surface that was given/loaded.  surface may be a
+              scaled version of this.
 
 """
 
@@ -459,7 +473,7 @@ surface: the surface that will be drawn.
             sfc = conf.GAME.img(sfc)
         else:
             sfc = convert_sfc(sfc)
-        self.surface = sfc
+        self.base_surface = self.surface = sfc
         Graphic.__init__(self, (pos, sfc.get_size()))
         self.opaque = sfc.get_alpha() is None and sfc.get_colorkey() is None
         self._offset = (-self._rect[0], -self._rect[1])
@@ -468,6 +482,45 @@ surface: the surface that will be drawn.
     def rect (self, rect):
         Graphic.rect.fset(self, rect)
         self._offset = (-self._rect[0], -self._rect[1])
+
+    def resize (self, w = None, h = None, scale = pg.transform.smoothscale):
+        """Resize the image.
+
+resize([w][, h], scale = pygame.transform.smoothscale)
+
+w, h: the new width and height.  If not given, each defaults to the original
+      width and height of this image.
+scale: a function to do the scaling:
+    scale(surface, (width, height)) -> new_surface.
+
+"""
+        ow, oh = self.base_surface.get_size()
+        r = self._rect
+        cw, ch = r.size
+        if w is None:
+            w = ow
+        if h is None:
+            h = oh
+        if w != cw or h != ch:
+            if w == ow and h == oh:
+                # no scaling
+                self.surface = self.base_surface
+            else:
+                self.surface = scale(self.base_surface, (w, h))
+            self.rect = (r[0], r[1], w, h)
+
+    def scale (self, w = None, h = None, scale = pg.transform.smoothscale):
+        """A convenience wrapper around resize to scale by a ratio.
+
+Arguments are as for resize, but w and h are ratios of the original size.
+
+"""
+        ow, oh = self.base_surface.get_size()
+        if w is None:
+            w = 1
+        if h is None:
+            h = 1
+        self.resize(ir(w * ow), ir(h * oh), scale)
 
     def draw (self, dest, rects):
         sfc = self.surface
