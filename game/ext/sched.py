@@ -10,7 +10,7 @@ This function should take the number of milliseconds to wait for.  This will
 always be an integer.
 
 Python version: 2.
-Release: 8.
+Release: 9-dev.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
@@ -20,6 +20,12 @@ included, you can find it here:
 
 Timer
 Scheduler
+
+    FUNCTIONS
+
+interp_linear
+interp_repeat
+interp_round
 
 """
 
@@ -32,6 +38,55 @@ except ImportError:
 
     def wait (t):
         sleep(int(t * 1000))
+
+
+def interp_linear (*args):
+    """Linear interpolation for Scheduler.interp.
+
+interp_linear(*waypoints, round = False) -> f
+
+waypoints: each is (v, t) to set the value to v at time t.  t can be omitted
+           for any but the first and waypoints, in which case equally-spaced
+           times are filled in.  v is a number or list of numbers, in which
+           case we interpolate for each number in the list.
+
+f: a function for which f(t) = v for every waypoint, with intermediate values
+   linearly interpolated between waypoints.
+
+"""
+    pass
+
+
+def interp_repeat (get_val, period, t0 = 0):
+    """Repeat an existing interpolation function.
+
+interp_repeat(get_val, period, t0 = 0) -> f
+
+get_val: an existing interpolation function, as taken by Scheduler.interp.
+period, t0: times passed to the returned function are looped around to fit in
+            the range [t0, t0 + period), and the result is passed to get_val.
+
+f: the get_val wrapper that repeats get_val over the given period.
+
+"""
+    pass
+
+def interp_round (get_val, round = True):
+    """Round the output of an existing interpolation function.
+
+interp_round(get_val, round = True) -> f
+
+get_val: the existing function.  The values it returns are numbers or lists of
+         numbers.
+round: a keyword-only argument that determines whether to round the numbers in
+       values to nearest integers.  This is a list containing a boolean for
+       each number in the value, or a single boolean to round for every number
+       (or just the number itself, if values are not lists).
+
+f: the get_val wrapper that rounds the returned value.
+
+"""
+    pass
 
 
 class Timer (object):
@@ -253,3 +308,77 @@ otherwise it will not be called again.
                     data[total] += data[total + 2]
                 elif i in cbs: # else removed in above call
                     del cbs[i]
+
+    def interp (self, get_val, set_val, t_max = None, val_min = None,
+                val_max = None, end = None):
+        """Vary a value over time.
+
+interp(get_val, set_val[, t_max][, val_min][, val_max][, end]) -> timeout_id
+
+get_val: a function called with the elapsed time in seconds to obtain the
+         current value.  If this function returns None, the interpolation will
+         be canceled.  The interp_* functions in this module can be used to
+         construct such functions.  The value must actually be a list of
+         arguments to pass to set_val (so if set_val is (obj, attr), it must be
+         a list of length 1).
+set_val: a function called with the current value to set it.  This may also be
+         a (obj, attr) tuple to do obj.attr = val.
+t_max: if time becomes larger than this, cancel the interpolation.
+val_min, val_max: minimum and maximum values of the interpolated value.  If
+                  given, get_val must only return values that can be compared
+                  with these.  If the value ever falls outside of this range,
+                  set_val is called with the value at the boundary it is beyond
+                  (val_min or val_max) and the interpolation is canceled.
+end: used to do some cleanup when the interpolation is canceled (when get_val
+     returns None or t_max, val_min or val_max comes into effect, but not when
+     the rm_timeout method is called with the returned id).  This can be a
+     final value to pass to set_val, or a function to call without arguments.
+     If the function returns a (non-None) value, set_val is called with it.
+
+timeout_id: an identifier that can be passed to the rm_timeout method to remove
+            the callback that continues the interpolation.  In this case
+            end_cb is not called.
+
+"""
+        if not callable(set_val):
+            obj, attr = set_val
+            set_val = lambda val: setattr(obj, attr, val)
+
+        def timeout_cb ():
+            t = 0
+            last_v = None
+            done = False
+            while 1:
+                t += self.frame
+                v = get_val(t)
+                if v is None:
+                    done = True
+                # check bounds
+                elif t_max is not None and t > t_max:
+                    done = True
+                else:
+                    if val_min is not None and v < val_min:
+                        done = True
+                        v = val_min
+                    elif val_max is not None and v > val_max:
+                        done = True
+                        v = val_max
+                    if v != last_v:
+                        set_val(*v)
+                        last_v = v
+                if done:
+                    # canceling for some reason
+                    if callable(end):
+                        v = end()
+                    else:
+                        v = end
+                    # set final value if want to
+                    if v is not None and v != last_v:
+                        set_val(*v)
+                    yield False
+                    # just in case we get called again (should never happen)
+                    return
+                else:
+                    yield True
+
+        return self.add_timeout(next, timeout_cb(), frames = 1)
