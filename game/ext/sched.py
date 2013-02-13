@@ -31,6 +31,7 @@ interp_repeat
 
 from time import time
 from bisect import bisect
+from math import cos, atan, exp
 
 try:
     from pygame.time import wait
@@ -170,6 +171,54 @@ f: a function for which f(t) = v for every waypoint, with intermediate values
     g = val_gen()
     g.next()
     return g.send
+
+
+def interp_target (v0, target, damp, freq = 0, speed = 0):
+    """Move towards a target.
+
+interp_target(v0, target, damp, freq = 0, speed = 0) -> f
+
+v0: the initial value (a structure of numbers like arguments to this module's
+    call_in_nest function).  Elements which are not numbers are ignored.
+target: the target value (has the same form as v0).
+damp: rate we move towards the target (> 0).
+freq: if damping is low, oscillation around the target can occur, and this
+      controls the frequency.  If 0, there is no oscillation.
+speed: if frequency is non-zero, this is the initial 'speed', in the same form
+       as v0.
+
+TODO: end at some point (when within threshold (same form as v0))
+
+"""
+    if v0 == target: # nothing to do
+        return lambda t: None
+
+    def get_phase (v0, target, sped):
+        if freq == 0 or not isinstance(v0, (int, float)) or v0 == target:
+            return 0
+        else:
+            return atan(-(float(speed) / (v0 - target) + damp) / freq)
+
+    phase = call_in_nest(get_phase, v0, target, speed)
+
+    def get_amplitude (v0, target, phase):
+        if isinstance(v0, (int, float)):
+            return (v0 - target) / cos(phase) # cos(atan(x)) is never 0
+
+    amplitude = call_in_nest(get_amplitude, v0, target, phase)
+
+    def get_val (t):
+        def interp_val (v0, target, amplitude, phase):
+            # amplitude is None if non-number
+            if amplitude is None or v0 == target:
+                return v0
+            else:
+                return amplitude * exp(-damp * t) * cos(freq * t + phase) + \
+                       target
+
+        return call_in_nest(interp_val, v0, target, amplitude, phase)
+
+    return get_val
 
 
 def interp_round (get_val, do_round = True):
