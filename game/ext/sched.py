@@ -30,6 +30,7 @@ interp_round
 """
 
 from time import time
+from bisect import bisect
 
 try:
     from pygame.time import wait
@@ -40,21 +41,128 @@ except ImportError:
         sleep(int(t * 1000))
 
 
-def interp_linear (*args):
+def call_in_nest (f, *args):
+    """Collapse a number of similar data structures into one.
+
+Used in interp_* functions.
+
+call_in_nest(f, *args) -> result
+
+Each arg in args is a data structure of nested lists with a similar format (eg.
+[1, 2, 3, [4, 5], []] and ['a', 'b', 'c', ['d', 'e'], []]).  result is a new
+structure in the same format with each non-list object the result of calling f
+with the corresponding objects from each arg (eg. f = lambda n, c: str(n) + c
+produces the result ['1a', '2b', '3c', ['4d', '5e'], []]).
+
+One argument may have a list where others do not.  In this case, those that do
+not have the object in that place passed to f for each object in the (possibly
+further nested) list in the argument that does.  For example, given
+[1, 2, [3, 4]], [1, 2, 3] and 1, result is
+[f(1, 1, 1), f(2, 2, 1), [f(3, 3, 1),  f(4, 3, 1)]].  However, in args with
+lists, all lists must be the same length.
+
+"""
+    is_list = [isinstance(arg, (tuple, list)) for arg in args]
+    if any(is_list):
+        n = len(args[is_list.index(True)])
+        # listify non-list args (assume all lists are the same length)
+        args = (arg if this_is_list else [arg] * n
+                for this_is_list, arg in zip(is_list, args))
+        return [call_in_nest(f, *inner_args) for inner_args in zip(*args)]
+    else:
+        return f(*args)
+
+
+def _cmp_structure (x, y):
+    """Find whether the (nested list) structure of two objects is the same."""
+    is_list = isinstance(x, (tuple, list))
+    if is_list != isinstance(y, (tuple, list)):
+        # one is a list, one isn't
+        return False
+    elif is_list:
+        # both are lists: check length and contents
+        return len(x) == len(y) and \
+               all(_cmp_structure(xi, yi) for xi, yi in zip(x, y))
+    else:
+        # neither is a list
+        return True
+
+
+def interp_linear (*waypoints):
     """Linear interpolation for Scheduler.interp.
 
-interp_linear(*waypoints, round = False) -> f
+interp_linear(*waypoints) -> f
 
 waypoints: each is (v, t) to set the value to v at time t.  t can be omitted
-           for any but the first and waypoints, in which case equally-spaced
-           times are filled in.  v is a number or list of numbers, in which
-           case we interpolate for each number in the list.
+           for any but the last waypoint; the first is 0, and other gaps are
+           filled in with equal spacing.  v is like the arguments taken by the
+           call_in_nest function in this module, and we interpolate for each number in the nested list structure of v.  Some objects in the v
+           structures may be non-numbers, in which case they will not be varied
+           (maybe your function takes another argument you don't want to vary).
 
 f: a function for which f(t) = v for every waypoint, with intermediate values
    linearly interpolated between waypoints.
 
 """
-    pass
+    # fill in missing times
+    vs = []
+    ts = []
+    last = waypoints[-1]
+    for w in waypoints:
+        if w is last or _cmp_structure(w, last):
+            vs.append(w[0])
+            ts.append(w[1])
+        else:
+            vs.append(w)
+            ts.append(None)
+    ts[0] = 0
+    # get groups with time = None
+    groups = []
+    group = None
+    for i, (v, t) in enumerate(zip(vs, ts)):
+        if t is None:
+            if group is None:
+                group = [i]
+                groups.append(group)
+        else:
+            if group is not None:
+                group.append(i)
+            group = None
+    # and assign times within those groups
+    for i0, i1 in groups:
+        t0 = ts[i0 - 1]
+        dt = float(ts[i1] - t0) / (i1 - (i0 - 1))
+        for i in xrange(i0, i1):
+            ts[i] = t0 + dt * (i - (i0 - 1))
+
+    def interp_val (r, v1, v2):
+        return (r * (v2 - v1) + v1) if isinstance(v1, (int, float)) else v1
+
+    def val_gen ():
+        t = yield
+        while 1:
+            # get waypoints we're between
+            i = bisect(ts, t)
+            if i == 0:
+                # before start
+                t = yield vs[0]
+            elif i == len(ts):
+                # past end: use final value, then end
+                t = yield vs[-1]
+                return
+            else:
+                v0 = vs[i - 1]
+                v1 = vs[i]
+                t0 = ts[i - 1]
+                t1 = ts[i]
+                # get ratio of the way between waypoints
+                r = 1 if t1 == t0 else (t - t0) / (t1 - t0) # t is always float
+                t = yield call_in_nest(interp_val, r, v0, v1)
+
+    # start the generator; get_val is its send method
+    g = val_gen()
+    g.next()
+    return g.send
 
 
 def interp_repeat (get_val, period, t0 = 0):
@@ -71,17 +179,20 @@ f: the get_val wrapper that repeats get_val over the given period.
 """
     pass
 
+
 def interp_round (get_val, round = True):
     """Round the output of an existing interpolation function.
 
 interp_round(get_val, round = True) -> f
 
-get_val: the existing function.  The values it returns are numbers or lists of
-         numbers.
+get_val: the existing function.  The values it returns are as the arguments
+         taken by the call_in_nest function in this module.
 round: a keyword-only argument that determines whether to round the numbers in
-       values to nearest integers.  This is a list containing a boolean for
-       each number in the value, or a single boolean to round for every number
-       (or just the number itself, if values are not lists).
+       values to nearest integers.  This is in the form of the values get_val
+       returns, a structure of lists and booleans corresponding to each number
+       in get_val.  Any list in this structure can be replaced by a single
+       boolean to apply to the entire (nested) list.  Non-number objects in the
+       value's structure are ignored.
 
 f: the get_val wrapper that rounds the returned value.
 
@@ -381,4 +492,4 @@ timeout_id: an identifier that can be passed to the rm_timeout method to remove
                 else:
                     yield True
 
-        return self.add_timeout(next, timeout_cb(), frames = 1)
+        return self.add_timeout(timeout_cb().next, frames = 1)
