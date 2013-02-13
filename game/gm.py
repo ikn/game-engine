@@ -338,11 +338,10 @@ dirty: a list of rects that need to be updated; for internal use.
     @rect.setter
     def rect (self, rect):
         # need to set dirty in old and new rects (if changed)
-        last = self._rect
+        last = self.last_rect
         rect = Rect(rect)
         if rect != last:
             self.dirty.append(last)
-            self.last_rect = last
             self.dirty.append(rect)
             self._rect = rect
 
@@ -387,6 +386,9 @@ Any co-ordinates not given are left unchanged.
         if y is not None:
             r[1] = y
         self.rect = r
+
+    def draw (self):
+        self.last_rect = self._rect
 
 
 class Colour (Graphic):
@@ -434,6 +436,7 @@ size: the (width, height) size of the rect covered (this can only be set, not
             self._sfc.fill(colour)
 
     def draw (self, dest, rects):
+        Graphic.draw(self)
         if self.opaque:
             c = self._colour
             fill = dest.fill
@@ -523,6 +526,7 @@ Arguments are as for resize, but w and h are ratios of the original size.
         self.resize(ir(w * ow), ir(h * oh), scale)
 
     def draw (self, dest, rects):
+        Graphic.draw(self)
         sfc = self.surface
         blit = dest.blit
         offset = self._offset

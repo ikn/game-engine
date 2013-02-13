@@ -24,8 +24,8 @@ Scheduler
     FUNCTIONS
 
 interp_linear
-interp_repeat
 interp_round
+interp_repeat
 
 """
 
@@ -39,6 +39,13 @@ except ImportError:
 
     def wait (t):
         sleep(int(t * 1000))
+
+
+def ir (x):
+    """Returns the argument rounded to the nearest integer."""
+    # this is about twice as fast as int(round(x))
+    y = int(x)
+    return (y + (x - y >= .5)) if x > 0 else (y - (y - x >= .5))
 
 
 def call_in_nest (f, *args):
@@ -134,9 +141,8 @@ f: a function for which f(t) = v for every waypoint, with intermediate values
         dt = float(ts[i1] - t0) / (i1 - (i0 - 1))
         for i in xrange(i0, i1):
             ts[i] = t0 + dt * (i - (i0 - 1))
-
-    def interp_val (r, v1, v2):
-        return (r * (v2 - v1) + v1) if isinstance(v1, (int, float)) else v1
+    interp_val = lambda r, v1, v2: (r * (v2 - v1) + v1) \
+                                   if isinstance(v1, (int, float)) else v1
 
     def val_gen ():
         t = yield
@@ -149,6 +155,7 @@ f: a function for which f(t) = v for every waypoint, with intermediate values
             elif i == len(ts):
                 # past end: use final value, then end
                 t = yield vs[-1]
+                yield None # to avoid StopIteration issues
                 return
             else:
                 v0 = vs[i - 1]
@@ -163,6 +170,31 @@ f: a function for which f(t) = v for every waypoint, with intermediate values
     g = val_gen()
     g.next()
     return g.send
+
+
+def interp_round (get_val, do_round = True):
+    """Round the output of an existing interpolation function to integers.
+
+interp_round(get_val, round_val = True) -> f
+
+get_val: the existing function.  The values it returns are as the arguments
+         taken by the call_in_nest function in this module.
+do_round: determines which values to round.  This is in the form of the values
+          get_val returns, a structure of lists and booleans corresponding to
+          each number in get_val.  Any list in this structure can be replaced
+          by a single boolean to apply to the entire (nested) list.  Non-number
+          objects in the value's structure are ignored.
+
+f: the get_val wrapper that rounds the returned value.
+
+"""
+    def round_val (do, v):
+        return ir(v) if isinstance(v, (int, float)) and do else v
+
+    def round_get_val (t):
+        return call_in_nest(round_val, do_round, get_val(t))
+
+    return round_get_val
 
 
 def interp_repeat (get_val, period, t0 = 0):
@@ -180,21 +212,16 @@ f: the get_val wrapper that repeats get_val over the given period.
     pass
 
 
-def interp_round (get_val, round = True):
-    """Round the output of an existing interpolation function.
+def interp_oscillate (get_val, t0, t1):
+    """Repeat a linear oscillation over an existing interpolation function.
 
-interp_round(get_val, round = True) -> f
+interp_oscillate(get_val, t0, t1) -> f
 
-get_val: the existing function.  The values it returns are as the arguments
-         taken by the call_in_nest function in this module.
-round: a keyword-only argument that determines whether to round the numbers in
-       values to nearest integers.  This is in the form of the values get_val
-       returns, a structure of lists and booleans corresponding to each number
-       in get_val.  Any list in this structure can be replaced by a single
-       boolean to apply to the entire (nested) list.  Non-number objects in the
-       value's structure are ignored.
+get_val: an existing interpolation function, as taken by Scheduler.interp.
+t0, t1: minimum and maximum times to pass to get_val (end points of the
+        oscillation).
 
-f: the get_val wrapper that rounds the returned value.
+f: the generated get_val wrapper.
 
 """
     pass
