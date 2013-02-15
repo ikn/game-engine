@@ -11,11 +11,10 @@ Image
 TODO:
  - if GM is fully dirty, draw everything without any rect checks
  - more setters (Graphic.x, Graphic.y, Graphic.pos, Image.size, Image.scale)
- - GraphicsGroup
  - performance:
     - reduce number of rects created by _mk_disjoint
     - maybe write GraphicsManager.draw and _mk_disjoint in C
- - GraphicsManager.*fade* to replace Game.*fade*
+ - GraphicsManager.overlay, .fade
  - GraphicsManager.offset to offset the viewing window
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
     - can set/unset a scroll function to call every draw
@@ -104,10 +103,10 @@ Graphics are meant to be used with only one GraphicsManager at a time.
 
     CONSTRUCTOR
 
-GraphicsManager(*graphics, surface = None)
+GraphicsManager(*graphics[, surface])
 
 graphics: any number of Graphic or GraphicsGroup instances.
-surface (keyword-only): a pygame.Surface to draw to; if None, no drawing
+surface (keyword-only): a pygame.Surface to draw to; if not given, no drawing
                         occurs.
 
     METHODS
@@ -119,7 +118,7 @@ draw
 
     ATTRIBUTES
 
-surface: as taken by constructor; set this directly (can be None).
+surface: as taken by constructor; set this directly (can be None to do nothing).
 graphics: {layer: graphics} dict, where graphics is a set of the graphics in
           the layer, each as taken by the add method.
 layers: a list of layers that contain graphics, lowest first.
@@ -163,7 +162,7 @@ Takes any number of Graphic or GraphicsGroup instances.
                 else:
                     all_gs[l] = set((g,))
                     ls.add(l)
-                g.manager = self
+                g._manager = self
             else: # GraphicsGroup
                 graphics.extend(g.contents)
         self.layers = sorted(ls)
@@ -184,7 +183,7 @@ Takes any number of Graphic or GraphicsGroup instances.
                     all_gs = all_graphics[l]
                     if g in all_gs:
                         all_gs.remove(g)
-                        del g.manager
+                        g._manager = None
                         if not all_gs:
                             del all_gs[l]
                             ls.remove(l)
@@ -263,26 +262,59 @@ nothing changed.
         return sum(dirty_by_layer.itervalues(), [])
 
 
-class GraphicsGroup (object):
+class GraphicsGroup (list):
     """Convenience wrapper for grouping a number of graphics.
 
 Takes any number of Graphic instances or lists of arguments to pass to Graphic
-to create one.
+to create one.  This is a list subclass, containing graphics, so add and remove
+graphics using list methods.
 
     METHODS
 
-move
+opaque_in
+move_by
 
     ATTRIBUTES
 
-graphics: a set of the Graphic instances contained.
-layer, visible: as for Graphic; these give a list of values for each graphic in
-                the graphics attribute; set them to a single value to apply to
-                all contained graphics.
+layer, visible, manager:
+    as for Graphic; these give a list of values for each contained graphic; set
+    them to a single value to apply to all contained graphics.
 
 """
 
-    pass
+    def __init__ (self, *graphics):
+        list.__init__(self, (g if isinstance(g, Graphic) else Graphic(*g)
+                             for g in graphics))
+
+    def __getattr__ (self, attr):
+        if attr in ('layer', 'visible', 'manager'):
+            return [getattr(g, attr) for g in self]
+        else:
+            return list.__getattr__(self, attr)
+
+    def __setattr__ (self, attr, val):
+        if attr in ('layer', 'visible', 'manager'):
+            for g in self:
+                setattr(g, attr, val)
+        else:
+            return list.__setattr__(self, attr, val)
+
+    def opaque_in (self, rect):
+        """Whether the contained graphics are opaque in the given rect.
+
+Returns True if any graphic draws opaque pixels in the whole of the given rect.
+
+"""
+        return any(g.opaque_in(rect) for g in self)
+
+    def move_by (self, *args, **kwargs):
+        """Move each contained graphic by the given number of pixels.
+
+move_by(dx = 0, dy = 0)
+
+"""
+        for g in self:
+            g.move_by(*args, **kwargs)
 
 
 class Graphic (object):
@@ -305,9 +337,9 @@ rect: boundary rect that this graphic is contained in.
 
     METHODS
 
+opaque_in
 move_by
 move_to
-opaque_in
 
     ATTRIBUTES
 
@@ -318,8 +350,9 @@ layer: the layer to draw in, lower being closer to the 'front'; defaults to 0.
        be ordered with respect to each other.
 visible: whether currently (supposed to be) visible on-screen.
 was_visible: visible at the time of the last draw.
-manager: the GraphicsManager this graphic is associated with, or None.  (A
-         graphic should only be used with one manager at a time.)
+manager: the GraphicsManager this graphic is associated with, or None; this may
+         be changed directly.  (A graphic should only be used with one manager
+         at a time.)
 dirty: a list of rects that need to be updated; for internal use.
 
 """
@@ -330,7 +363,7 @@ dirty: a list of rects that need to be updated; for internal use.
         self._layer = 0
         self.visible = True
         self.was_visible = False
-        self.manager = None
+        self._manager = None
         self.dirty = []
 
     @property
@@ -361,6 +394,16 @@ dirty: a list of rects that need to be updated; for internal use.
             self._layer = layer
             if m is not None:
                 m.add(self)
+
+    @property
+    def manager (self):
+        return self._manager
+
+    @manager.setter
+    def manager (self, manager):
+        if self._manager is not None:
+            self._manager.rm(self)
+        manager.add(self) # changes value in _manager
 
     def opaque_in (self, rect):
         """Whether this draws opaque pixels in the whole of the given rect."""

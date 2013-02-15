@@ -29,6 +29,9 @@ interp_round
 interp_repeat
 interp_oscillate
 
+TODO:
+ - interp preset: jitter-like (random, 'quake-like motion) - how best to do a camera shake?  (call it 'shake'?)
+
 """
 
 from time import time
