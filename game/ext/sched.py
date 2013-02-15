@@ -24,8 +24,10 @@ Scheduler
     FUNCTIONS
 
 interp_linear
+interp_target
 interp_round
 interp_repeat
+interp_oscillate
 
 """
 
@@ -397,6 +399,8 @@ Takes the same arguments as Timer.
 
 add_timeout
 rm_timeout
+interp
+interp_simple
 
 """
 
@@ -523,13 +527,13 @@ end: used to do some cleanup when the interpolation is canceled (when get_val
      If the function returns a (non-None) value, set_val is called with it.
 
 timeout_id: an identifier that can be passed to the rm_timeout method to remove
-            the callback that continues the interpolation.  In this case
-            end_cb is not called.
+            the callback that continues the interpolation.  In this case the
+            end argument is not respected.
 
 """
         if not callable(set_val):
             obj, attr = set_val
-            set_val = lambda val: setattr(obj, attr, val)
+            set_val = lambda *val: setattr(obj, attr, val)
 
         def timeout_cb ():
             t = 0
@@ -569,3 +573,30 @@ timeout_id: an identifier that can be passed to the rm_timeout method to remove
                     yield True
 
         return self.add_timeout(timeout_cb().next, frames = 1)
+
+    def interp_simple (self, obj, attr, target, t, end_cb = None,
+                       round_val = False):
+        """A simple version of the interp method.
+
+Varies an object's attribute linearly from its current value to a target value
+in a set amount of time.
+
+interp_simple(obj, attr, target, t[, end], round_val = False) -> timeout_id
+
+obj, attr: this function varies the attribute attr of the object obj.
+target: a target value, in the same form as the current value in the given
+        attribute.
+t: the amount of time to take to reach the target value.
+end_cb: a function to call when the target value has been reached.
+round_val: whether to round the value(s) (see the interp_round function in this
+           module for other possible values).
+
+timeout_id: an identifier that can be passed to the rm_timeout method to remove
+            the callback that continues the interpolation.  In this case end_cb
+            is not called.
+
+"""
+        get_val = interp_linear(getattr(obj, attr), (target, t))
+        if round_val:
+            get_val = interp_round(get_val, round_val)
+        self.interp(get_val, (obj, attr), end = end_cb)

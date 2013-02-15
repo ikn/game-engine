@@ -9,6 +9,7 @@ Colour
 Image
 
 TODO:
+ - more setters (Graphic.x, Graphic.y, Graphic.pos, Image.size, Image.scale)
  - GraphicsGroup
  - performance:
     - reduce number of rects created by _mk_disjoint
@@ -280,7 +281,7 @@ layer, visible: as for Graphic; these give a list of values for each graphic in
 
 """
 
-    pass # TODO; layer, visible need getters, setters
+    pass
 
 
 class Graphic (object):
@@ -424,24 +425,28 @@ size: the (width, height) size of the rect covered (this can only be set, not
 
     @colour.setter
     def colour (self, colour):
-        self._colour = colour
-        self.opaque = len(colour) == 3 or colour[3] == 255
-        if self.opaque:
-            if hasattr(self, '_sfc'):
-                del self._sfc
-        else:
-            # have to use a surface: can't fill an alpha colour to a non-alpha
-            # surface directly
-            self._sfc = blank_sfc(self._rect.size)
-            self._sfc.fill(colour)
+        if not hasattr(self, '_colour') or colour != self._colour:
+            self._colour = colour
+            self.opaque = len(colour) == 3 or colour[3] == 255
+            if self.opaque or colour[3] == 0:
+                if hasattr(self, '_sfc'):
+                    del self._sfc
+            else:
+                # have to use a surface: can't fill an alpha colour to a
+                # non-alpha surface directly
+                if not hasattr(self, '_sfc'):
+                    self._sfc = blank_sfc(self._rect.size)
+                self._sfc.fill(colour)
+            self.dirty.append(self._rect)
 
     def draw (self, dest, rects):
         Graphic.draw(self)
         if self.opaque:
             c = self._colour
-            fill = dest.fill
-            for r in rects:
-                fill(c, r)
+            if len(c) == 3 or c[3] != 0:
+                fill = dest.fill
+                for r in rects:
+                    fill(c, r)
         else:
             sfc = self._sfc
             blit = dest.blit
@@ -462,6 +467,7 @@ img: surface or filename (under conf.IMG_DIR) to load.
     METHODS
 
 resize
+rescale
 
     ATTRIBUTES
 
@@ -512,7 +518,7 @@ scale: a function to do the scaling:
                 self.surface = scale(self.base_surface, (w, h))
             self.rect = (r[0], r[1], w, h)
 
-    def scale (self, w = None, h = None, scale = pg.transform.smoothscale):
+    def rescale (self, w = None, h = None, scale = pg.transform.smoothscale):
         """A convenience wrapper around resize to scale by a ratio.
 
 Arguments are as for resize, but w and h are ratios of the original size.
