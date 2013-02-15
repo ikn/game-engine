@@ -510,10 +510,9 @@ get_val: a function called with the elapsed time in seconds to obtain the
          current value.  If this function returns None, the interpolation will
          be canceled.  The interp_* functions in this module can be used to
          construct such functions.  The value must actually be a list of
-         arguments to pass to set_val (so if set_val is (obj, attr), it must be
-         a list of length 1).
+         arguments to pass to set_val (unless set_val is (obj, attr)).
 set_val: a function called with the current value to set it.  This may also be
-         a (obj, attr) tuple to do obj.attr = val.
+         an (obj, attr) tuple to do obj.attr = val.
 t_max: if time becomes larger than this, cancel the interpolation.
 val_min, val_max: minimum and maximum values of the interpolated value.  If
                   given, get_val must only return values that can be compared
@@ -531,9 +530,10 @@ timeout_id: an identifier that can be passed to the rm_timeout method to remove
             end argument is not respected.
 
 """
-        if not callable(set_val):
+        got_obj = not callable(set_val)
+        if got_obj:
             obj, attr = set_val
-            set_val = lambda *val: setattr(obj, attr, val)
+            set_val = lambda val: setattr(obj, attr, val)
 
         def timeout_cb ():
             t = 0
@@ -555,7 +555,7 @@ timeout_id: an identifier that can be passed to the rm_timeout method to remove
                         done = True
                         v = val_max
                     if v != last_v:
-                        set_val(*v)
+                        set_val(v) if got_obj else set_val(*v)
                         last_v = v
                 if done:
                     # canceling for some reason
@@ -565,7 +565,7 @@ timeout_id: an identifier that can be passed to the rm_timeout method to remove
                         v = end
                     # set final value if want to
                     if v is not None and v != last_v:
-                        set_val(*v)
+                        set_val(v) if got_obj else set_val(*v)
                     yield False
                     # just in case we get called again (should never happen)
                     return
