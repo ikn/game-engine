@@ -260,7 +260,7 @@ period, t0: times passed to the returned function are looped around to fit in
 f: the get_val wrapper that repeats get_val over the given period.
 
 """
-    pass
+    pass # TODO
 
 
 def interp_oscillate (get_val, t0, t1):
@@ -275,7 +275,7 @@ t0, t1: minimum and maximum times to pass to get_val (end points of the
 f: the generated get_val wrapper.
 
 """
-    pass
+    pass # TODO
 
 
 class Timer (object):
@@ -501,10 +501,11 @@ otherwise it will not be called again.
                     del cbs[i]
 
     def interp (self, get_val, set_val, t_max = None, val_min = None,
-                val_max = None, end = None):
+                val_max = None, end = None, round_val = False, multi_arg = False):
         """Vary a value over time.
 
-interp(get_val, set_val[, t_max][, val_min][, val_max][, end]) -> timeout_id
+interp(get_val, set_val[, t_max][, val_min][, val_max][, end],
+       round_val = False, multi_arg = False) -> timeout_id
 
 get_val: a function called with the elapsed time in seconds to obtain the
          current value.  If this function returns None, the interpolation will
@@ -524,14 +525,19 @@ end: used to do some cleanup when the interpolation is canceled (when get_val
      the rm_timeout method is called with the returned id).  This can be a
      final value to pass to set_val, or a function to call without arguments.
      If the function returns a (non-None) value, set_val is called with it.
+round_val: whether to round the value(s) (see the interp_round function in this
+           module for other possible values).
+multi_arg: whether values should be interpreted as lists of arguments to pass
+           to set_val instead of a single list argument.
 
 timeout_id: an identifier that can be passed to the rm_timeout method to remove
             the callback that continues the interpolation.  In this case the
             end argument is not respected.
 
 """
-        got_obj = not callable(set_val)
-        if got_obj:
+        if round_val:
+            get_val = interp_round(get_val, round_val)
+        if not callable(set_val):
             obj, attr = set_val
             set_val = lambda val: setattr(obj, attr, val)
 
@@ -555,7 +561,7 @@ timeout_id: an identifier that can be passed to the rm_timeout method to remove
                         done = True
                         v = val_max
                     if v != last_v:
-                        set_val(v) if got_obj else set_val(*v)
+                        set_val(*v) if multi_arg else set_val(v)
                         last_v = v
                 if done:
                     # canceling for some reason
@@ -565,7 +571,7 @@ timeout_id: an identifier that can be passed to the rm_timeout method to remove
                         v = end
                     # set final value if want to
                     if v is not None and v != last_v:
-                        set_val(v) if got_obj else set_val(*v)
+                        set_val(*v) if multi_arg else set_val(v)
                     yield False
                     # just in case we get called again (should never happen)
                     return
@@ -597,6 +603,4 @@ timeout_id: an identifier that can be passed to the rm_timeout method to remove
 
 """
         get_val = interp_linear(getattr(obj, attr), (target, t))
-        if round_val:
-            get_val = interp_round(get_val, round_val)
-        self.interp(get_val, (obj, attr), end = end_cb)
+        self.interp(get_val, (obj, attr), end = end_cb, round_val = round_val)

@@ -9,6 +9,7 @@ Colour
 Image
 
 TODO:
+ - if GM is fully dirty, draw everything without any rect checks
  - more setters (Graphic.x, Graphic.y, Graphic.pos, Image.size, Image.scale)
  - GraphicsGroup
  - performance:
