@@ -52,17 +52,6 @@ int set_add (int *arr, int n, int x) {
 }
 
 PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
-//     int s;
-//     printf("add: ");
-//     for (s = 0; s < PyList_GET_SIZE(add); s++) {
-//         printf("(%d, %d, %d, %d) ", ((PyRectObject*) PyList_GET_ITEM(add, s))->r.x, ((PyRectObject*) PyList_GET_ITEM(add, s))->r.y, ((PyRectObject*) PyList_GET_ITEM(add, s))->r.w, ((PyRectObject*) PyList_GET_ITEM(add, s))->r.h);
-//     }
-//     printf("\n");
-//     printf("rm: ");
-//     for (s = 0; s < PyList_GET_SIZE(rm); s++) {
-//         printf("(%d, %d, %d, %d) ", ((PyRectObject*) PyList_GET_ITEM(rm, s))->r.x, ((PyRectObject*) PyList_GET_ITEM(rm, s))->r.y, ((PyRectObject*) PyList_GET_ITEM(rm, s))->r.w, ((PyRectObject*) PyList_GET_ITEM(rm, s))->r.h);
-//     }
-//     printf("\n");
     // both arguments are [pygame.Rect]
     // turn into arrays
     add = PySequence_Fast(add, "expected list"); // NOTE: ref[+1]
@@ -105,9 +94,9 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
                 for (k = row0; k < row1; k++) { // rows
                     for (l = col0; l < col1; l++) { // cols
                         if (i == 0) // add
-                            grid[(n_edges[1] - 1) * k + l] |= 2;
+                            grid[(n_edges[0] - 1) * k + l] |= 2;
                         else // rm (i == 1)
-                            grid[(n_edges[1] - 1) * k + l] ^= 1;
+                            grid[(n_edges[0] - 1) * k + l] ^= 1;
                     }
                 }
             }
@@ -118,7 +107,7 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
     PyObject* rs = PyList_New(0);
     for (i = 0; i < n_edges[1] - 1; i++) { // rows
         for (j = 0; j < n_edges[0] - 1; j++) { // cols
-            if (grid[(n_edges[1] - 1) * i + j] == 3) { // add and not rm
+            if (grid[(n_edges[0] - 1) * i + j] == 3) { // add and not rm
                 k = edges[0][j];
                 l = edges[1][i];
                 // NOTE: ref[+3]
@@ -134,11 +123,6 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
     PyMem_Free(edges[1]); // NOTE: alloc[-1]
     Py_DECREF(rm); // NOTE: ref[-2]
     Py_DECREF(add); // NOTE: ref[-1]
-//     printf("rtn: ");
-//     for (i = 0; i < PyList_GET_SIZE(rs); i++) {
-//         printf("(%d, %d, %d, %d) ", ((PyRectObject*) PyList_GET_ITEM(rs, i))->r.x, ((PyRectObject*) PyList_GET_ITEM(rs, i))->r.y, ((PyRectObject*) PyList_GET_ITEM(rs, i))->r.w, ((PyRectObject*) PyList_GET_ITEM(rs, i))->r.h);
-//     }
-//     printf("\n");
     return rs;
 }
 
