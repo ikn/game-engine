@@ -44,6 +44,7 @@ from pygame import Rect
 
 from conf import conf
 from util import ir, convert_sfc, blank_sfc
+from gmdraw import fastdraw
 
 
 def _mk_disjoint (add, rm = []):
@@ -220,31 +221,34 @@ nothing changed.
             return False
         graphics = self.graphics
         dirty = self._dirty
+        fastdraw(layers, sfc, graphics, dirty)
         # get dirty rects from graphics
-        for gs in graphics.itervalues():
-            for g in gs:
-                for flag, bdy in ((g.was_visible, g.last_rect),
-                                  (g.visible, g._rect)):
-                    if flag:
-                        dirty += [r.clip(bdy) for r in g.dirty]
-                g.was_visible = g.visible
-        if not dirty:
-            return False
-        # get opaque regions of dirty rects by layer
-        dirty_opaque = {}
-        for l, gs in graphics.iteritems():
-            dirty_opaque[l] = l_dirty_opaque = []
-            for r in dirty:
-                for g in gs:
-                    r = r.clip(g._rect)
-                    if r and g.opaque_in(r):
-                        l_dirty_opaque.append(r)
-        # undirty below opaque graphics and make dirty rects disjoint
-        dirty_by_layer = {}
-        dirty_opaque_sum = []
-        for l in layers:
-            dirty_by_layer[l] = _mk_disjoint(dirty, dirty_opaque_sum)
-            dirty_opaque_sum += dirty_opaque[l]
+        #for gs in graphics.itervalues():
+            #for g in gs:
+                #for flag, bdy in ((g.was_visible, g.last_rect),
+                                  #(g.visible, g._rect)):
+                    #if flag:
+                        #dirty += [r.clip(bdy) for r in g.dirty]
+                #g.was_visible = g.visible
+        #if not dirty:
+            #return False
+        #dirty_opaque = {}
+        #dirty_opaque_sum = []
+        #dirty_by_layer = {}
+        #for l in layers:
+            #gs = graphics[l]
+            ## get opaque regions of dirty rects
+            #dirty_opaque[l] = l_dirty_opaque = []
+            #for r in dirty:
+                #for g in gs:
+                    #r = r.clip(g._rect)
+                    #if not r or not g.opaque_in(r):
+                        #break
+                #else:
+                    #l_dirty_opaque.append(r)
+            ## undirty below opaque graphics and make dirty rects disjoint
+            #dirty_by_layer[l] = _mk_disjoint(dirty, dirty_opaque_sum)
+            #dirty_opaque_sum += l_dirty_opaque
         # redraw in dirty rects
         for l in reversed(layers):
             rs = dirty_by_layer[l]
@@ -322,7 +326,8 @@ class Graphic (object):
 
 Subclasses should implement:
 
-    draw(surface, rects): draw the graphic.
+    draw(surface, rects): draw the graphic (should never alter any state that
+                          is not internal to the graphic).
         surface: surface to draw to.
         rects: rects to draw in; guaranteed to be disjoint pygame.Rect
                instances that are contained by the graphic's rect.
