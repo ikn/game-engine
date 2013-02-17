@@ -221,7 +221,7 @@ nothing changed.
             return False
         graphics = self.graphics
         dirty = self._dirty
-        fastdraw(layers, sfc, graphics, dirty)
+        return fastdraw(layers, sfc, graphics, dirty)
         # get dirty rects from graphics
         #for gs in graphics.itervalues():
             #for g in gs:
@@ -250,20 +250,20 @@ nothing changed.
             #dirty_by_layer[l] = _mk_disjoint(dirty, dirty_opaque_sum)
             #dirty_opaque_sum += l_dirty_opaque
         # redraw in dirty rects
-        for l in reversed(layers):
-            rs = dirty_by_layer[l]
-            for g in graphics[l]:
-                r = g._rect
-                this_rs = []
-                for d in rs:
-                    d = r.clip(d)
-                    if d:
-                        this_rs.append(d)
-                if this_rs:
-                    g.draw(sfc, this_rs)
-                g.dirty = []
-        self._dirty = []
-        return sum(dirty_by_layer.itervalues(), [])
+        #for l in reversed(layers):
+            #rs = dirty_by_layer[l]
+            #for g in graphics[l]:
+                #r = g._rect
+                #this_rs = []
+                #for d in rs:
+                    #d = r.clip(d)
+                    #if d:
+                        #this_rs.append(d)
+                #if this_rs:
+                    #g.draw(sfc, this_rs)
+                #g.dirty = []
+        #self._dirty = []
+        #return sum(dirty_by_layer.itervalues(), [])
 
 
 class GraphicsGroup (list):
