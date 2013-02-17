@@ -437,10 +437,10 @@ volume: float to scale volume by.
 
     # running
 
-    def run (self, n = None):
+    def run (self, t = None):
         """Main loop."""
-        while not self._quit:
-            self.world.scheduler.run(seconds = n)
+        while not self._quit and (t is None or t > 0):
+            t = self.world.scheduler.run(seconds = t)
 
     def quit (self, *args):
         """Quit the game."""

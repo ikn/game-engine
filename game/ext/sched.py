@@ -415,12 +415,13 @@ interp_simple
     def run (self, seconds = None, frames = None):
         """Start the scheduler.
 
-run([seconds][, frames])
+run([seconds][, frames]) -> remain
 
-Arguments are as required by Timer.run.
+Arguments and return value are as for Timer.run.
 
 """
-        Timer.run(self, self._update, seconds = seconds, frames = frames)
+        return Timer.run(self, self._update, seconds = seconds,
+                         frames = frames)
 
     def step (self):
         self._update()
