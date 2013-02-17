@@ -42,7 +42,27 @@ int find (int *arr, int n, int x, int i) {
     return -1;
 }
 
+int set_add (int *arr, int n, int x) {
+    int i;
+    for (i = 0; i < n; i++) {
+        if (arr[i] == x) return 0;
+    }
+    arr[n] = x;
+    return 1;
+}
+
 PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
+//     int s;
+//     printf("add: ");
+//     for (s = 0; s < PyList_GET_SIZE(add); s++) {
+//         printf("(%d, %d, %d, %d) ", ((PyRectObject*) PyList_GET_ITEM(add, s))->r.x, ((PyRectObject*) PyList_GET_ITEM(add, s))->r.y, ((PyRectObject*) PyList_GET_ITEM(add, s))->r.w, ((PyRectObject*) PyList_GET_ITEM(add, s))->r.h);
+//     }
+//     printf("\n");
+//     printf("rm: ");
+//     for (s = 0; s < PyList_GET_SIZE(rm); s++) {
+//         printf("(%d, %d, %d, %d) ", ((PyRectObject*) PyList_GET_ITEM(rm, s))->r.x, ((PyRectObject*) PyList_GET_ITEM(rm, s))->r.y, ((PyRectObject*) PyList_GET_ITEM(rm, s))->r.w, ((PyRectObject*) PyList_GET_ITEM(rm, s))->r.h);
+//     }
+//     printf("\n");
     // both arguments are [pygame.Rect]
     // turn into arrays
     add = PySequence_Fast(add, "expected list"); // NOTE: ref[+1]
@@ -59,11 +79,10 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
     for (i = 0; i < 2; i++) { // rects
         for (j = 0; j < n_rects[i]; j++) { // add|rm
             r = rects[i][j]->r;
-            for (k = 0; k < 2; k++) { // axes
-                edges[k][n_edges[k]] = r.y;
-                edges[k][n_edges[k] + 1] = r.y + r.h;
-                n_edges[k] += 2;
-            }
+            n_edges[0] += set_add(edges[0], n_edges[0], r.x);
+            n_edges[0] += set_add(edges[0], n_edges[0], r.x + r.w);
+            n_edges[1] += set_add(edges[1], n_edges[1], r.y);
+            n_edges[1] += set_add(edges[1], n_edges[1], r.y + r.h);
         }
     }
     // sort edges
@@ -71,36 +90,55 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
     quicksort(edges[1], n_edges[1]);
     // generate grid of (rows of) subrects and mark contents
     // each has 2 if add, has no 1 if rm
-    int* grid = PyMem_New(int, (n_edges[0] - 1) * (n_edges[1] - 1));
-    int row, col, l;
+    i = (n_edges[0] - 1) * (n_edges[1] - 1);
+    int* grid = PyMem_New(int, i);
+    for (j = 0; j < i; j++) grid[j] = 1;
+    int row0, row1, col0, col1, l;
     for (i = 0; i < 2; i++) { // rects
         for (j = 0; j < n_rects[i]; j++) { // add|rm
             r = rects[i][j]->r;
             if (r.w > 0 && r.h > 0) {
-                row = find(edges[1], n_edges[1], r.y, 0);
-                col = find(edges[0], n_edges[0], r.x, 0);
-                for (k = row; k < find(edges[1], n_edges[1], r.y + r.h, row);
-                     k++) { // rows
-                    for (l = col;
-                         l < find(edges[0], n_edges[0], r.x + r.w, col);
-                         l++) { // cols
+                row0 = find(edges[1], n_edges[1], r.y, 0);
+                row1 = find(edges[1], n_edges[1], r.y + r.h, row0);
+                col0 = find(edges[0], n_edges[0], r.x, 0);
+                col1 = find(edges[0], n_edges[0], r.x + r.w, col0);
+                for (k = row0; k < row1; k++) { // rows
+                    for (l = col0; l < col1; l++) { // cols
                         if (i == 0) // add
-                            grid[(n_edges[0] - 1) * k + l] |= 2;
+                            grid[(n_edges[1] - 1) * k + l] |= 2;
                         else // rm (i == 1)
-                            grid[(n_edges[0] - 1) * k + l] ^= 1;
+                            grid[(n_edges[1] - 1) * k + l] ^= 1;
                     }
                 }
             }
         }
     }
+    PyObject* r_o;
     // generate subrects
-
     PyObject* rs = PyList_New(0);
+    for (i = 0; i < n_edges[1] - 1; i++) { // rows
+        for (j = 0; j < n_edges[0] - 1; j++) { // cols
+            if (grid[(n_edges[1] - 1) * i + j] == 3) { // add and not rm
+                k = edges[0][j];
+                l = edges[1][i];
+                // NOTE: ref[+3]
+                r_o = PyRect_New4(k, l, edges[0][j + 1] - k,
+                                  edges[1][i + 1] - l);
+                PyList_Append(rs, r_o);
+                Py_DECREF(r_o); // NOTE: ref[-3]
+            }
+        }
+    }
     // cleanup
     PyMem_Free(edges[0]);
     PyMem_Free(edges[1]); // NOTE: alloc[-1]
     Py_DECREF(rm); // NOTE: ref[-2]
     Py_DECREF(add); // NOTE: ref[-1]
+//     printf("rtn: ");
+//     for (i = 0; i < PyList_GET_SIZE(rs); i++) {
+//         printf("(%d, %d, %d, %d) ", ((PyRectObject*) PyList_GET_ITEM(rs, i))->r.x, ((PyRectObject*) PyList_GET_ITEM(rs, i))->r.y, ((PyRectObject*) PyList_GET_ITEM(rs, i))->r.w, ((PyRectObject*) PyList_GET_ITEM(rs, i))->r.h);
+//     }
+//     printf("\n");
     return rs;
 }
 
@@ -160,10 +198,15 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                     }
                     Py_DECREF(g_rect); // NOTE: ref[-6]
                 }
+                Py_DECREF(tmp); // NOTE: ref[-5]
             }
             Py_DECREF(g_dirty); // NOTE: ref[-4]
+            tmp = PyObject_GetAttrString(g, "visible"); // NOTE: ref[+4]
+            PyObject_SetAttrString(g, "was_visible", tmp);
+            Py_DECREF(tmp); // NOTE: ref[-4]
         }
     }
+
     // only have something to do if dirty is non-empty
     PyObject* rtn = Py_False;
     int n_dirty, r_new, r_good;
@@ -180,13 +223,14 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
     PyObject** dirty_by_layer = PyMem_New(PyObject*, n_layers);
     for (i = 0; i < n_layers; i++) { // graphics
         gs = graphics[i];
+        n = n_graphics[i];
         // get opaque regions of dirty rects
         l_dirty_opaque = PyList_New(0); // NOTE: ref[+6]
         for (j = 0; j < n_dirty; j++) { // dirty
             r = (PyRectObject*) PyList_GET_ITEM(dirty, j); // pygame.Rect
             r_new = 0;
             r_good = 1;
-            for (k = 0; k < n_graphics[i]; k++) { // gs
+            for (k = 0; k < n; k++) { // gs
                 g = gs[k];
                 g_rect = PyObject_GetAttrString(g, "_rect"); // NOTE: ref[+7]
                 if (r_new) tmp_r = r;
@@ -212,12 +256,53 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
         dirty_by_layer[i] = mk_disjoint(dirty, dirty_opaque);
         tmp = dirty_opaque;
         // NOTE: ref[+8] (not sure why this returns a new reference)
-        PySequence_InPlaceConcat(dirty_opaque, l_dirty_opaque);
+        dirty_opaque = PySequence_InPlaceConcat(dirty_opaque, l_dirty_opaque);
         Py_DECREF(tmp); // NOTE: ref[-5] ref[-8+5]
-        Py_DECREF(l_dirty_opaque); // NOTE: ref[-6] lef[-7+6]
+        Py_DECREF(l_dirty_opaque); // NOTE: ref[-6] ref[-7+6]
+    }
+
+    PyObject* rs, * draw_in;
+    PyObject* draw = PyString_FromString("draw"); // NOTE: ref[+7]
+    // redraw in dirty rects
+    for (i = n_layers - 1; i >= 0; i--) { // layers
+        rs = dirty_by_layer[i];
+        n = PyList_GET_SIZE(rs);
+        gs = graphics[i];
+        for (j = 0; j < n_graphics[i]; j++) { // gs
+            g = gs[j];
+            g_rect = PyObject_GetAttrString(g, "_rect"); // NOTE: ref[+8]
+            draw_in = PyList_New(0); // NOTE: ref[+9]
+            for (k = 0; k < n; k++) { // rs
+                r = (PyRectObject*) PyList_GET_ITEM(rs, k);
+                // NOTE: ref[+10]
+                r = (PyRectObject*)
+                    PyObject_CallMethodObjArgs(g_rect, clip, r, NULL);
+                if (r->r.w > 0 && r->r.h > 0)
+                    PyList_Append(draw_in, (PyObject*) r);
+                Py_DECREF(r); // NOTE: ref[-10]
+            }
+            if (PyList_GET_SIZE(draw_in) > 0) {
+                PyObject_CallMethodObjArgs(g, draw, sfc, draw_in, NULL);
+            }
+            tmp = PyList_New(0); // NOTE: ref[+10]
+            PyObject_SetAttrString(g, "dirty", tmp);
+            Py_DECREF(tmp); // NOTE: ref[-10]
+            Py_DECREF(draw_in); // NOTE: ref[-9]
+            Py_DECREF(g_rect); // NOTE: ref[-8]
+        }
+    }
+
+    // add up dirty rects to return
+    rtn = PyList_New(0); // new ref, but we're returning it
+    for (i = 0; i < n_layers; i++) { // dirty_by_layer
+        tmp = rtn;
+        // NOTE: ref[+8] (not sure why this returns a new reference)
+        rtn = PySequence_InPlaceConcat(rtn, dirty_by_layer[i]);
+        Py_DECREF(tmp); // NOTE: ref[-8]
     }
 
     // cleanup (in reverse order)
+    Py_DECREF(draw); // NOTE: ref[-7]
     // NOTE: ref[-6]
     for (i = 0; i < n_layers; i++) Py_DECREF(dirty_by_layer[i]);
     PyMem_Free(dirty_by_layer); // NOTE: alloc[-4]

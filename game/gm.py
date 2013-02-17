@@ -221,49 +221,8 @@ nothing changed.
             return False
         graphics = self.graphics
         dirty = self._dirty
+        self._dirty = []
         return fastdraw(layers, sfc, graphics, dirty)
-        # get dirty rects from graphics
-        #for gs in graphics.itervalues():
-            #for g in gs:
-                #for flag, bdy in ((g.was_visible, g.last_rect),
-                                  #(g.visible, g._rect)):
-                    #if flag:
-                        #dirty += [r.clip(bdy) for r in g.dirty]
-                #g.was_visible = g.visible
-        #if not dirty:
-            #return False
-        #dirty_opaque = {}
-        #dirty_opaque_sum = []
-        #dirty_by_layer = {}
-        #for l in layers:
-            #gs = graphics[l]
-            ## get opaque regions of dirty rects
-            #dirty_opaque[l] = l_dirty_opaque = []
-            #for r in dirty:
-                #for g in gs:
-                    #r = r.clip(g._rect)
-                    #if not r or not g.opaque_in(r):
-                        #break
-                #else:
-                    #l_dirty_opaque.append(r)
-            ## undirty below opaque graphics and make dirty rects disjoint
-            #dirty_by_layer[l] = _mk_disjoint(dirty, dirty_opaque_sum)
-            #dirty_opaque_sum += l_dirty_opaque
-        # redraw in dirty rects
-        #for l in reversed(layers):
-            #rs = dirty_by_layer[l]
-            #for g in graphics[l]:
-                #r = g._rect
-                #this_rs = []
-                #for d in rs:
-                    #d = r.clip(d)
-                    #if d:
-                        #this_rs.append(d)
-                #if this_rs:
-                    #g.draw(sfc, this_rs)
-                #g.dirty = []
-        #self._dirty = []
-        #return sum(dirty_by_layer.itervalues(), [])
 
 
 class GraphicsGroup (list):
