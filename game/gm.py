@@ -5,15 +5,15 @@
 GraphicsManager
 GraphicsGroup
 Graphic
+ResizableGraphic
 Colour
 Image
 
 TODO:
- - more setters (Graphic.x, Graphic.y, Graphic.pos, Image.size, Image.width, Image.height, Image.scale, Image.scale_x, Image.scale_y (no move_to, resize, rescale))
  - GraphicsManager.overlay, .fade
  - if GM is fully dirty, draw everything without any rect checks
  - performance: reduce number of rects created by mk_disjoint
- - GraphicsManager.offset to offset the viewing window
+ - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
     - can set/unset a scroll function to call every draw
     - implementation:
@@ -301,11 +301,12 @@ rect: boundary rect that this graphic is contained in.
 
 opaque_in
 move_by
-move_to
 
     ATTRIBUTES
 
 rect: pygame.Rect giving the on-screen area covered; do not change directly.
+pos: (x, y).
+x, y: co-ordinates of the top-left corner of rect.
 last_rect: rect at the time of the last draw.
 layer: the layer to draw in, lower being closer to the 'front'; defaults to 0.
        This can actually be any hashable object, as long as all layers used can
@@ -341,6 +342,30 @@ dirty: a list of rects that need to be updated; for internal use.
             self.dirty.append(last)
             self.dirty.append(rect)
             self._rect = rect
+
+    @property
+    def pos (self):
+        return self._rect.topleft
+
+    @pos.setter
+    def pos (self, pos):
+        self.rect = (pos, self._rect.size)
+
+    @property
+    def x (self):
+        return self._rect[0]
+
+    @x.setter
+    def x (self, x):
+        self.pos = (x, self._rect[1])
+
+    @property
+    def y (self):
+        return self._rect[1]
+
+    @y.setter
+    def y (self, y):
+        self.pos = (self._rect[0], y)
 
     @property
     def layer (self):
@@ -379,40 +404,60 @@ move_by(dx = 0, dy = 0)
 """
         self.rect = self._rect.move(dx, dy)
 
-    def move_to (self, x = None, y = None):
-        """Move to the given position.
-
-move_to([x][, y])
-
-Any co-ordinates not given are left unchanged.
-
-"""
-        r = Rect(self._rect)
-        if x is not None:
-            r[0] = x
-        if y is not None:
-            r[1] = y
-        self.rect = r
-
     def draw (self):
         self.last_rect = self._rect
 
 
-class Colour (Graphic):
-    """A solid rect of colour.
+class ResizableGraphic (Graphic):
+    """Base class for resizeable graphics (Graphics subclass).
+
+The rect attribute may be set directly (but not altered in-place).
+
+    ATTRIBUTES
+
+size: (w, h).
+w, h: width and height of rect.
+
+"""
+
+    @property
+    def size (self):
+        return self._rect.size
+
+    @size.setter
+    def size (self, size):
+        self.rect = (self._rect.topleft, size)
+
+    @property
+    def w (self):
+        return self._rect[2]
+
+    @w.setter
+    def w (self, w):
+        self.size = (w, self._rect[3])
+
+    @property
+    def h (self):
+        return self._rect[3]
+
+    @h.setter
+    def h (self, h):
+        self.size = (self._rect[2], h)
+
+
+class Colour (ResizableGraphic):
+    """A solid rect of colour (ResizableGraphic subclass).
 
     CONSTRUCTOR
 
 Colour(rect, colour)
 
-rect: as taken by Graphic; may be set directly (but not altered in-place).
+rect: as taken by Graphic.
 colour: a Pygame-style (R, G, B[, A = 255]) colour to draw.
 
     ATTRIBUTES
 
 colour: as taken by constructor; set as necessary.
-size: the (width, height) size of the rect covered (this can only be set, not
-      retrieved).
 
 """
 
@@ -420,10 +465,15 @@ size: the (width, height) size of the rect covered (this can only be set, not
         Graphic.__init__(self, rect)
         self.colour = colour
 
-    def _set_size (self, size):
-        self.rect = (self._rect.topleft, size)
-
-    size = property(None, _set_size)
+    @ResizableGraphic.rect.setter
+    def rect (self, rect):
+        last_size = self._rect.size
+        ResizableGraphic.rect.fset(self, rect)
+        size = self._rect.size
+        if last_size != size and hasattr(self, '_sfc'):
+            # size changed: resize surface (just create a new one)
+            self._sfc = pg.Surface(size).convert_alpha()
+            self._sfc.fill(self._colour)
 
     @property
     def colour (self):
@@ -441,7 +491,7 @@ size: the (width, height) size of the rect covered (this can only be set, not
                 # have to use a surface: can't fill an alpha colour to a
                 # non-alpha surface directly
                 if not hasattr(self, '_sfc'):
-                    self._sfc = blank_sfc(self._rect.size)
+                    self._sfc = pg.Surface(self._rect.size).convert_alpha()
                 self._sfc.fill(colour)
             self.dirty.append(self._rect)
 
@@ -460,8 +510,10 @@ size: the (width, height) size of the rect covered (this can only be set, not
                 blit(sfc, r, ((0, 0), r.size))
 
 
-class Image (Graphic):
-    """A Pygame surface.
+class Image (ResizableGraphic):
+    """A Pygame surface (ResizableGraphic subclass).
+
+Changing the size scales the surface using the resize method.
 
     CONSTRUCTOR
 
@@ -480,6 +532,8 @@ rescale
 surface: the surface that will be drawn.
 base_surface: the original surface that was given/loaded.  surface may be a
               scaled version of this.
+scale: (scale_x, scale_y); uses the rescale method.
+scale_x, scale_y: scaling ratio of the image on each axis.
 
 """
 
@@ -489,14 +543,42 @@ base_surface: the original surface that was given/loaded.  surface may be a
         else:
             sfc = convert_sfc(sfc)
         self.base_surface = self.surface = sfc
+        self._base_size = sfc.get_size()
         Graphic.__init__(self, (pos, sfc.get_size()))
         self.opaque = sfc.get_alpha() is None and sfc.get_colorkey() is None
-        self._offset = (-self._rect[0], -self._rect[1])
 
     @Graphic.rect.setter
     def rect (self, rect):
-        Graphic.rect.fset(self, rect)
-        self._offset = (-self._rect[0], -self._rect[1])
+        last_size = self._rect.size
+        ResizableGraphic.rect.fset(self, rect)
+        size = self._rect.size
+        if last_size != size:
+            # size changed
+            self.resize(*size)
+
+    @property
+    def scale (self):
+        return (self.scale_x, self.scale_y)
+
+    @scale.setter
+    def scale (self, scale):
+        self.rescale(*scale)
+
+    @property
+    def scale_x (self):
+        return float(self._rect[2]) / self._base_size[0]
+
+    @scale_x.setter
+    def scale_x (self, scale_x):
+        self.rescale(scale_x)
+
+    @property
+    def scale_y (self):
+        return float(self._rect[3]) / self._base_size[1]
+
+    @scale_y.setter
+    def scale_y (self, scale_y):
+        self.rescale(h = scale_y)
 
     def resize (self, w = None, h = None, scale = pg.transform.smoothscale):
         """Resize the image.
@@ -509,7 +591,7 @@ scale: a function to do the scaling:
     scale(surface, (width, height)) -> new_surface.
 
 """
-        ow, oh = self.base_surface.get_size()
+        ow, oh = self._base_size
         r = self._rect
         cw, ch = r.size
         if w is None:
@@ -541,6 +623,6 @@ Arguments are as for resize, but w and h are ratios of the original size.
         Graphic.draw(self)
         sfc = self.surface
         blit = dest.blit
-        offset = self._offset
+        offset = (-self._rect[0], -self._rect[1])
         for r in rects:
             blit(sfc, r, r.move(offset))
