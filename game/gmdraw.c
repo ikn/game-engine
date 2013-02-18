@@ -1,11 +1,11 @@
 #include <Python.h>
 #include <pygame/pygame.h>
 
-#define MAX_LEVELS 300
+#define MAX_QSORT_LEVELS 300
 
 void quicksort(int *arr, int elements) {
     // http://alienryderflex.com/quicksort/
-    int piv, beg[MAX_LEVELS], end[MAX_LEVELS], i = 0, L, R, swap;
+    int piv, beg[MAX_QSORT_LEVELS], end[MAX_QSORT_LEVELS], i = 0, L, R, swap;
     beg[0] = 0;
     end[0] = elements;
     while (i >= 0) {
@@ -140,6 +140,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
             ** graphics_obj, * tmp;
     char* dbl[4] = {"was_visible", "visible", "last_rect", "_rect"};
     PyObject* clip = PyString_FromString("clip"); // NOTE: ref[+1]
+    PyObject* dbl_tmp[2];
     int n_layers, * n_graphics;
     int i, j, k, l, n;
     // get arrays of layers, graphics and sizes
@@ -166,10 +167,20 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
             g = gs[j];
             // NOTE: ref[+4] (list)
             g_dirty = PyObject_GetAttrString(g, "dirty");
+            for (k = 0; k < 2; k++) // last/current
+                // NOTE: ref[+5]
+                dbl_tmp[k] = PyObject_GetAttrString(g, dbl[k]);
+            if (dbl_tmp[0] != dbl_tmp[1]) {
+                // visiblity changed since last draw: set dirty everywhere
+                Py_DECREF(g_dirty); // NOTE: ref[-4]
+                g_dirty = PyList_New(1); // NOTE: ref[+4]
+                g_rect = PyObject_GetAttrString(g, "_rect"); // NOTE: ref[+6]
+                PyList_SET_ITEM(g_dirty, 0, g_rect); // NOTE: ref[-6]
+                PyObject_SetAttrString(g, "dirty", g_dirty);
+            }
             n = PyList_GET_SIZE(g_dirty);
-            for (k = 0; k < 2; k++) { // last/current
-                tmp = PyObject_GetAttrString(g, dbl[k]); // NOTE: ref[+5]
-                if (tmp == Py_True) {
+            for (k = 0; k < 2; k++) {
+                if (dbl_tmp[k] == Py_True) {
                     // NOTE: ref[+6] (pygame.Rect)
                     g_rect = PyObject_GetAttrString(g, dbl[k + 2]);
                     for (l = 0; l < n; l++) { // g_dirty
@@ -182,8 +193,9 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                     }
                     Py_DECREF(g_rect); // NOTE: ref[-6]
                 }
-                Py_DECREF(tmp); // NOTE: ref[-5]
             }
+            Py_DECREF(dbl_tmp[0]);
+            Py_DECREF(dbl_tmp[1]); // NOTE: ref[-5]
             Py_DECREF(g_dirty); // NOTE: ref[-4]
             tmp = PyObject_GetAttrString(g, "visible"); // NOTE: ref[+4]
             PyObject_SetAttrString(g, "was_visible", tmp);
@@ -193,10 +205,11 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
 
     // only have something to do if dirty is non-empty
     PyObject* rtn = Py_False;
+    Py_INCREF(rtn); // since we're (possibly) returning it
     int n_dirty, r_new, r_good;
     n_dirty = PyList_GET_SIZE(dirty);
     if (PyList_GET_SIZE(dirty) == 0) {
-        goto error;
+        goto end;
     }
 
     PyObject* opaque_in = PyString_FromString("opaque_in"); // NOTE: ref[+4]
@@ -254,30 +267,35 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
         gs = graphics[i];
         for (j = 0; j < n_graphics[i]; j++) { // gs
             g = gs[j];
-            g_rect = PyObject_GetAttrString(g, "_rect"); // NOTE: ref[+8]
-            draw_in = PyList_New(0); // NOTE: ref[+9]
-            for (k = 0; k < n; k++) { // rs
-                r = (PyRectObject*) PyList_GET_ITEM(rs, k);
-                // NOTE: ref[+10]
-                r = (PyRectObject*)
-                    PyObject_CallMethodObjArgs(g_rect, clip, r, NULL);
-                if (r->r.w > 0 && r->r.h > 0)
-                    PyList_Append(draw_in, (PyObject*) r);
-                Py_DECREF(r); // NOTE: ref[-10]
+            tmp = PyObject_GetAttrString(g, "visible"); // NOTE: ref[+8]
+            if (tmp == Py_True) {
+                g_rect = PyObject_GetAttrString(g, "_rect"); // NOTE: ref[+9]
+                draw_in = PyList_New(0); // NOTE: ref[+10]
+                for (k = 0; k < n; k++) { // rs
+                    r = (PyRectObject*) PyList_GET_ITEM(rs, k);
+                    // NOTE: ref[+11]
+                    r = (PyRectObject*)
+                        PyObject_CallMethodObjArgs(g_rect, clip, r, NULL);
+                    if (r->r.w > 0 && r->r.h > 0)
+                        PyList_Append(draw_in, (PyObject*) r);
+                    Py_DECREF(r); // NOTE: ref[-11]
+                }
+                if (PyList_GET_SIZE(draw_in) > 0) {
+                    PyObject_CallMethodObjArgs(g, draw, sfc, draw_in, NULL);
+                }
+                Py_DECREF(draw_in); // NOTE: ref[-10]
+                Py_DECREF(g_rect); // NOTE: ref[-9]
             }
-            if (PyList_GET_SIZE(draw_in) > 0) {
-                PyObject_CallMethodObjArgs(g, draw, sfc, draw_in, NULL);
-            }
-            tmp = PyList_New(0); // NOTE: ref[+10]
+            Py_DECREF(tmp); // ref[-8]
+            tmp = PyList_New(0); // NOTE: ref[+8]
             PyObject_SetAttrString(g, "dirty", tmp);
-            Py_DECREF(tmp); // NOTE: ref[-10]
-            Py_DECREF(draw_in); // NOTE: ref[-9]
-            Py_DECREF(g_rect); // NOTE: ref[-8]
+            Py_DECREF(tmp); // NOTE: ref[-8]
         }
     }
 
     // add up dirty rects to return
-    rtn = PyList_New(0); // new ref, but we're returning it
+    Py_DECREF(rtn);
+    rtn = PyList_New(0);
     for (i = 0; i < n_layers; i++) { // dirty_by_layer
         tmp = rtn;
         // NOTE: ref[+8] (not sure why this returns a new reference)
@@ -292,7 +310,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
     PyMem_Free(dirty_by_layer); // NOTE: alloc[-4]
     Py_DECREF(dirty_opaque); // NOTE: ref[-5]
     Py_DECREF(opaque_in); // NOTE: ref[-4]
-error:
+end:
     for (i = 0; i < n_layers; i++) Py_DECREF(graphics_obj[i]); // NOTE: ref[-3]
     PyMem_Free(graphics); // NOTE: alloc[-3]
     PyMem_Free(n_graphics); // NOTE: alloc[-2]

@@ -9,12 +9,10 @@ Colour
 Image
 
 TODO:
- - if GM is fully dirty, draw everything without any rect checks
- - more setters (Graphic.x, Graphic.y, Graphic.pos, Image.size, Image.scale)
- - performance:
-    - reduce number of rects created by _mk_disjoint
-    - maybe write GraphicsManager.draw and _mk_disjoint in C
+ - more setters (Graphic.x, Graphic.y, Graphic.pos, Image.size, Image.width, Image.height, Image.scale, Image.scale_x, Image.scale_y (no move_to, resize, rescale))
  - GraphicsManager.overlay, .fade
+ - if GM is fully dirty, draw everything without any rect checks
+ - performance: reduce number of rects created by mk_disjoint
  - GraphicsManager.offset to offset the viewing window
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
     - can set/unset a scroll function to call every draw
@@ -22,7 +20,7 @@ TODO:
         - in first loop, for each graphic, offset _rect by -offset
         - when using, offset old graphic dirty rects by -last_offset, current by -offset
         - after drawing, for each graphic, offset _rect by offset
- - Image.resize(w, h) (no args for default)
+ - Graphic.opacity?
  - Graphic subclasses:
 AnimatedImage(surface | filename[image])
 Tilemap
