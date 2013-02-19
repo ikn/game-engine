@@ -251,34 +251,51 @@ f: the get_val wrapper that rounds the returned value.
     return round_get_val
 
 
-def interp_repeat (get_val, period, t0 = 0):
+def interp_repeat (get_val, period, t_min = 0, t_start = None):
     """Repeat an existing interpolation function.
 
-interp_repeat(get_val, period, t0 = 0) -> f
+interp_repeat(get_val, period, t_min = 0, t_start = t_min) -> f
 
 get_val: an existing interpolation function, as taken by Scheduler.interp.
-period, t0: times passed to the returned function are looped around to fit in
-            the range [t0, t0 + period), and the result is passed to get_val.
+
+Times passed to the returned function are looped around to fit in the range
+[t_min, t_min + period), starting at t_start, and the result is passed to
+get_val.
 
 f: the get_val wrapper that repeats get_val over the given period.
 
 """
-    pass # TODO
+    if t_start is None:
+        t_start = t_min
+    return lambda t: get_val(t_min + (t_start - t_min + t) % period)
 
 
-def interp_oscillate (get_val, t0, t1):
+def interp_oscillate (get_val, t_max, t_min = 0, t_start = None):
     """Repeat a linear oscillation over an existing interpolation function.
 
-interp_oscillate(get_val, t0, t1) -> f
+interp_oscillate(get_val, t_max, t_min = 0, t_start = t_min) -> f
 
 get_val: an existing interpolation function, as taken by Scheduler.interp.
-t0, t1: minimum and maximum times to pass to get_val (end points of the
-        oscillation).
+
+Times passed to the returned function are looped and reversed to fit in the
+range [t_min, t_max), starting at t_start.  If t_start is in the range
+[t_max, 2 * t_max + - t_min), it is mapped to the 'return journey' of the
+oscillation.
 
 f: the generated get_val wrapper.
 
 """
-    pass # TODO
+    if t_start is None:
+        t_start = t_min
+    period = t_max - t_min
+
+    def osc_get_val (t):
+        t = (t_start - t_min + t) % (2 * period)
+        if t >= period:
+            t = 2 * period - t
+        return get_val(t_min + t)
+
+    return osc_get_val
 
 
 class Timer (object):

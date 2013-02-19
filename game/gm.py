@@ -11,8 +11,9 @@ Image
 
 TODO:
  - GraphicsManager.overlay, .fade
- - if GM is fully dirty, draw everything without any rect checks
- - performance: reduce number of rects created by mk_disjoint
+ - performance:
+    - reduce number of rects created by mk_disjoint
+    - if GM is fully dirty, draw everything without any rect checks
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
     - can set/unset a scroll function to call every draw
