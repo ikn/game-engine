@@ -10,7 +10,7 @@ This function should take the number of milliseconds to wait for.  This will
 always be an integer.
 
 Python version: 2.
-Release: 9-dev.
+Release: 10.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
@@ -52,6 +52,13 @@ def ir (x):
     # this is about twice as fast as int(round(x))
     y = int(x)
     return (y + (x - y >= .5)) if x > 0 else (y - (y - x >= .5))
+
+
+def _match_in_nest (obj, x):
+    if isinstance(obj, (tuple, list)):
+        return all(_match_in_nest(o) == x for o in obj)
+    else:
+        return obj == x
 
 
 def call_in_nest (f, *args):
@@ -178,10 +185,10 @@ f: a function for which f(t) = v for every waypoint, with intermediate values
     return g.send
 
 
-def interp_target (v0, target, damp, freq = 0, speed = 0):
+def interp_target (v0, target, damp, freq = 0, speed = 0, threshold = 0):
     """Move towards a target.
 
-interp_target(v0, target, damp, freq = 0, speed = 0) -> f
+interp_target(v0, target, damp, freq = 0, speed = 0, threshold = 0) -> f
 
 v0: the initial value (a structure of numbers like arguments to this module's
     call_in_nest function).  Elements which are not numbers are ignored.
@@ -191,8 +198,9 @@ freq: if damping is low, oscillation around the target can occur, and this
       controls the frequency.  If 0, there is no oscillation.
 speed: if frequency is non-zero, this is the initial 'speed', in the same form
        as v0.
-
-TODO: end at some point (when within threshold (same form as v0))
+threshold: stop when within this distance of the target, in the same form as
+           v0.  If None, never stop.  If varying more than one number, only
+           stop when every number is within its threshold.
 
 """
     if v0 == target: # nothing to do
@@ -213,15 +221,23 @@ TODO: end at some point (when within threshold (same form as v0))
     amplitude = call_in_nest(get_amplitude, v0, target, phase)
 
     def get_val (t):
-        def interp_val (v0, target, amplitude, phase):
+        def interp_val (v0, target, amplitude, phase, threshold):
             # amplitude is None if non-number
             if amplitude is None or v0 == target:
+                if threshold is not None:
+                    return None
                 return v0
             else:
-                return amplitude * exp(-damp * t) * cos(freq * t + phase) + \
-                       target
+                dist = amplitude * exp(-damp * t)
+                if threshold is not None and abs(dist) < threshold:
+                    return None
+                return dist * cos(freq * t + phase) + target
 
-        return call_in_nest(interp_val, v0, target, amplitude, phase)
+        rtn = call_in_nest(interp_val, v0, target, amplitude, phase, threshold)
+        if _match_in_nest(rtn, None):
+            # all done
+            rtn = None
+        return rtn
 
     return get_val
 
