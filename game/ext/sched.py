@@ -10,7 +10,7 @@ This function should take the number of milliseconds to wait for.  This will
 always be an integer.
 
 Python version: 2.
-Release: 10.
+Release: 11-dev.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:
@@ -29,14 +29,12 @@ interp_round
 interp_repeat
 interp_oscillate
 
-TODO:
- - interp preset: jitter-like (random, 'quake-like motion) - how best to do a camera shake?  (call it 'shake'?)
-
 """
 
 from time import time
 from bisect import bisect
 from math import cos, atan, exp
+from random import randrange, expovariate
 
 try:
     from pygame.time import wait
@@ -55,8 +53,16 @@ def ir (x):
 
 
 def _match_in_nest (obj, x):
+    """Check if every object in a data structure is equal to some given object.
+
+_match_in_nest(obj, x)
+
+obj: data structure to look in: an arbitrarily nested list of lists.
+x: object to compare to  (not a list or tuple).
+
+"""
     if isinstance(obj, (tuple, list)):
-        return all(_match_in_nest(o) == x for o in obj)
+        return all(_match_in_nest(o, x) == x for o in obj)
     else:
         return obj == x
 
@@ -202,6 +208,8 @@ threshold: stop when within this distance of the target, in the same form as
            v0.  If None, never stop.  If varying more than one number, only
            stop when every number is within its threshold.
 
+f: function that returns position given the current time.
+
 """
     if v0 == target: # nothing to do
         return lambda t: None
@@ -222,6 +230,8 @@ threshold: stop when within this distance of the target, in the same form as
 
     def get_val (t):
         def interp_val (v0, target, amplitude, phase, threshold):
+            if not isinstance(v0, (int, float)):
+                return v0
             # amplitude is None if non-number
             if amplitude is None or v0 == target:
                 if threshold is not None:
@@ -229,11 +239,52 @@ threshold: stop when within this distance of the target, in the same form as
                 return v0
             else:
                 dist = amplitude * exp(-damp * t)
-                if threshold is not None and abs(dist) < threshold:
+                if threshold is not None and abs(dist) <= threshold:
                     return None
                 return dist * cos(freq * t + phase) + target
 
         rtn = call_in_nest(interp_val, v0, target, amplitude, phase, threshold)
+        if _match_in_nest(rtn, None):
+            # all done
+            rtn = None
+        return rtn
+
+    return get_val
+
+
+def interp_shake (centre, amplitude = 1, threshold = 0, signed = True):
+    """Shake randomly.
+
+interp(centre, amplitude = 1, threshold = 0, signed = True) -> f
+
+centre: the value to shake about; a nested list (a structure of numbers like
+        arguments to this module's call_in_nest function).  Elements which are
+        not numbers are ignored.
+amplitude: a number to multiply the value by.  This can be a function that
+           takes the elapsed time in seconds to vary in time.  Has the same
+           form as centre (return value if a function).
+threshold: stop when amplitude is this small.  If None, never stop.  If varying
+           more than one number, only stop when every number is within its
+           threshold.
+signed: whether to shake around the centre.  If False, values are greater than
+        centre (not that amplitude may be signed).
+
+f: function that returns position given the current time.
+
+"""
+    def get_val (t):
+        def interp_val (centre, amplitude, threshold):
+            if not isinstance(centre, (int, float)):
+                return centre
+            if threshold is not None and abs(amplitude) <= threshold:
+                return None
+            val = amplitude * expovariate(1)
+            if signed:
+                val *= 2 * randrange(2) - 1
+            return centre + val
+
+        a = amplitude(t) if callable(amplitude) else amplitude
+        rtn = call_in_nest(interp_val, centre, a, threshold)
         if _match_in_nest(rtn, None):
             # all done
             rtn = None
