@@ -80,7 +80,7 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
     // generate grid of (rows of) subrects and mark contents
     // each has 2 if add, has no 1 if rm
     i = (n_edges[0] - 1) * (n_edges[1] - 1);
-    int* grid = PyMem_New(int, i);
+    int* grid = PyMem_New(int, i); // NOTE: alloc[+2]
     for (j = 0; j < i; j++) grid[j] = 1;
     int row0, row1, col0, col1, l;
     for (i = 0; i < 2; i++) { // rects
@@ -119,6 +119,7 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
         }
     }
     // cleanup
+    PyMem_Free(grid); // NOTE: alloc[-2]
     PyMem_Free(edges[0]);
     PyMem_Free(edges[1]); // NOTE: alloc[-1]
     Py_DECREF(rm); // NOTE: ref[-2]
