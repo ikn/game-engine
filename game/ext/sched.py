@@ -10,7 +10,7 @@ This function should take the number of milliseconds to wait for.  This will
 always be an integer.
 
 Python version: 2.
-Release: 11-dev.
+Release: 11.
 
 Licensed under the GNU General Public License, version 3; if this was not
 included, you can find it here:

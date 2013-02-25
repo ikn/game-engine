@@ -10,10 +10,14 @@ Colour
 Image
 
 TODO:
+ - don't return the right rects - seems offset by 1px
  - GraphicsManager.overlay, .fade
  - performance:
+    - updating in rects is slow with lots of rects
+    - ignore off-screen things
     - reduce number of rects created by mk_disjoint
     - if GM is fully dirty, draw everything without any rect checks
+    - something to duplicate a graphic, changing position only?  Maybe only images?
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
     - can set/unset a scroll function to call every draw
@@ -156,6 +160,7 @@ Takes any number of Graphic or GraphicsGroup instances.
         graphics = list(graphics)
         for g in graphics:
             if isinstance(g, Graphic):
+                # add to graphics
                 l = g.layer
                 if l in ls:
                     all_gs[l].add(g)
@@ -163,6 +168,8 @@ Takes any number of Graphic or GraphicsGroup instances.
                     all_gs[l] = set((g,))
                     ls.add(l)
                 g._manager = self
+                # don't draw over any possible previous location
+                g.was_visible = False
             else: # GraphicsGroup
                 graphics.extend(g.contents)
         self.layers = sorted(ls)
@@ -182,10 +189,15 @@ Takes any number of Graphic or GraphicsGroup instances.
                 if l in ls:
                     all_gs = all_graphics[l]
                     if g in all_gs:
+                        # remove from graphics
                         all_gs.remove(g)
                         g._manager = None
+                        # draw over previous location
+                        if g.was_visible:
+                            self.dirty(g.last_rect)
+                        # remove layer
                         if not all_gs:
-                            del all_gs[l]
+                            del all_graphics[l]
                             ls.remove(l)
                 # else not added: fail silently
             else: # GraphicsGroup
@@ -550,12 +562,11 @@ scale_x, scale_y: scaling ratio of the image on each axis.
 
     @Graphic.rect.setter
     def rect (self, rect):
-        last_size = self._rect.size
-        ResizableGraphic.rect.fset(self, rect)
-        size = self._rect.size
-        if last_size != size:
+        size = Rect(rect).size
+        if self._rect.size != size:
             # size changed
             self.resize(*size)
+        ResizableGraphic.rect.fset(self, rect)
 
     @property
     def scale (self):
@@ -571,7 +582,7 @@ scale_x, scale_y: scaling ratio of the image on each axis.
 
     @scale_x.setter
     def scale_x (self, scale_x):
-        self.rescale(scale_x)
+        self.resize(ir(scale_x * self.base_surface.get_width()), self._rect[3])
 
     @property
     def scale_y (self):
@@ -579,7 +590,7 @@ scale_x, scale_y: scaling ratio of the image on each axis.
 
     @scale_y.setter
     def scale_y (self, scale_y):
-        self.rescale(h = scale_y)
+        self.resize(self.rect[2], ir(scale_y * self.base_surface.get_height()))
 
     def resize (self, w = None, h = None, scale = pg.transform.smoothscale):
         """Resize the image.
@@ -605,7 +616,7 @@ scale: a function to do the scaling:
                 self.surface = self.base_surface
             else:
                 self.surface = scale(self.base_surface, (w, h))
-            self.rect = (r[0], r[1], w, h)
+            self._rect = Rect(r[0], r[1], w, h)
 
     def rescale (self, w = None, h = None, scale = pg.transform.smoothscale):
         """A convenience wrapper around resize to scale by a ratio.
