@@ -234,7 +234,7 @@ data: a filename to load.
 size: scale the image.  Can be an (x, y) size, a rect (in which case its
       dimension is used), or a number to scale by.  If (x, y), either x or y
       can be None to scale to the other with aspect ratio preserved.
-cache: whether to store this image in the cache if not already stored.
+cache: whether to store this image in/retrieve it from the cache if possible.
 
 """
         # get standardised cache key
@@ -252,7 +252,7 @@ cache: whether to store this image in the cache if not already stored.
         # else new: load/render
         filename = conf.IMG_DIR + filename
         # also cache loaded images to reduce file I/O
-        if filename in self.file_cache:
+        if cache and filename in self.file_cache:
             img = self.file_cache[filename]
         else:
             img = convert_sfc(pg.image.load(filename))

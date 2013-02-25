@@ -167,7 +167,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
         for (j = 0; j < n_graphics[i]; j++) { // gs
             g = gs[j];
             // NOTE: ref[+4] (list)
-            g_dirty = PyObject_GetAttrString(g, "dirty");
+            g_dirty = PyObject_GetAttrString(g, "_dirty");
             for (k = 0; k < 2; k++) // last/current
                 // NOTE: ref[+5]
                 dbl_tmp[k] = PyObject_GetAttrString(g, dbl[k]);
@@ -177,7 +177,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                 g_dirty = PyList_New(1); // NOTE: ref[+4]
                 g_rect = PyObject_GetAttrString(g, "_rect"); // NOTE: ref[+6]
                 PyList_SET_ITEM(g_dirty, 0, g_rect); // NOTE: ref[-6]
-                PyObject_SetAttrString(g, "dirty", g_dirty);
+                PyObject_SetAttrString(g, "_dirty", g_dirty);
             }
             n = PyList_GET_SIZE(g_dirty);
             for (k = 0; k < 2; k++) {
@@ -260,7 +260,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
     }
 
     PyObject* rs, * draw_in;
-    PyObject* draw = PyString_FromString("draw"); // NOTE: ref[+7]
+    PyObject* draw = PyString_FromString("_draw"); // NOTE: ref[+7]
     // redraw in dirty rects
     for (i = n_layers - 1; i >= 0; i--) { // layers
         rs = dirty_by_layer[i];
@@ -289,7 +289,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
             }
             Py_DECREF(tmp); // ref[-8]
             tmp = PyList_New(0); // NOTE: ref[+8]
-            PyObject_SetAttrString(g, "dirty", tmp);
+            PyObject_SetAttrString(g, "_dirty", tmp);
             Py_DECREF(tmp); // NOTE: ref[-8]
         }
     }

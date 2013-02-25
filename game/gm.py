@@ -10,14 +10,17 @@ Colour
 Image
 
 TODO:
- - don't return the right rects - seems offset by 1px
  - GraphicsManager.overlay, .fade
+ - Graphic{,Group}.scale_fn
+ - Graphic.transforms = OrderedDict({method: (value, surface)}), where method is 'resize', 'rotate', value is method arg, surface is resulting surface
+ - all graphics resizable
  - performance:
     - updating in rects is slow with lots of rects
     - ignore off-screen things
     - reduce number of rects created by mk_disjoint
-    - if GM is fully dirty, draw everything without any rect checks
+    - if GM is fully dirty, draw everything without any rect checks (but still nothing under opaque)
     - something to duplicate a graphic, changing position only?  Maybe only images?
+    - GM.busy to redraw all every frame
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
     - can set/unset a scroll function to call every draw
@@ -41,6 +44,8 @@ Tilemap
           list: tiles indices; either also take width, or is list of rows
 
 """
+
+from collections import OrderedDict
 
 import pygame as pg
 from pygame import Rect
@@ -292,55 +297,97 @@ move_by(dx = 0, dy = 0)
 
 
 class Graphic (object):
-    """Base class for a thing that can be drawn to the screen.  Use a subclass.
+    """Something that can be drawn to the screen.
 
-Subclasses should implement:
+Many properties of a graphic, such as its position and size, can be changed in
+two main ways: by setting the attribute directly, or by calling the
+corresponding method.  The former is more natural, and is useful for
+sched.interp, while the latter all return the graphic, and so can be chained
+together.
 
-    draw(surface, rects): draw the graphic (should never alter any state that
-                          is not internal to the graphic).
-        surface: surface to draw to.
-        rects: rects to draw in; guaranteed to be disjoint pygame.Rect
-               instances that are contained by the graphic's rect.
-
-    opaque: whether this draws opaque pixels in the entire rect.
+Position and size can also be retrieved and altered using list indexing, like
+with Pygame rects.
 
     CONSTRUCTOR
 
-Graphic(rect)
+Graphic(img, pos, layer = 0)
 
-rect: boundary rect that this graphic is contained in.
+img: surface or filename (under conf.IMG_DIR) to load.
+pos: initial (x, y) position.
+layer: the layer to draw in, lower being closer to the 'front'. This can
+       actually be any hashable object, as long as all layers used in the same
+       GraphicsManager can be ordered with respect to each other.
 
     METHODS
 
 opaque_in
+move_to
 move_by
+reload
 
     ATTRIBUTES
 
-rect: pygame.Rect giving the on-screen area covered; do not change directly.
-pos: (x, y).
-x, y: co-ordinates of the top-left corner of rect.
+fn: filename of the loaded image, or None if a surface was given.
+surface: the (possibly transformed) surface that will be used for drawing.
+rect: pygame.Rect giving the on-screen area covered; may be set directly, but
+      not altered in-place.
 last_rect: rect at the time of the last draw.
-layer: the layer to draw in, lower being closer to the 'front'; defaults to 0.
-       This can actually be any hashable object, as long as all layers used can
-       be ordered with respect to each other.
-visible: whether currently (supposed to be) visible on-screen.
-was_visible: visible at the time of the last draw.
+x, y: co-ordinates of the top-left corner of rect.
+pos: (x, y).
+w, h: width and height of rect.
+size: (w, h).
+scale_fn: function to use for scaling; defaults to pygame.transform.smoothscale
+          (and should have this signature).  If you change this, you may want
+          to call the reload method.
 manager: the GraphicsManager this graphic is associated with, or None; this may
          be changed directly.  (A graphic should only be used with one manager
          at a time.)
-dirty: a list of rects that need to be updated; for internal use.
+layer: as taken by constructor.
+visible: whether currently (supposed to be) visible on-screen.
+was_visible: visible at the time of the last draw.
+opaque: whether this draws opaque pixels in the entire rect.
 
 """
 
-    def __init__ (self, rect):
-        self._rect = Rect(rect)
+    def __init__ (self, img, pos, layer = 0):
+        if isinstance(img, basestring):
+            self.fn = img
+            img = conf.GAME.img(img)
+        else:
+            self.fn = None
+            img = convert_sfc(img)
+        self.surface = img
+        self._rect = Rect(pos, img.get_size())
         self.last_rect = Rect(self._rect)
-        self._layer = 0
+        # {method: (data, previous_surface, previous_rect)}
+        self._transforms = OrderedDict()
+        self.scale_fn = pg.transform.smoothscale
+        self._manager = None
+        self._layer = layer
         self.visible = True
         self.was_visible = False
-        self._manager = None
-        self.dirty = []
+        self.opaque = img.get_alpha() is None and img.get_colorkey() is None
+        self._dirty = [] # gets used (and reset) by GraphicsManager
+
+    def __getitem__ (self, i):
+        if isinstance(i, slice):
+            # Rect is weird and only accepts slices through slice syntax
+            # this is the easiest way around it
+            r = self._rect
+            return [r[i] for i in range(4)[i]]
+        else:
+            return self._rect[i]
+
+    def __setitem__ (self, i, v):
+        r = Rect(self._rect)
+        if isinstance(i, slice):
+            for v_i, r_i in enumerate(range(4)[i]):
+                r[r_i] = v[v_i]
+        else:
+            r[i] = v
+        self.rect = r
+
+    # appearance properties
 
     @property
     def rect (self):
@@ -352,17 +399,18 @@ dirty: a list of rects that need to be updated; for internal use.
         last = self.last_rect
         rect = Rect(rect)
         if rect != last:
-            self.dirty.append(last)
-            self.dirty.append(rect)
-            self._rect = rect
-
-    @property
-    def pos (self):
-        return self._rect.topleft
-
-    @pos.setter
-    def pos (self, pos):
-        self.rect = (pos, self._rect.size)
+            # TODO: better system for the whole _dirty thing - note: _add_transform overwrites it currently, losing last if in there
+            self._dirty.append(last)
+            self._dirty.append(rect)
+            sz = rect.size
+            if sz != last.size:
+                ts = self._transforms
+                if 'resize' in ts:
+                    self._reapply_transforms(ts.keys().index('resize'))
+                else:
+                    self.resize(*sz)
+            else:
+                self._rect = rect # done in _reapply_transforms and in resize
 
     @property
     def x (self):
@@ -370,7 +418,9 @@ dirty: a list of rects that need to be updated; for internal use.
 
     @x.setter
     def x (self, x):
-        self.pos = (x, self._rect[1])
+        r = Rect(self._rect)
+        r[0] = x
+        self._rect = r
 
     @property
     def y (self):
@@ -378,7 +428,57 @@ dirty: a list of rects that need to be updated; for internal use.
 
     @y.setter
     def y (self, y):
-        self.pos = (self._rect[0], y)
+        r = Rect(self._rect)
+        r[1] = y
+        self._rect = r
+
+    @property
+    def pos (self):
+        return self._rect.topleft
+
+    @pos.setter
+    def pos (self, pos):
+        self.rect = self._rect.move(pos)
+
+    @property
+    def w (self):
+        return self._rect[2]
+
+    @w.setter
+    def w (self, w):
+        r = Rect(self._rect)
+        r[2] = w
+        self._rect = r
+
+    @property
+    def h (self):
+        return self._rect[3]
+
+    @h.setter
+    def h (self, h):
+        r = Rect(self._rect)
+        r[3] = h
+        self._rect = r
+
+    @property
+    def size (self):
+        return self._rect.size
+
+    @size.setter
+    def size (self, size):
+        self.rect = (self._rect.topleft, size)
+
+    # for the manager
+
+    @property
+    def manager (self):
+        return self._manager
+
+    @manager.setter
+    def manager (self, manager):
+        if self._manager is not None:
+            self._manager.rm(self)
+        manager.add(self) # changes value in _manager
 
     @property
     def layer (self):
@@ -395,215 +495,72 @@ dirty: a list of rects that need to be updated; for internal use.
             if m is not None:
                 m.add(self)
 
-    @property
-    def manager (self):
-        return self._manager
-
-    @manager.setter
-    def manager (self, manager):
-        if self._manager is not None:
-            self._manager.rm(self)
-        manager.add(self) # changes value in _manager
-
     def opaque_in (self, rect):
         """Whether this draws opaque pixels in the whole of the given rect."""
         return self.opaque and self._rect.contains(rect)
 
+    # appearance methods
+
+    def move_to (self, x = None, y = None):
+        """Move to the given postition.
+
+move([x][, y]) -> self
+
+Omitted arguments are unchanged.
+
+"""
+        r = Rect(self._rect)
+        if x is not None:
+            r[0] = x
+        if y is not None:
+            r[1] = y
+        self._rect = r
+        return self
+
     def move_by (self, dx = 0, dy = 0):
         """Move by the given number of pixels.
 
-move_by(dx = 0, dy = 0)
+move_by(dx = 0, dy = 0) -> self
 
 """
         self.rect = self._rect.move(dx, dy)
+        return self
 
-    def draw (self):
-        self.last_rect = self._rect
+    # transform
 
+    def _add_transform (self, method, args, sfc, rect):
+        """Register a transformation.
 
-class ResizableGraphic (Graphic):
-    """Base class for resizeable graphics (Graphics subclass).
+_add_transform(method, args, sfc, rect)
 
-The rect attribute may be set directly (but not altered in-place).
+method, args: method name that was called with arguments args to apply the
+              transformation.
+sfc, rect: surface and rect before transforming.
 
-    ATTRIBUTES
-
-size: (w, h).
-w, h: width and height of rect.
-
-"""
-
-    @property
-    def size (self):
-        return self._rect.size
-
-    @size.setter
-    def size (self, size):
-        self.rect = (self._rect.topleft, size)
-
-    @property
-    def w (self):
-        return self._rect[2]
-
-    @w.setter
-    def w (self, w):
-        self.size = (w, self._rect[3])
-
-    @property
-    def h (self):
-        return self._rect[3]
-
-    @h.setter
-    def h (self, h):
-        self.size = (self._rect[2], h)
-
-
-class Colour (ResizableGraphic):
-    """A solid rect of colour (ResizableGraphic subclass).
-
-    CONSTRUCTOR
-
-Colour(rect, colour)
-
-rect: as taken by Graphic.
-colour: a Pygame-style (R, G, B[, A = 255]) colour to draw.
-
-    ATTRIBUTES
-
-colour: as taken by constructor; set as necessary.
+Should be called after the surface and rect have been set.
 
 """
+        ts = self._transforms
+        existed = method in ts
+        ts[method] = (args, sfc, rect)
+        if existed:
+            # reapply from this transform onwards
+            self._reapply_transforms(ts.keys().index(method) + 1)
+        # _reapply_transforms will call transform functions which will call
+        # this method; we end up at the outermost call with self._rect set to
+        # the final value
+        self._dirty = [self._rect]
 
-    def __init__ (self, rect, colour):
-        Graphic.__init__(self, rect)
-        self.colour = colour
-
-    @ResizableGraphic.rect.setter
-    def rect (self, rect):
-        last_size = self._rect.size
-        ResizableGraphic.rect.fset(self, rect)
-        size = self._rect.size
-        if last_size != size and hasattr(self, '_sfc'):
-            # size changed: resize surface (just create a new one)
-            self._sfc = pg.Surface(size).convert_alpha()
-            self._sfc.fill(self._colour)
-
-    @property
-    def colour (self):
-        return self._colour
-
-    @colour.setter
-    def colour (self, colour):
-        if not hasattr(self, '_colour') or colour != self._colour:
-            self._colour = colour
-            self.opaque = len(colour) == 3 or colour[3] == 255
-            if self.opaque or colour[3] == 0:
-                if hasattr(self, '_sfc'):
-                    del self._sfc
-            else:
-                # have to use a surface: can't fill an alpha colour to a
-                # non-alpha surface directly
-                if not hasattr(self, '_sfc'):
-                    self._sfc = pg.Surface(self._rect.size).convert_alpha()
-                self._sfc.fill(colour)
-            self.dirty.append(self._rect)
-
-    def draw (self, dest, rects):
-        Graphic.draw(self)
-        if self.opaque:
-            c = self._colour
-            if len(c) == 3 or c[3] != 0:
-                fill = dest.fill
-                for r in rects:
-                    fill(c, r)
-        else:
-            sfc = self._sfc
-            blit = dest.blit
-            for r in rects:
-                blit(sfc, r, ((0, 0), r.size))
-
-
-class Image (ResizableGraphic):
-    """A Pygame surface (ResizableGraphic subclass).
-
-Changing the size scales the surface using the resize method.
-
-    CONSTRUCTOR
-
-Image(pos, img)
-
-pos: (x, y) initial position.
-img: surface or filename (under conf.IMG_DIR) to load.
-
-    METHODS
-
-resize
-rescale
-
-    ATTRIBUTES
-
-surface: the surface that will be drawn.
-base_surface: the original surface that was given/loaded.  surface may be a
-              scaled version of this.
-scale: (scale_x, scale_y); uses the rescale method.
-scale_x, scale_y: scaling ratio of the image on each axis.
-
-"""
-
-    def __init__ (self, pos, sfc):
-        if isinstance(sfc, basestring):
-            sfc = conf.GAME.img(sfc)
-        else:
-            sfc = convert_sfc(sfc)
-        self.base_surface = self.surface = sfc
-        self._base_size = sfc.get_size()
-        Graphic.__init__(self, (pos, sfc.get_size()))
-        self.opaque = sfc.get_alpha() is None and sfc.get_colorkey() is None
-
-    @Graphic.rect.setter
-    def rect (self, rect):
-        size = Rect(rect).size
-        if self._rect.size != size:
-            # size changed
-            self.resize(*size)
-        ResizableGraphic.rect.fset(self, rect)
-
-    @property
-    def scale (self):
-        return (self.scale_x, self.scale_y)
-
-    @scale.setter
-    def scale (self, scale):
-        self.rescale(*scale)
-
-    @property
-    def scale_x (self):
-        return float(self._rect[2]) / self._base_size[0]
-
-    @scale_x.setter
-    def scale_x (self, scale_x):
-        self.resize(ir(scale_x * self.base_surface.get_width()), self._rect[3])
-
-    @property
-    def scale_y (self):
-        return float(self._rect[3]) / self._base_size[1]
-
-    @scale_y.setter
-    def scale_y (self, scale_y):
-        self.resize(self.rect[2], ir(scale_y * self.base_surface.get_height()))
-
-    def resize (self, w = None, h = None, scale = pg.transform.smoothscale):
+    def resize (self, w = None, h = None):
         """Resize the image.
 
-resize([w][, h], scale = pygame.transform.smoothscale)
+resize([w][, h]) -> self
 
 w, h: the new width and height.  If not given, each defaults to the original
       width and height of this image.
-scale: a function to do the scaling:
-    scale(surface, (width, height)) -> new_surface.
 
 """
-        ow, oh = self._base_size
+        ow, oh = self.surface.get_size()
         r = self._rect
         cw, ch = r.size
         if w is None:
@@ -611,30 +568,176 @@ scale: a function to do the scaling:
         if h is None:
             h = oh
         if w != cw or h != ch:
-            if w == ow and h == oh:
-                # no scaling
-                self.surface = self.base_surface
-            else:
-                self.surface = scale(self.base_surface, (w, h))
-            self._rect = Rect(r[0], r[1], w, h)
+            # changed
+            if w != ow or h != oh:
+                sfc = self.surface
+                sz = (w, h)
+                self.surface = self.scale_fn(sfc, sz)
+                self._rect = Rect(r.topleft, sz)
+                self._add_transform('resize', sz, sfc, r)
+            # else no scaling
+        return self
 
-    def rescale (self, w = None, h = None, scale = pg.transform.smoothscale):
-        """A convenience wrapper around resize to scale by a ratio.
+    def _reapply_transforms (self, start = 0):
+        """Reapply transformations starting from the given index or method."""
+        ts = self._transforms.items()
+        if isinstance(start, basestring):
+            start = ts.keys().index(start)
+        self._transforms = OrderedDict(ts[:start])
+        first = True
+        for method, (args, sfc, rect) in ts[start:]:
+            if first:
+                self._rect = rect # any transformations will do the dirtying
+                first = False
+            getattr(self, method)(*args)
 
-Arguments are as for resize, but w and h are ratios of the original size.
+    def reload (self, from_disk = True):
+        """Reload from disk if necessary, then reapply transformations.
+
+reload(from_disk = True)
+
+from_disk: whether to load from disk (if possible).  If False, only reapply
+           transformations.
 
 """
-        ow, oh = self.base_surface.get_size()
-        if w is None:
-            w = 1
-        if h is None:
-            h = 1
-        self.resize(ir(w * ow), ir(h * oh), scale)
+        if from_disk and self.fn is not None:
+            self.surface = conf.GAME.img(self.fn)
+            self._rect
+            self._dirty = [self._rect]
+        self._reapply_transforms()
 
-    def draw (self, dest, rects):
-        Graphic.draw(self)
+    def _draw (self, dest, rects):
+        """Draw the graphic.
+
+_draw(dest, rects)
+
+dest: pygame.Surface to draw to.
+rects: list of rects to draw in.
+
+Should never alter any state that is not internal to the graphic.
+
+"""
+
         sfc = self.surface
         blit = dest.blit
         offset = (-self._rect[0], -self._rect[1])
         for r in rects:
             blit(sfc, r, r.move(offset))
+        self.last_rect = self._rect
+
+
+#class Colour (ResizableGraphic):
+    #"""A solid rect of colour (ResizableGraphic subclass).
+
+    #CONSTRUCTOR
+
+#Colour(rect, colour)
+
+#rect: as taken by Graphic.
+#colour: a Pygame-style (R, G, B[, A = 255]) colour to draw.
+
+    #ATTRIBUTES
+
+#colour: as taken by constructor; set as necessary.
+
+#"""
+
+    #def __init__ (self, rect, colour):
+        #Graphic.__init__(self, rect)
+        #self.colour = colour
+
+    #@ResizableGraphic.rect.setter
+    #def rect (self, rect):
+        #last_size = self._rect.size
+        #ResizableGraphic.rect.fset(self, rect)
+        #size = self._rect.size
+        #if last_size != size and hasattr(self, '_sfc'):
+            ## size changed: resize surface (just create a new one)
+            #self._sfc = pg.Surface(size).convert_alpha()
+            #self._sfc.fill(self._colour)
+
+    #@property
+    #def colour (self):
+        #return self._colour
+
+    #@colour.setter
+    #def colour (self, colour):
+        #if not hasattr(self, '_colour') or colour != self._colour:
+            #self._colour = colour
+            #self.opaque = len(colour) == 3 or colour[3] == 255
+            #if self.opaque or colour[3] == 0:
+                #if hasattr(self, '_sfc'):
+                    #del self._sfc
+            #else:
+                ## have to use a surface: can't fill an alpha colour to a
+                ## non-alpha surface directly
+                #if not hasattr(self, '_sfc'):
+                    #self._sfc = pg.Surface(self._rect.size).convert_alpha()
+                #self._sfc.fill(colour)
+            #self._dirty.append(self._rect)
+
+
+#class Image (ResizableGraphic):
+    #"""A Pygame surface (ResizableGraphic subclass).
+
+#Changing the size scales the surface using the resize method.
+
+    #CONSTRUCTOR
+
+#Image(pos, img)
+
+#pos: (x, y) initial position.
+#img: surface or filename (under conf.IMG_DIR) to load.
+
+    #METHODS
+
+#resize
+#rescale
+
+    #ATTRIBUTES
+
+#scale: (scale_x, scale_y); uses the rescale method.  Can be set to a single
+       #number to scale both dimensions by.
+#scale_x, scale_y: scaling ratio of the image on each axis.
+
+#"""
+
+    #@property
+    #def scale (self):
+        #return (self.scale_x, self.scale_y)
+
+    #@scale.setter
+    #def scale (self, scale):
+        #if isinstance(scale, (int, float)):
+            #self.rescale(scale, scale)
+        #else:
+            #self.rescale(*scale)
+
+    #@property
+    #def scale_x (self):
+        #return float(self._rect[2]) / self._base_size[0]
+
+    #@scale_x.setter
+    #def scale_x (self, scale_x):
+        #self.resize(ir(scale_x * self.base_surface.get_width()), self._rect[3])
+
+    #@property
+    #def scale_y (self):
+        #return float(self._rect[3]) / self._base_size[1]
+
+    #@scale_y.setter
+    #def scale_y (self, scale_y):
+        #self.resize(self.rect[2], ir(scale_y * self.base_surface.get_height()))
+
+    #def rescale (self, w = None, h = None, scale = pg.transform.smoothscale):
+        #"""A convenience wrapper around resize to scale by a ratio.
+
+#Arguments are as for resize, but w and h are ratios of the original size.
+
+#"""
+        #ow, oh = self.base_surface.get_size()
+        #if w is None:
+            #w = 1
+        #if h is None:
+            #h = 1
+        #self.resize(ir(w * ow), ir(h * oh), scale)
