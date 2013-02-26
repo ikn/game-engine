@@ -16,7 +16,7 @@ included, you can find it here:
     - call cbs at most once per frame
     - has .cb(cb, *args, **kwargs) - can do multiple times
         - returns self, so can pass Event(...).cb(...) to EventHandler.add
-     - cbs get Event
+     - cbs get Event (but use function.func_code.co_{varnames,argcount} to check if takes any, and only then pass it)
  - Button(type, device, btn, *mods)
     - go to .type (kb, mouse, joy), .device (ie. joy number), .btn (key/btn id)
     - key(btn, *mods), mouse(btn, *mods), joy(device, btn, *mods) return Button
