@@ -311,13 +311,15 @@ with Pygame rects.
 
     CONSTRUCTOR
 
-Graphic(img, pos, layer = 0)
+Graphic(img, pos, layer = 0, blit_flags = 0)
 
 img: surface or filename (under conf.IMG_DIR) to load.
 pos: initial (x, y) position.
 layer: the layer to draw in, lower being closer to the 'front'. This can
        actually be any hashable object, as long as all layers used in the same
        GraphicsManager can be ordered with respect to each other.
+blit_flags: when blitting the surface to the screen, this is passed as the
+            special_flags argument.
 
     METHODS
 
@@ -343,14 +345,14 @@ scale_fn: function to use for scaling; defaults to pygame.transform.smoothscale
 manager: the GraphicsManager this graphic is associated with, or None; this may
          be changed directly.  (A graphic should only be used with one manager
          at a time.)
-layer: as taken by constructor.
+layer, blit_flags: as taken by constructor.
 visible: whether currently (supposed to be) visible on-screen.
 was_visible: visible at the time of the last draw.
 opaque: whether this draws opaque pixels in the entire rect.
 
 """
 
-    def __init__ (self, img, pos, layer = 0):
+    def __init__ (self, img, pos, layer = 0, blit_flags = 0):
         if isinstance(img, basestring):
             self.fn = img
             img = conf.GAME.img(img)
@@ -365,6 +367,7 @@ opaque: whether this draws opaque pixels in the entire rect.
         self.scale_fn = pg.transform.smoothscale
         self._manager = None
         self._layer = layer
+        self._blit_flags = blit_flags
         self.visible = True
         self.was_visible = False
         self.opaque = img.get_alpha() is None and img.get_colorkey() is None
@@ -482,7 +485,7 @@ opaque: whether this draws opaque pixels in the entire rect.
 
     @layer.setter
     def layer (self, layer):
-        if layer != self.layer:
+        if layer != self._layer:
             # change layer in gm by removing, setting attribute, then adding
             m = self.manager
             if m is not None:
@@ -490,6 +493,16 @@ opaque: whether this draws opaque pixels in the entire rect.
             self._layer = layer
             if m is not None:
                 m.add(self)
+
+    @property
+    def blit_flags (self):
+        return self._blit_flags
+
+    @blit_flags.setter
+    def blit_flags (self, blit_flags):
+        if blit_flags != self._blit_flags:
+            self._blit_flags = blit_flags
+            self._mk_dirty()
 
     def opaque_in (self, rect):
         """Whether this draws opaque pixels in the whole of the given rect."""
@@ -667,9 +680,10 @@ Should never alter any state that is not internal to the graphic.
 
         sfc = self.surface
         blit = dest.blit
+        flags = self._blit_flags
         offset = (-self._rect[0], -self._rect[1])
         for r in rects:
-            blit(sfc, r, r.move(offset))
+            blit(sfc, r, r.move(offset), flags)
         self.last_rect = self._rect
 
 
