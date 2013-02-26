@@ -10,10 +10,11 @@ Colour
 Image
 
 TODO:
+ - Graphic.blit_flags to pass to blit
+ - Graphic.transform(transform_fn, *args, **kwargs) which registers transform_fn as a transform and calls it as necessary:
+    transform_fn(surface, pos, origin) -> (new_surface, new_pos, new_origin) - must copy surface
+ - GM stuff to make it act as a Graphic, so it can be transformed and added to another GM, for multi-Graphic transforms
  - GraphicsManager.overlay, .fade
- - Graphic{,Group}.scale_fn
- - Graphic.transforms = OrderedDict({method: (value, surface)}), where method is 'resize', 'rotate', value is method arg, surface is resulting surface
- - all graphics resizable
  - performance:
     - updating in rects is slow with lots of rects
     - ignore off-screen things
@@ -359,7 +360,7 @@ opaque: whether this draws opaque pixels in the entire rect.
         self.surface = img
         self._rect = Rect(pos, img.get_size())
         self.last_rect = Rect(self._rect)
-        # {method: (data, previous_surface, previous_rect)}
+        # {method: (data, previous_surface, previous_rect, does_something)}
         self._transforms = OrderedDict()
         self.scale_fn = pg.transform.smoothscale
         self._manager = None
@@ -399,18 +400,13 @@ opaque: whether this draws opaque pixels in the entire rect.
         last = self.last_rect
         rect = Rect(rect)
         if rect != last:
-            # TODO: better system for the whole _dirty thing - note: _add_transform overwrites it currently, losing last if in there
-            self._dirty.append(last)
-            self._dirty.append(rect)
             sz = rect.size
             if sz != last.size:
-                ts = self._transforms
-                if 'resize' in ts:
-                    self._reapply_transforms(ts.keys().index('resize'))
-                else:
-                    self.resize(*sz)
+                self.resize(*sz)
             else:
-                self._rect = rect # done in _reapply_transforms and in resize
+                # done in resize
+                self._rect = rect
+                self._mk_dirty()
 
     @property
     def x (self):
@@ -528,55 +524,102 @@ move_by(dx = 0, dy = 0) -> self
 
     # transform
 
-    def _add_transform (self, method, args, sfc, rect):
+    def _transform_sfc (self, method):
+        """Return surface before given transform method was applied."""
+        ts = self._transforms
+        if method in ts:
+            return ts[method][1]
+        else:
+            # use original surface
+            return ts.values()[0][1] if ts else self.surface
+
+    def _to_transform_if_changed (self, method, args):
+        """Revert surface and rect to before a transform if args changed.
+
+_to_transform_if_changed(method, args) -> changed
+
+method, args: transform method/arguments.
+
+changed: whether args changed.
+
+"""
+        ts = self._transforms
+        if method in ts:
+            old_args, sfc, rect, changed = ts[method]
+            if old_args == args:
+                return False
+            self.surface = sfc
+            self._rect = rect
+        # else didn't exist: do nothing
+        return True
+
+    def _add_transform (self, method, args, sfc, rect, changed = True):
         """Register a transformation.
 
-_add_transform(method, args, sfc, rect)
+_add_transform(method, args, sfc, rect, changed = True)
 
 method, args: method name that was called with arguments args to apply the
               transformation.
 sfc, rect: surface and rect before transforming.
+changed: whether the transform changed anything (surface or rect).
 
 Should be called after the surface and rect have been set.
 
 """
         ts = self._transforms
         existed = method in ts
-        ts[method] = (args, sfc, rect)
+        ts[method] = (args, sfc, rect, changed)
         if existed:
             # reapply from this transform onwards
             self._reapply_transforms(ts.keys().index(method) + 1)
         # _reapply_transforms will call transform functions which will call
         # this method; we end up at the outermost call with self._rect set to
         # the final value
-        self._dirty = [self._rect]
+        if changed:
+            self._mk_dirty
 
     def resize (self, w = None, h = None):
         """Resize the image.
 
 resize([w][, h]) -> self
 
-w, h: the new width and height.  If not given, each defaults to the original
-      width and height of this image.
+w, h: the new width and height.  No scaling occurs in omitted dimensions.
+
+"""
+        orig_w, orig_h = self._transform_sfc('resize').get_size()
+        if w is None:
+            w = orig_w
+        if h is None:
+            h = orig_h
+        sz = (w, h)
+        if self._to_transform_if_changed('resize', sz):
+            r = self._rect
+            prev_w, prev_h = r.size
+            sfc = self.surface
+            changed = False
+            if w != prev_w or h != prev_h or w != orig_w or h != orig_h:
+                    self.surface = self.scale_fn(sfc, sz)
+                    self._rect = Rect(r.topleft, sz)
+                    changed = True
+            # else no scaling or already scaled like this
+            self._add_transform('resize', sz, sfc, r, changed)
+        return self
+
+    def rescale (self, w = None, h = None):
+        """A convenience wrapper around resize to scale by a ratio.
+
+rescale([w][, h]) -> self
+
+w, h: new width and height as ratios of the original size.  No scaling occurs
+      in omitted dimensions.
 
 """
         ow, oh = self.surface.get_size()
-        r = self._rect
-        cw, ch = r.size
         if w is None:
-            w = ow
+            w = 1
         if h is None:
-            h = oh
-        if w != cw or h != ch:
-            # changed
-            if w != ow or h != oh:
-                sfc = self.surface
-                sz = (w, h)
-                self.surface = self.scale_fn(sfc, sz)
-                self._rect = Rect(r.topleft, sz)
-                self._add_transform('resize', sz, sfc, r)
-            # else no scaling
-        return self
+            h = 1
+        return self.resize(ir(w * ow), ir(h * oh))
 
     def _reapply_transforms (self, start = 0):
         """Reapply transformations starting from the given index or method."""
@@ -585,7 +628,7 @@ w, h: the new width and height.  If not given, each defaults to the original
             start = ts.keys().index(start)
         self._transforms = OrderedDict(ts[:start])
         first = True
-        for method, (args, sfc, rect) in ts[start:]:
+        for method, (args, sfc, rect, change) in ts[start:]:
             if first:
                 self._rect = rect # any transformations will do the dirtying
                 first = False
@@ -603,8 +646,12 @@ from_disk: whether to load from disk (if possible).  If False, only reapply
         if from_disk and self.fn is not None:
             self.surface = conf.GAME.img(self.fn)
             self._rect
-            self._dirty = [self._rect]
+            self._mk_dirty()
         self._reapply_transforms()
+
+    def _mk_dirty (self):
+        """Mark as dirty."""
+        self._dirty = [self.last_rect, self._rect]
 
     def _draw (self, dest, rects):
         """Draw the graphic.
@@ -728,16 +775,3 @@ Should never alter any state that is not internal to the graphic.
     #@scale_y.setter
     #def scale_y (self, scale_y):
         #self.resize(self.rect[2], ir(scale_y * self.base_surface.get_height()))
-
-    #def rescale (self, w = None, h = None, scale = pg.transform.smoothscale):
-        #"""A convenience wrapper around resize to scale by a ratio.
-
-#Arguments are as for resize, but w and h are ratios of the original size.
-
-#"""
-        #ow, oh = self.base_surface.get_size()
-        #if w is None:
-            #w = 1
-        #if h is None:
-            #h = 1
-        #self.resize(ir(w * ow), ir(h * oh), scale)
