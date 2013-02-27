@@ -54,56 +54,6 @@ from util import ir, convert_sfc, blank_sfc
 from gmdraw import fastdraw
 
 
-def _mk_disjoint (add, rm = []):
-    """Make a list of rects disjoint.
-
-_mk_disjoint(add, rm = []) -> rects
-
-add: rects to make disjoint ('positive rects').
-rm: rects to remove (cut out).
-
-rects: the resulting list of disjoint rects.
-
-"""
-    # get sorted edges
-    edges = []
-    rs = add + rm
-    for axis in (0, 1):
-        es = set()
-        for r in rs:
-            x = r[axis]
-            w = r[axis + 2]
-            es.add(x)
-            es.add(x + w)
-        edges.append(sorted(es))
-    # generate grid of subrects and mark contents
-    # each has 2 if add, has no 1 if rm
-    edges0, edges1 = edges
-    grid = [[1] * (len(edges0) - 1) for j in xrange(len(edges1) - 1)]
-    for rtype, rs in enumerate((add, rm)):
-        for r in rs:
-            x, y, w, h = r
-            if w > 0 and h > 0:
-                j = edges1.index(y)
-                for row in grid[j:j + edges1[j:].index(y + h)]:
-                    i = edges0.index(x)
-                    for k in xrange(i, i + edges0[i:].index(x + w)):
-                        if rtype == 0: # add
-                            row[k] |= 2
-                        else: # rm (rtype == 1)
-                            row[k] ^= 1
-    # generate subrects
-    rs = []
-    for j, row in enumerate(grid):
-        for i, cell in enumerate(row):
-            if cell == 3: # add and not rm
-                x0 = edges0[i]
-                y0 = edges1[j]
-                rs.append(Rect(x0, y0, edges0[i + 1] - x0,
-                          edges1[j + 1] - y0))
-    return rs
-
-
 class GraphicsManager (object):
     """Handles intelligently drawing things to a surface.
 
@@ -340,8 +290,12 @@ rect: pygame.Rect giving the on-screen area covered; may be set directly, but
 last_rect: rect at the time of the last draw.
 x, y: co-ordinates of the top-left corner of rect.
 pos: (x, y).
-w, h: width and height of rect.
+w, h: width and height of rect; they use the resize method.
 size: (w, h).
+scale_x, scale_y: scaling ratio of the image on each axis; thy use the rescale
+                  method.
+scale: (scale_x, scale_y).  Can be set to a single number to scale both
+       dimensions by.
 scale_fn: function to use for scaling; defaults to pygame.transform.smoothscale
           (and should have the same signature as this default).  If you change
           this, you may want to call the reapply_transforms method.
@@ -365,7 +319,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         self.surface = img
         self._rect = Rect(pos, img.get_size())
         self.last_rect = Rect(self._rect)
-        # {function: (args, previous_surface, previous_pos, previous_origin)}
+        # {function: (args, previous_surface, previous_pos)}
         self._transforms = OrderedDict()
         self.scale_fn = pg.transform.smoothscale
         self._manager = None
@@ -469,6 +423,47 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
     @size.setter
     def size (self, size):
         self.rect = (self._rect.topleft, size)
+
+    def _get_scale (self, axis):
+        """Get scaling of given axis."""
+        ts = self._transforms
+        r = self._resize
+        if r in ts:
+            ks = ts.keys()
+            i = ks.index(r)
+            old_sfc = ts[ks[i]][1]
+            new_sfc = self.surface if i + 1 >= len(ks) else ts[ks[i + 1]][1]
+            return float(new_sfc.get_size()[axis]) / old_sfc.get_size()[axis]
+        else:
+            # no scaling
+            return 1
+
+    @property
+    def scale_x (self):
+        return self._get_scale(0)
+
+    @scale_x.setter
+    def scale_x (self, scale_x):
+        self.rescale(scale_x, self._get_scale(1))
+
+    @property
+    def scale_y (self):
+        return self._get_scale(1)
+
+    @scale_y.setter
+    def scale_y (self, scale_y):
+        self.rescale(self._get_scale(0), scale_y)
+
+    @property
+    def scale (self):
+        return (self._get_scale(0), self._get_scale(1))
+
+    @scale.setter
+    def scale (self, scale):
+        if isinstance(scale, (int, float)):
+            self.rescale(scale, scale)
+        else:
+            self.rescale(*scale)
 
     # for the manager
 
@@ -597,11 +592,14 @@ Index is the order the transform was applied, 0 first; function is as passed
 to the transform method, but can also be 'resize' for the built-in transform.
 
 """
-        ts = self._transforms.items()
+        ts = self._transforms
         if isinstance(start, basestring):
             start = getattr(self, '_' + start)
         if callable(start):
+            if start not in ts:
+                return
             start = ts.keys().index(start)
+        ts = ts.items()
         self._transforms = OrderedDict(ts[:start])
         first = True
         for fn, (args, sfc, pos) in ts[start:]:
@@ -754,38 +752,3 @@ Should never alter any state that is not internal to the graphic.
                     #self._sfc = pg.Surface(self._rect.size).convert_alpha()
                 #self._sfc.fill(colour)
             #self._dirty.append(self._rect)
-
-
-    #ATTRIBUTES
-
-#scale: (scale_x, scale_y); uses the rescale method.  Can be set to a single
-       #number to scale both dimensions by.
-#scale_x, scale_y: scaling ratio of the image on each axis.
-
-
-    #@property
-    #def scale (self):
-        #return (self.scale_x, self.scale_y)
-
-    #@scale.setter
-    #def scale (self, scale):
-        #if isinstance(scale, (int, float)):
-            #self.rescale(scale, scale)
-        #else:
-            #self.rescale(*scale)
-
-    #@property
-    #def scale_x (self):
-        #return float(self._rect[2]) / self._base_size[0]
-
-    #@scale_x.setter
-    #def scale_x (self, scale_x):
-        #self.resize(ir(scale_x * self.base_surface.get_width()), self._rect[3])
-
-    #@property
-    #def scale_y (self):
-        #return float(self._rect[3]) / self._base_size[1]
-
-    #@scale_y.setter
-    #def scale_y (self, scale_y):
-        #self.resize(self.rect[2], ir(scale_y * self.base_surface.get_height()))
