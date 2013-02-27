@@ -81,6 +81,7 @@ screen: the main Pygame surface.
 
     def __init__ (self, *args, **kwargs):
         conf.GAME = self
+        conf.RES_F = pg.display.list_modes()[0]
         self._quit = False
         self._update_again = False
         # initialise caches
@@ -390,8 +391,6 @@ volume: float to scale volume by.
         self.screen = pg.display.set_mode(conf.RES, flags)
         if hasattr(self, 'world'):
             self.world.graphics.dirty()
-        # clear image cache (very unlikely we'll need the same sizes)
-        self.img_cache = {}
 
     def toggle_fullscreen (self, *args):
         """Toggle fullscreen mode."""

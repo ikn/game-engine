@@ -56,7 +56,7 @@ class Conf (object):
     FULLSCREEN = False
     RESIZABLE = True # also determines whether fullscreen togglable
     RES_W = (960, 540)
-    RES_F = pg.display.list_modes()[0]
+    RES_F = None
     RES = RES_W
     MIN_RES_W = (320, 180)
     ASPECT_RATIO = None

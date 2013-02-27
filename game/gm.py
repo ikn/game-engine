@@ -10,7 +10,7 @@ Colour
 Image
 
 TODO:
- - when adding origin, need to change _transform doc, transform, before_transform, _resize, _draw
+ - when adding origin, need to change _transform doc, transform, before_transform, _resize, _draw, _fill
  - GM stuff to make it act as a Graphic, so it can be transformed and added to another GM, for multi-Graphic transforms
  - GraphicsManager.overlay, .fade
  - performance:
@@ -29,6 +29,7 @@ TODO:
         - after drawing, for each graphic, offset _rect by offset
  - Graphic.opacity?
  - Graphic subclasses:
+Text
 AnimatedImage(surface | filename[image])
 Tilemap
   (surface | filename[image])
@@ -275,7 +276,7 @@ opaque_in
 move_to
 move_by
 transform
-reapply_transforms
+reapply_transform
 before_transform
 resize
 rescale
@@ -298,7 +299,7 @@ scale: (scale_x, scale_y).  Can be set to a single number to scale both
        dimensions by.
 scale_fn: function to use for scaling; defaults to pygame.transform.smoothscale
           (and should have the same signature as this default).  If you change
-          this, you may want to call the reapply_transforms method.
+          this, you may want to call the reapply_transform method.
 manager: the GraphicsManager this graphic is associated with, or None; this may
          be changed directly.  (A graphic should only be used with one manager
          at a time.)
@@ -315,11 +316,11 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
             img = conf.GAME.img(img)
         else:
             self.fn = None
-            img = convert_sfc(img)
-        self.surface = img
+        self._set_sfc(img)
         self._rect = Rect(pos, img.get_size())
+        self._offset = (0, 0)
         self.last_rect = Rect(self._rect)
-        # {function: (args, previous_surface, previous_pos)}
+        # {function: (args, previous_surface, previous_offset)}
         self._transforms = OrderedDict()
         self.scale_fn = pg.transform.smoothscale
         self._manager = None
@@ -327,7 +328,6 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         self._blit_flags = blit_flags
         self.visible = True
         self.was_visible = False
-        self.opaque = img.get_alpha() is None and img.get_colorkey() is None
         self._dirty = [] # gets used (and reset) by GraphicsManager
 
     def __getitem__ (self, i):
@@ -376,7 +376,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
     def x (self, x):
         r = Rect(self._rect)
         r[0] = x
-        self._rect = r
+        self.rect = r
 
     @property
     def y (self):
@@ -386,7 +386,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
     def y (self, y):
         r = Rect(self._rect)
         r[1] = y
-        self._rect = r
+        self.rect = r
 
     @property
     def pos (self):
@@ -394,7 +394,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @pos.setter
     def pos (self, pos):
-        self.rect = self._rect.move(pos)
+        self.rect = (pos, self._rect[2:])
 
     @property
     def w (self):
@@ -404,7 +404,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
     def w (self, w):
         r = Rect(self._rect)
         r[2] = w
-        self._rect = r
+        self.rect = r
 
     @property
     def h (self):
@@ -414,7 +414,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
     def h (self, h):
         r = Rect(self._rect)
         r[3] = h
-        self._rect = r
+        self.rect = r
 
     @property
     def size (self):
@@ -506,6 +506,16 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         """Whether this draws opaque pixels in the whole of the given rect."""
         return self.opaque and self._rect.contains(rect)
 
+    def _set_sfc (self, sfc):
+        """Set new surface and opacity (but nothing else)."""
+        if sfc.get_alpha() is None and sfc.get_colorkey() is None:
+            sfc = sfc.convert()
+            self.opaque = True
+        else:
+            sfc = sfc.convert_alpha()
+            self.opaque = False
+        self.surface = sfc
+
     # appearance methods
 
     def move_to (self, x = None, y = None):
@@ -521,7 +531,7 @@ Omitted arguments are unchanged.
             r[0] = x
         if y is not None:
             r[1] = y
-        self._rect = r
+        self.rect = r
         return self
 
     def move_by (self, dx = 0, dy = 0):
@@ -540,18 +550,18 @@ move_by(dx = 0, dy = 0) -> self
 
 transform(transform_fn, *args) -> self
 
-Calls transform_fn(sfc, pos, last_args, *args) to apply the transformation,
+Calls transform_fn(sfc, offset, last_args, *args) to apply the transformation,
 where:
 
 sfc: surface before this transformation was last applied (or the current
      surface if it never has been).
-pos: (x, y) position before this was last applied.
+offset: (x, y) position offset before this was last applied.
 last_args: the args passed to this method when this transformation was last
            applied, as a tuple.
 
-and transform_fn should return (new_sfc, new_pos), the new surface and position
-after transforming.  The passed surface should not be altered; new_sfc should
-be a new instance.
+and transform_fn should return (new_sfc, new_offset), the new surface and
+position offsets  after transforming.  The passed surface should not be
+altered; new_sfc should be a new instance.
 
 If the results of the transformation would be exactly the same with last_args
 as with args, or if the transformation would do nothing, transform_fn may
@@ -562,31 +572,32 @@ return None to indicate this.
         exist = transform_fn in ts
         if exist:
             # existing transform: grab data previous to it
-            last_args, sfc, pos = ts[transform_fn]
+            last_args, sfc, offset = ts[transform_fn]
         else:
             # new transform: use current data
-            last_args, sfc, pos = None, self.surface, self._rect.topleft
-        result = transform_fn(sfc, pos, last_args, *args)
+            last_args, sfc, offset = None, self.surface, self._rect.topleft
+        result = transform_fn(sfc, offset, last_args, *args)
         if result is None:
             # transformation did nothing
             if not exist:
                 # add to transforms anyway
-                ts[transform_fn] = (args, sfc, pos)
+                ts[transform_fn] = (args, sfc, offset)
         else:
-            new_sfc, new_pos = result
-            self.surface = new_sfc
-            self._rect = Rect(new_pos, new_sfc.get_size())
-            ts[transform_fn] = (args, sfc, pos)
+            new_sfc, new_offset = result
+            self._set_sfc(new_sfc)
+            self._rect = Rect(self._rect[:2], new_sfc.get_size())
+            self._offset = offset
+            ts[transform_fn] = (args, sfc, offset)
             if exist:
                 # reapply from this transform onwards
-                self.reapply_transforms(ts.keys().index(transform_fn) + 1)
-            # _reapply_transforms will call this method; we end up at the
+                self.reapply_transform(ts.keys().index(transform_fn) + 1)
+            # reapply_transform will call this method; we end up at the
             # outermost call with self._rect set to the final value
             self._mk_dirty()
         return self
 
-    def reapply_transforms (self, start = 0):
-        """Reapply transforms starting from the given index or function.
+    def reapply_transform (self, start = 0):
+        """Reapply the given transformation (index or function).
 
 Index is the order the transform was applied, 0 first; function is as passed
 to the transform method, but can also be 'resize' for the built-in transform.
@@ -601,19 +612,18 @@ to the transform method, but can also be 'resize' for the built-in transform.
             start = ts.keys().index(start)
         ts = ts.items()
         self._transforms = OrderedDict(ts[:start])
-        first = True
-        for fn, (args, sfc, pos) in ts[start:]:
-            if first:
-                # set up environment for first transform
-                self.surface = sfc
-                self._rect = Rect(pos, sfc.get_size())
-                # transforms might all do nothing, so dirty here
-                self._mk_dirty()
-                first = False
-            self.transform(fn, *args)
+        ts = ts[start:]
+        if ts:
+            args, sfc, offset = ts[0]
+            self.surface = sfc
+            self._rect = Rect(self._rect[:2], sfc.get_size())
+            # if any transforms do anything, they will set opacity, etc. (else
+            # the surface won't change and we just keep the current opacity)
+            for fn, (args, sfc, offset) in ts[start:]:
+                self.transform(fn, *args)
 
     def before_transform (self, transform_fn):
-        """Return (surface, pos) before the given transform.
+        """Return (surface, offset) before the given transform.
 
 Takes a transform function that may or may not have been applied yet.
 
@@ -622,9 +632,9 @@ Takes a transform function that may or may not have been applied yet.
         if transform_fn in ts:
             return ts[transform_fn][1:]
         else:
-            return (self.surface, self._rect.topleft)
+            return (self.surface, self._offset)
 
-    def _resize (self, sfc, pos, last, w, h):
+    def _resize (self, sfc, offset, last, w, h):
         """Backend for resize."""
         start_w, start_h = start_sz = sfc.get_size()
         if w is None:
@@ -633,7 +643,7 @@ Takes a transform function that may or may not have been applied yet.
             h = start_h
         sz = (w, h)
         if last is None or sz != last or sz != start_sz:
-            return (self.scale_fn(sfc, sz), pos)
+            return (self.scale_fn(sfc, sz), offset)
         # else already scaled like this or no scaling
 
     def resize (self, w = None, h = None):
@@ -670,12 +680,12 @@ If successful, all transformations are reapplied afterwards.
 
 """
         if self.fn is not None:
-            self.surface = sfc = conf.GAME.img(self.fn, cache = False)
-            self._rect = (self._rect.topleft, sfc.get_size())
+            sfc = conf.GAME.img(self.fn, cache = False)
+            self._set_sfc(sfc)
             self._mk_dirty()
             ts = self._transforms
             self._transforms = OrderedDict()
-            for fn, (args, sfc, pos) in ts:
+            for fn, (args, sfc, offset) in ts:
                 self.transform(fn, *args)
 
     def _mk_dirty (self):
@@ -703,52 +713,61 @@ Should never alter any state that is not internal to the graphic.
         self.last_rect = self._rect
 
 
-#class Colour (ResizableGraphic):
-    #"""A solid rect of colour (ResizableGraphic subclass).
+class Colour (Graphic):
+    """A solid rect of colour (Graphic subclass).
 
-    #CONSTRUCTOR
+    CONSTRUCTOR
 
-#Colour(rect, colour)
+Colour(colour, rect, layer = 0, blit_flags = 0)
 
-#rect: as taken by Graphic.
-#colour: a Pygame-style (R, G, B[, A = 255]) colour to draw.
+colour: a Pygame-style (R, G, B[, A = 255]) colour to draw.
+rect: (left, top, width, height) rect (of ints) to draw in (or anything taken
+      by pygame.Rect, like a Rect, or ((left, top), (width, height))).
+layer, blit_flags: as taken by Graphic.
 
-    #ATTRIBUTES
+    METHODS
 
-#colour: as taken by constructor; set as necessary.
+fill
 
-#"""
+    ATTRIBUTES
 
-    #def __init__ (self, rect, colour):
-        #Graphic.__init__(self, rect)
-        #self.colour = colour
+colour: as taken by constructor; set as necessary.
 
-    #@ResizableGraphic.rect.setter
-    #def rect (self, rect):
-        #last_size = self._rect.size
-        #ResizableGraphic.rect.fset(self, rect)
-        #size = self._rect.size
-        #if last_size != size and hasattr(self, '_sfc'):
-            ## size changed: resize surface (just create a new one)
-            #self._sfc = pg.Surface(size).convert_alpha()
-            #self._sfc.fill(self._colour)
+"""
 
-    #@property
-    #def colour (self):
-        #return self._colour
+    def __init__ (self, colour, rect):
+        rect = Rect(rect)
+        # converts surface and sets opaque to True
+        Graphic.__init__(self, pg.Surface(rect[2:]), rect[:2])
+        self.fill(colour)
 
-    #@colour.setter
-    #def colour (self, colour):
-        #if not hasattr(self, '_colour') or colour != self._colour:
-            #self._colour = colour
-            #self.opaque = len(colour) == 3 or colour[3] == 255
-            #if self.opaque or colour[3] == 0:
-                #if hasattr(self, '_sfc'):
-                    #del self._sfc
-            #else:
-                ## have to use a surface: can't fill an alpha colour to a
-                ## non-alpha surface directly
-                #if not hasattr(self, '_sfc'):
-                    #self._sfc = pg.Surface(self._rect.size).convert_alpha()
-                #self._sfc.fill(colour)
-            #self._dirty.append(self._rect)
+    @property
+    def colour (self):
+        return self._colour
+
+    @colour.setter
+    def colour (self, colour):
+        self.fill(colour)
+
+    def _fill (self, sfc, offset, last_args, colour):
+        if last_args is not None:
+            # compare colours
+            lcolour = last_args[0]
+            lr, lg, lb = lcolour
+            la = 255 if len(lcolour) < 4 else lcolour[3]
+            r, g, b = colour
+            a = 255 if len(colour) < 4 else colour[3]
+            if (lr, lg, lb, la) == (r, g, b, a):
+                return
+        # need a new surface anyway
+        sfc = pg.Surface(sfc.get_size())
+        if len(colour) == 4 and colour[3] < 255:
+            # non-opaque: need to convert to alpha
+            sfc = sfc.convert_alpha()
+        sfc.fill(colour)
+        return (sfc, offset)
+
+    def fill (self, colour):
+        self.transform(self._fill, colour)
+        self._colour = colour
+        return self
