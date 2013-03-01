@@ -10,7 +10,6 @@ Colour
 Image
 
 TODO:
- - scale takes position to scale about
  - rotate(angle, about) - make sure to convert_alpha before; rotate threshold
     r is rotation centre, c is surface centre
     new_topleft = (r - c).rotate(angle) + new_c - r
@@ -281,7 +280,7 @@ move_by
 transform
 undo_transforms
 reapply_transform
-before_transform
+sfc_before_transform
 resize  [builtin transform]
 rescale
 reload
@@ -318,20 +317,13 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
 """
 
-    # (method, attr, args, expand_for_method)
-    _transform_defaults = (
-        #('crop', 'crop_rect', None, False),
-        #('flip', 'flipped', (False, False), True),
-        ('resize', 'scale', (1, 1), True),
-        #('rotate', 'angle', 0, False)
-    )
-
     def __init__ (self, img, pos, layer = 0, blit_flags = 0):
         if isinstance(img, basestring):
             self.fn = img
             img = conf.GAME.img(img)
         else:
             self.fn = None
+        self._scale = (1, 1)
         # {function: (args, previous_surface, apply_fn, undo_fn)}
         self._transforms = ts = OrderedDict()
         # postrot is the rect drawn in
@@ -339,15 +331,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
         self._set_sfc(img)
         self.last_rect = self._last_postrot_rect = Rect(self._rect)
-        # fill in bultin transforms
-        sfc = self.surface
-        for method, attr, args, expand in Graphic._transform_defaults:
-            if not expand:
-                args = (args,)
-            ts[method] = (args, sfc, None, None)
-        self.transforms = self._transforms.keys() # transform strings/functions
-        for method, attr, val, expand in Graphic._transform_defaults:
-            setattr(self, '_' + attr, val)
+        self.transforms = []
         # for manager
         self.scale_fn = pg.transform.smoothscale
         self._manager = None
@@ -614,16 +598,22 @@ return None to indicate this.
                 position = ks.index(transform_fn)
         elif position >= len(ks):
             position = None
-        #print position, exist, ks, transform_fn
         if position is not None:
-            # undo up to this position
-            self.undo_transforms(position + 1)
-            # grab data previous to requested position and insert there
+            # grab data previous to requested position and undo up to it
             last_args, sfc, apply_fn, undo_fn = ts[ks[position]]
+            for this_args, this_sfc, this_apply_fn, this_undo_fn \
+                in reversed(ts.values()[position:]):
+                if this_undo_fn is not None:
+                    this_undo_fn(self)
             if ks[position] != transform_fn:
+                # insert in transforms and _transforms
                 self.transforms.insert(position, transform_fn)
+                ts = ts.items()
+                # value for this position gets set below
+                ts = ts[:position] + (position, None) + ts[position:]
+                self._transforms = ts = OrderedDict(ts)
         else:
-            # use current data and add to end
+            # use current data
             sfc = self.surface
             last_args = apply_fn = undo_fn = None
             self.transforms.append(transform_fn)
@@ -632,6 +622,8 @@ return None to indicate this.
         new_sfc = t_fn(sfc, last_args, *args)
         if new_sfc is None:
             # transformation did nothing
+            if apply_fn is not None:
+                apply_fn(self)
             if not exist:
                 # add to transforms anyway
                 ts[transform_fn] = (args, sfc)
@@ -642,12 +634,13 @@ return None to indicate this.
                     apply_fn(self) # must not modify surface or _rect.size
             self._set_sfc(new_sfc)
             ts[transform_fn] = (args, sfc, apply_fn, undo_fn)
-            if exist:
+            if position is not None:
                 # reapply from this transform onwards: call after setting
-                # surface and _rect since it calls this method and we end up at
-                # the outermost call with the final values set last
-                self.reapply_transform(ts.keys().index(transform_fn) + 1,
-                                       False)
+                # surface and _rect so we end up at the outermost call with the
+                # final values set last
+                for fn, (args, sfc, apply_fn, undo_fn) \
+                    in ts.items()[position + 1:]:
+                    self.transform(fn, *args)
             self._mk_dirty()
         return self
 
@@ -677,7 +670,7 @@ for a builtin.
         # we know upto < len(ts) so we looped at least once and sfc exists
         self._set_sfc(sfc)
 
-    def reapply_transform (self, start = 0, undo_first = True):
+    def reapply_transform (self, start = 0):
         """Reapply the given transformation (index or function).
 
 Index is the order the transform was applied, 0 first; function is as passed
@@ -692,10 +685,8 @@ to the transform method.
                 return
             start = ts.keys().index(start)
         ts = ts.items()
-        if undo_first:
-            # removes from _transforms and transforms; transform will add them
-            # back
-            self.undo_transforms(start)
+        # removes from _transforms and transforms; transform will add them back
+        self.undo_transforms(start)
         self._transforms = OrderedDict(ts[:start])
         ts = ts[start:]
         if ts:
@@ -720,7 +711,7 @@ have been applied yet.
         else:
             return self.surface
 
-    def _resize (self, sfc, last, w, h):
+    def _resize (self, sfc, last, w, h, about = (0, 0)):
         """Backend for resize."""
         start_w, start_h = start_sz = sfc.get_size()
         if w is None:
@@ -728,28 +719,50 @@ have been applied yet.
         if h is None:
             h = start_h
         sz = (w, h)
-        if last is None or sz != last or sz != start_sz:
-            return (self.scale_fn(sfc, sz), None, None)
+        about = (about[0], about[1])
+        if last is not None:
+            (last_w, last_h, (last_ax, last_ay)) = last
+            last_sz = (last_w, last_h)
+            last_a = (last_ax, last_ay)
+            if sz == last_sz and about == last_a:
+                # no change to arguments
+                return
+        if sz != start_sz or about != (0, 0):
+            scale = (float(w) / start_w, float(h) / start_h)
+            offset = (ir((1 - scale[0]) * about[0]),
+                      ir((1 - scale[1]) * about[1]))
+
+            def apply_fn (g):
+                g._scale = scale
+                x, y, gw, gh = g._rect
+                g._rect = Rect(x + offset[0], y + offset[1], gw, gh)
+
+            def undo_fn (g):
+                g._scale = (1, 1)
+                x, y, gw, gh = g._rect
+                g._rect = Rect(x - offset[0], y - offset[1], gw, gh)
+
+            return (self.scale_fn(sfc, sz), apply_fn, undo_fn)
         # else already scaled like this or no scaling
 
-    def resize (self, w = None, h = None):
+    def resize (self, w = None, h = None, about = (0, 0)):
         """Resize the image.
 
-resize([w][, h]) -> self
+resize([w][, h], about = (0, 0)) -> self
 
 w, h: the new width and height.  No scaling occurs in omitted dimensions.
+about: the (x, y) position relative to the top-left of the graphic to scale
+       about.
 
 """
-        self.transform('resize', w, h)
+        self.transform('resize', w, h, about)
         return self
 
-    def rescale (self, w = None, h = None):
+    def rescale (self, w = None, h = None, about = (0, 0)):
         """A convenience wrapper around resize to scale by a ratio.
 
-rescale([w][, h]) -> self
-
-w, h: new width and height as ratios of the size before scaling.  No scaling
-      occurs in omitted dimensions.
+Arguments are as taken by resize, but w and h are ratios of the size before
+scaling.
 
 """
         if w is None:
@@ -757,7 +770,7 @@ w, h: new width and height as ratios of the size before scaling.  No scaling
         if h is None:
             h = 1
         ow, oh = self.sfc_before_transform('resize').get_size()
-        return self.resize(ir(w * ow), ir(h * oh))
+        return self.resize(ir(w * ow), ir(h * oh), about)
 
     def reload (self):
         """Reload from disk if possible.
@@ -821,14 +834,11 @@ colour: as taken by constructor; set as necessary.
 
 """
 
-    _transform_defaults = Graphic._transform_defaults + (
-        ('fill', 'colour', (0, 0, 0), False),
-    )
-
     def __init__ (self, colour, rect):
         rect = Rect(rect)
         # converts surface and sets opaque to True
         Graphic.__init__(self, pg.Surface(rect[2:]), rect[:2])
+        self._colour = (0, 0, 0)
         self.fill(colour)
 
     @property
