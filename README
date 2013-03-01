@@ -7,8 +7,13 @@ Pygame (1.8 or later, probably; tested with 1.9.1)
 
     RUNNING
 
-This should work wherever Pygame does.  On systems with a sh-compatible shell,
-do
+To run from source, you must first compile.  This process requires GNU Make or
+equivalent, and header files for SDL and Pygame must be available on the
+system.  Just run
+
+    make
+
+Now, on systems with a sh-compatible shell, do
 
     ./run
 

@@ -139,7 +139,8 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
 
     PyObject** layers, *** graphics, ** gs, * g, * g_dirty, * g_rect, * r_o,
             ** graphics_obj, * tmp;
-    char* dbl[4] = {"was_visible", "visible", "last_rect", "_rect"};
+    char* dbl[4] = {"was_visible", "visible", "_last_postrot_rect",
+                    "_postrot_rect"};
     PyObject* clip = PyString_FromString("clip"); // NOTE: ref[+1]
     PyObject* dbl_tmp[2];
     int n_layers, * n_graphics;
@@ -175,7 +176,8 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                 // visiblity changed since last draw: set dirty everywhere
                 Py_DECREF(g_dirty); // NOTE: ref[-4]
                 g_dirty = PyList_New(1); // NOTE: ref[+4]
-                g_rect = PyObject_GetAttrString(g, "_rect"); // NOTE: ref[+6]
+                // NOTE: ref[+6]
+                g_rect = PyObject_GetAttrString(g, "_postrot_rect");
                 PyList_SET_ITEM(g_dirty, 0, g_rect); // NOTE: ref[-6]
                 PyObject_SetAttrString(g, "_dirty", g_dirty);
             }
@@ -230,7 +232,8 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
             r_good = 1;
             for (k = 0; k < n; k++) { // gs
                 g = gs[k];
-                g_rect = PyObject_GetAttrString(g, "_rect"); // NOTE: ref[+7]
+                // NOTE: ref[+7]
+                g_rect = PyObject_GetAttrString(g, "_postrot_rect");
                 if (r_new) tmp_r = r;
                 // NOTE: ref[+8]
                 r = (PyRectObject*)
@@ -270,7 +273,8 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
             g = gs[j];
             tmp = PyObject_GetAttrString(g, "visible"); // NOTE: ref[+8]
             if (tmp == Py_True) {
-                g_rect = PyObject_GetAttrString(g, "_rect"); // NOTE: ref[+9]
+                // NOTE: ref[+9]
+                g_rect = PyObject_GetAttrString(g, "_postrot_rect");
                 draw_in = PyList_New(0); // NOTE: ref[+10]
                 for (k = 0; k < n; k++) { // rs
                     r = (PyRectObject*) PyList_GET_ITEM(rs, k);

@@ -468,7 +468,7 @@ if __name__ == '__main__':
             t = conf.DEFAULT_PROFILE_TIME
         fn = conf.PROFILE_STATS_FILE
         run('Game(Level).run(t)', fn, locals())
-        Stats(fn).strip_dirs().sort_stats('cumulative').print_stats(20)
+        Stats(fn).strip_dirs().sort_stats('cumulative').print_stats(30)
         os.unlink(fn)
     else:
         # run normally
