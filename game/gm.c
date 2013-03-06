@@ -330,7 +330,7 @@ PyMethodDef methods[] = {
     {NULL, NULL, 0, NULL}
 };
 
-PyMODINIT_FUNC initgmdraw (void) {
+PyMODINIT_FUNC init_gm (void) {
     import_pygame_rect();
-    Py_InitModule("gmdraw", methods);
+    Py_InitModule("_gm", methods);
 }

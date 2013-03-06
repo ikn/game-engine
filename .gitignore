@@ -1,0 +1,4 @@
+todo
+build/*
+game/_gm.so
+*.py[co]

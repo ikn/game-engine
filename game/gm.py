@@ -10,7 +10,7 @@ Colour
 Image
 
 TODO:
- - rotate(angle, about) - make sure to convert_alpha before; rotate threshold
+ - rotate(angle, about) - make sure to convert_alpha before; rotate threshold (threshold for all builtin continuous transforms?)
     r is rotation centre, c is surface centre
     new_topleft = (r - c).rotate(angle) + new_c - r
  - GM stuff to make it act as a Graphic, so it can be transformed and added to another GM, for multi-Graphic transforms
@@ -54,7 +54,7 @@ from pygame import Rect
 
 from conf import conf
 from util import ir, convert_sfc, blank_sfc
-from gmdraw import fastdraw
+from _gm import fastdraw
 
 
 class GraphicsManager (object):
@@ -317,21 +317,27 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
 """
 
+    _builtin_transforms = ('crop', 'flip', 'resize', 'rotate')
+
     def __init__ (self, img, pos, layer = 0, blit_flags = 0):
         if isinstance(img, basestring):
             self.fn = img
             img = conf.GAME.img(img)
         else:
             self.fn = None
+        self._cropped_rect = None
         self._scale = (1, 1)
-        # {function: (args, previous_surface, apply_fn, undo_fn)}
-        self._transforms = ts = OrderedDict()
         # postrot is the rect drawn in
         self._rect = self._postrot_rect = Rect(pos, img.get_size())
         self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
+        self._transforms = OrderedDict() # required by _set_sfc
         self._set_sfc(img)
         self.last_rect = self._last_postrot_rect = Rect(self._rect)
-        self.transforms = []
+        # {function: (args, previous_surface, apply_fn, undo_fn)}
+        self._transforms = OrderedDict.fromkeys(
+            self._builtin_transforms, (None, self.surface, None, None)
+        )
+        self.transforms = self._transforms.keys()
         # for manager
         self.scale_fn = pg.transform.smoothscale
         self._manager = None
@@ -464,6 +470,17 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         else:
             self.rescale(*scale)
 
+    @property
+    def cropped_rect (self):
+        if self._cropped_rect is None:
+            return self.sfc_before_transform('crop').get_rect()
+        else:
+            return self._cropped_rect
+
+    @cropped_rect.setter
+    def cropped_rect (self, rect):
+        self.crop(rect)
+
     # for the manager
 
     @property
@@ -506,7 +523,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         return self.opaque and self._rect.contains(rect)
 
     def _set_sfc (self, sfc):
-        """Set new surface and opacity (but nothing else)."""
+        """Set new surface and opacity and modify rects."""
         if sfc.get_alpha() is None and sfc.get_colorkey() is None:
             sfc = sfc.convert()
             self.opaque = True
@@ -601,8 +618,8 @@ return None to indicate this.
         if position is not None:
             # grab data previous to requested position and undo up to it
             last_args, sfc, apply_fn, undo_fn = ts[ks[position]]
-            for this_args, this_sfc, this_apply_fn, this_undo_fn \
-                in reversed(ts.values()[position:]):
+            for i, (this_args, this_sfc, this_apply_fn, this_undo_fn) \
+                in reversed(list(enumerate(ts.values()))[position:]):
                 if this_undo_fn is not None:
                     this_undo_fn(self)
             if ks[position] != transform_fn:
@@ -626,21 +643,24 @@ return None to indicate this.
                 apply_fn(self)
             if not exist:
                 # add to transforms anyway
-                ts[transform_fn] = (args, sfc)
+                ts[transform_fn] = (args, sfc, apply_fn, undo_fn)
         else:
             if builtin:
                 new_sfc, apply_fn, undo_fn = new_sfc
                 if apply_fn is not None:
                     apply_fn(self) # must not modify surface or _rect.size
             self._set_sfc(new_sfc)
+            #print transform_fn, 'mid', id(self.surface)
             ts[transform_fn] = (args, sfc, apply_fn, undo_fn)
             if position is not None:
                 # reapply from this transform onwards: call after setting
                 # surface and _rect so we end up at the outermost call with the
                 # final values set last
-                for fn, (args, sfc, apply_fn, undo_fn) \
-                    in ts.items()[position + 1:]:
-                    self.transform(fn, *args)
+                ts = ts.items()
+                self._transforms = OrderedDict(ts[:position + 1])
+                for fn, (args, sfc, apply_fn, undo_fn) in ts[position + 1:]:
+                    if args is not None:
+                        self.transform(fn, *args)
             self._mk_dirty()
         return self
 
@@ -755,8 +775,7 @@ about: the (x, y) position relative to the top-left of the graphic to scale
        about.
 
 """
-        self.transform('resize', w, h, about)
-        return self
+        return self.transform('resize', w, h, about)
 
     def rescale (self, w = None, h = None, about = (0, 0)):
         """A convenience wrapper around resize to scale by a ratio.
@@ -771,6 +790,41 @@ scaling.
             h = 1
         ow, oh = self.sfc_before_transform('resize').get_size()
         return self.resize(ir(w * ow), ir(h * oh), about)
+
+    def _crop (self, sfc, last, rect):
+        """Backend for crop."""
+        start = sfc.get_rect()
+        if (last is not None and rect == last[0]) or rect == start:
+            return
+        new_sfc = pg.Surface(rect.size)
+        inside = start.contains(rect)
+        if sfc.get_alpha() is None and sfc.get_colorkey() is None and inside:
+            new_sfc = new_sfc.convert()
+        else:
+            new_sfc = new_sfc.convert_alpha()
+            if not inside:
+                # fill with alpha so area outside borders is transparent
+                new_sfc.fill((0, 0, 0, 0))
+        dx, dy = rect[:2]
+        new_sfc.blit(sfc, rect.move(-dx, -dy), rect)
+
+        def apply_fn (g):
+            g._rect = g._rect.move(dx, dy)
+            g._cropped_rect = rect
+
+        def undo_fn (g):
+            g._rect = g._rect.move(-dx, -dy)
+            g._cropped_rect = None
+
+        return (new_sfc, apply_fn, undo_fn)
+
+    def crop (self, rect):
+        """Crop the surface to the given rect.
+
+The rect need not be contained in the current surface rect.
+
+"""
+        return self.transform('crop', Rect(rect))
 
     def reload (self):
         """Reload from disk if possible.
@@ -834,10 +888,15 @@ colour: as taken by constructor; set as necessary.
 
 """
 
-    def __init__ (self, colour, rect):
+    _i = Graphic._builtin_transforms.index('crop')
+    _builtin_transforms = Graphic._builtin_transforms[:_i] + ('fill',) + \
+                          Graphic._builtin_transforms[_i:]
+
+    def __init__ (self, colour, rect, layer = 0, blit_flags = 0):
         rect = Rect(rect)
         # converts surface and sets opaque to True
-        Graphic.__init__(self, pg.Surface(rect[2:]), rect[:2])
+        Graphic.__init__(self, pg.Surface(rect[2:]), rect[:2], layer,
+                         blit_flags)
         self._colour = (0, 0, 0)
         self.fill(colour)
 

@@ -1,7 +1,7 @@
 .PHONY: all clean distclean
 
 all:
-	CFLAGS="`pkg-config --cflags sdl`" ./setup
+	CFLAGS="$(CFLAGS) `pkg-config --cflags sdl`" ./setup
 	cp -a build/lib*/*.so game/
 
 clean:
