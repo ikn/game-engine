@@ -275,6 +275,7 @@ blit_flags: when blitting the surface to the screen, this is passed as the
     METHODS
 
 opaque_in
+snapshot
 move_to
 move_by
 transform
@@ -555,6 +556,19 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
     def opaque_in (self, rect):
         """Whether this draws opaque pixels in the whole of the given rect."""
         return self.opaque and self._rect.contains(rect)
+
+    def snapshot (self):
+        """Return a copy of this graphic.
+
+The copy is shallow, which means the new graphic will not appear to be
+transformed, even if this one is, but will be an exact copy.
+
+"""
+        g = Graphic(self.surface, self._postrot_rect[:2], self._layer,
+                    self.blit_flags)
+        g.visible = self.visible
+        g.scale_fn = self.scale_fn
+        return g
 
     def _set_sfc (self, sfc):
         """Set new surface and opacity and modify rects."""
