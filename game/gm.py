@@ -281,8 +281,10 @@ transform
 undo_transforms
 reapply_transform
 sfc_before_transform
-resize  [builtin transform]
+resize [builtin transform]
 rescale
+crop [builtin transform]
+flip [builtin transform]
 reload
 
     ATTRIBUTES
@@ -303,10 +305,14 @@ scale: (scale_x, scale_y).  Can be set to a single number to scale both
 scale_fn: function to use for scaling; defaults to pygame.transform.smoothscale
           (and should have the same signature as this default).  If you change
           this, you may want to call the reapply_transform method.
+cropped_rect: the rect currently cropped to.
+flipped_x, flipped_y: whether flipped on each axis.
+flipped: (flipped_x, flipped_y).  Can be set to a single value to apply to both
+         dimensions.
 transforms: a list of transformations applied to the graphic.  This always
-            contains 'crop', 'flip', 'resize' and 'rotate' (though they do
-            nothing by default); other transforms are added through the
-            transform method, and are functions rather than strings.
+            contains the builtin transforms as strings (though they do nothing
+            by default); other transforms are added through the transform
+            method, and are functions.
 manager: the GraphicsManager this graphic is associated with, or None; this may
          be changed directly.  (A graphic should only be used with one manager
          at a time.)
@@ -325,8 +331,9 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
             img = conf.GAME.img(img)
         else:
             self.fn = None
-        self._cropped_rect = None
         self._scale = (1, 1)
+        self._cropped_rect = None
+        self._flipped = (False, False)
         # postrot is the rect drawn in
         self._rect = self._postrot_rect = Rect(pos, img.get_size())
         self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
@@ -480,6 +487,33 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
     @cropped_rect.setter
     def cropped_rect (self, rect):
         self.crop(rect)
+
+    @property
+    def flipped_x (self):
+        return self._flipped[0]
+
+    @flipped_x.setter
+    def flipped_x (self, flipped_x):
+        self.flip(flipped_x, self._flipped[1])
+
+    @property
+    def flipped_y (self):
+        return self._flipped[0]
+
+    @flipped_x.setter
+    def flipped_y (self, flipped_y):
+        self.flip(self._flipped[0], flipped_y)
+
+    @property
+    def flipped (self):
+        return self._flipped
+
+    @flipped.setter
+    def flipped (self, flipped):
+        if isinstance(flipped, (bool, int)):
+            self.flip(flipped, flipped)
+        else:
+            self.flip(*flipped)
 
     # for the manager
 
@@ -823,8 +857,34 @@ scaling.
 
 The rect need not be contained in the current surface rect.
 
+Returns self.
+
 """
         return self.transform('crop', Rect(rect))
+
+    def _flip (self, sfc, last, x, y):
+        """Backend for flip."""
+        if (last is not None and last == (x, y)) or (not x and not y):
+            return
+        new_sfc = pg.transform.flip(sfc, x, y)
+
+        def apply_fn (g):
+            g._flipped = (x, y)
+
+        def undo_fn (g):
+            g._flipped = (False, False)
+
+        return (new_sfc, apply_fn, undo_fn)
+
+    def flip (self, x = False, y = False):
+        """Flip the graphic over either axis.
+
+flip(x = False, y = False) -> self
+
+x, y: whether to flip over this axis.
+
+"""
+        return self.transform('flip', bool(x), bool(y))
 
     def reload (self):
         """Reload from disk if possible.
