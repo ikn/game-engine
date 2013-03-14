@@ -10,6 +10,7 @@ Colour
 Image
 
 TODO:
+ - resize, rotate don't transform if only 'about' changes
  - rotate(angle, about) - make sure to convert_alpha before; rotate threshold (threshold for all builtin continuous transforms?)
     r is rotation centre, c is surface centre
     new_topleft = (r - c).rotate(angle) + new_c - r
@@ -278,6 +279,7 @@ opaque_in
 snapshot
 move_to
 move_by
+align
 transform
 undo_transforms
 reapply_transform
@@ -608,6 +610,45 @@ move_by(dx = 0, dy = 0) -> self
 
 """
         self.rect = self._rect.move(dx, dy)
+        return self
+
+    def align (self, pos = 0, pad = 0, offset = 0, rect = None):
+        """Position this graphic within a rect.
+
+align(pos = 0, pad = 0, offset = 0, rect = self.manager.surface.get_rect())
+    -> self
+
+pos: (x, y) alignment; each is < 0 for left-aligned, 0 for centred, > 0 for
+     right-aligned.  Can be just one number to use on both axes.
+pad: (x, y) padding to leave around the inner edge of the rect.  Can be
+     negative to allow positioning outside of the rect, and can be just one
+     number to use on both axes.
+pos: (x, y) amounts to offset by after all other positioning; can be just one
+     number to use on both axes.
+rect: Pygame-style rect to align in.
+
+"""
+        pos = [pos, pos] if isinstance(pos, (int, float)) else list(pos)
+        if isinstance(pad, (int, float)):
+            pad = (pad, pad)
+        if isinstance(offset, (int, float)):
+            offset = (offset, offset)
+        if rect is None:
+            rect = self._manager.surface.get_rect()
+        else:
+            rect = Rect(rect)
+        rect = rect.inflate(-2 * pad[0], -2 * pad[1])
+        sz = self._rect[2:]
+        for axis in (0, 1):
+            align = pos[axis]
+            if align < 0:
+                x = 0
+            elif align == 0:
+                x = (rect[2 + axis] - sz[axis]) / 2.
+            else: # align > 0
+                x = rect[2 + axis] - sz[axis]
+            pos[axis] = ir(rect[axis] + x + offset[axis])
+        self.rect = (pos, sz)
         return self
 
     # transform

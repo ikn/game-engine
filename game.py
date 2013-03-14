@@ -158,6 +158,7 @@ passed to that base class).
                 fonts[k] = v
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
+        world._select()
         world.select()
 
     def start_world (self, *args, **kwargs):
