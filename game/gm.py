@@ -10,10 +10,11 @@ Colour
 Image
 
 TODO:
- - resize, rotate don't transform if only 'about' changes
- - rotate(angle, about) - make sure to convert_alpha before; rotate threshold (threshold for all builtin continuous transforms?)
-    r is rotation centre, c is surface centre
-    new_topleft = (r - c).rotate(angle) + new_c - r
+ - .transforms is a property that gets ._transforms.keys(), so don't have to alter .transforms
+ - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
+ - rotate threshold (threshold for all builtin continuous transforms?)
+ - rotate_fn
+ - Graphic.angle
  - GM stuff to make it act as a Graphic, so it can be transformed and added to another GM, for multi-Graphic transforms
  - GraphicsManager.overlay, .fade
  - performance:
@@ -48,6 +49,7 @@ Tilemap
 
 """
 
+from math import sin, cos, pi
 from collections import OrderedDict
 
 import pygame as pg
@@ -288,6 +290,7 @@ resize [builtin transform]
 rescale
 crop [builtin transform]
 flip [builtin transform]
+rotate
 reload
 
     ATTRIBUTES
@@ -679,16 +682,17 @@ Calls transform_fn(sfc, last_args, *args) to apply the transformation, where:
 sfc: surface before this transformation was last applied (or the current
      surface if it never has been).
 last_args: the args passed to this method when this transformation was last
-           applied, as a tuple.
+           applied, as a tuple (or None if it never has been).
 
 and transform_fn should return the new surface after transforming.  The passed
-surface should not be altered: the new surface should be a new instance.
+surface should not be altered: the new surface should be a new instance, or the
+same surface if the transformation would do nothing
 
 If the results of the transformation would be exactly the same with last_args
-as with args, or if the transformation would do nothing, transform_fn may
-return None to indicate this.
+as with args, transform_fn may return None to indicate this.
 
 """
+        # determine position
         ts = self._transforms
         ks = ts.keys()
         exist = transform_fn in ts
@@ -704,9 +708,15 @@ return None to indicate this.
                 position = ks.index(transform_fn)
         elif position >= len(ks):
             position = None
+        # get previous surface and args, and the last resulting surface, if any
         if position is not None:
             # grab data previous to requested position and undo up to it
             last_args, sfc, apply_fn, undo_fn = ts[ks[position]]
+            if position == len(ks) - 1:
+                # last transform: last result is current surface
+                last_new_sfc = self.surface
+            else:
+                last_new_sfc = ts[ks[position + 1]][1]
             for i, (this_args, this_sfc, this_apply_fn, this_undo_fn) \
                 in reversed(list(enumerate(ts.values()))[position:]):
                 if this_undo_fn is not None:
@@ -720,26 +730,29 @@ return None to indicate this.
                 self._transforms = ts = OrderedDict(ts)
         else:
             # use current data
-            sfc = self.surface
+            last_new_sfc = sfc = self.surface
             last_args = apply_fn = undo_fn = None
             self.transforms.append(transform_fn)
         builtin = isinstance(transform_fn, basestring)
         t_fn = getattr(self, '_' + transform_fn) if builtin else transform_fn
         new_sfc = t_fn(sfc, last_args, *args)
         if new_sfc is None:
-            # transformation did nothing
-            if apply_fn is not None:
-                apply_fn(self)
+            # transformation would do nothing
             if not exist:
                 # add to transforms anyway
-                ts[transform_fn] = (args, sfc, apply_fn, undo_fn)
+                ts[transform_fn] = (args, sfc, None, None)
         else:
             if builtin:
-                new_sfc, apply_fn, undo_fn = new_sfc
+                new_sfc, new_apply_fn, new_undo_fn = new_sfc
+                if new_apply_fn is not None:
+                    apply_fn = new_apply_fn
+                if new_undo_fn is not None:
+                    undo_fn = new_undo_fn
                 if apply_fn is not None:
                     apply_fn(self) # must not modify surface or _rect.size
+            if new_sfc is sfc:
+                new_sfc = last_new_sfc
             self._set_sfc(new_sfc)
-            #print transform_fn, 'mid', id(self.surface)
             ts[transform_fn] = (args, sfc, apply_fn, undo_fn)
             if position is not None:
                 # reapply from this transform onwards: call after setting
@@ -830,32 +843,30 @@ have been applied yet.
         sz = (w, h)
         about = (about[0], about[1])
         if last is not None:
-            (last_w, last_h, (last_ax, last_ay)) = last
-            last_sz = (last_w, last_h)
-            last_a = (last_ax, last_ay)
-            if sz == last_sz and about == last_a:
+            last_w, last_h, (last_ax, last_ay) = last
+            if sz == (last_w, last_h) and about == (last_ax, last_ay):
                 # no change to arguments
-                return
-        if sz != start_sz or about != (0, 0):
-            scale = (float(w) / start_w, float(h) / start_h)
-            offset = (ir((1 - scale[0]) * about[0]),
-                      ir((1 - scale[1]) * about[1]))
+                return (sfc, None, None)
+        if sz == start_sz and about == (0, 0):
+            return
+        scale = (float(w) / start_w, float(h) / start_h)
+        offset = (ir((1 - scale[0]) * about[0]),
+                    ir((1 - scale[1]) * about[1]))
 
-            def apply_fn (g):
-                g._scale = scale
-                x, y, gw, gh = g._rect
-                g._rect = Rect(x + offset[0], y + offset[1], gw, gh)
+        def apply_fn (g):
+            g._scale = scale
+            x, y, gw, gh = g._rect
+            g._rect = Rect(x + offset[0], y + offset[1], gw, gh)
 
-            def undo_fn (g):
-                g._scale = (1, 1)
-                x, y, gw, gh = g._rect
-                g._rect = Rect(x - offset[0], y - offset[1], gw, gh)
+        def undo_fn (g):
+            g._scale = (1, 1)
+            x, y, gw, gh = g._rect
+            g._rect = Rect(x - offset[0], y - offset[1], gw, gh)
 
-            return (self.scale_fn(sfc, sz), apply_fn, undo_fn)
-        # else already scaled like this or no scaling
+        return (self.scale_fn(sfc, sz), apply_fn, undo_fn)
 
     def resize (self, w = None, h = None, about = (0, 0)):
-        """Resize the image.
+        """Resize the graphic.
 
 resize([w][, h], about = (0, 0)) -> self
 
@@ -883,7 +894,9 @@ scaling.
     def _crop (self, sfc, last, rect):
         """Backend for crop."""
         start = sfc.get_rect()
-        if (last is not None and rect == last[0]) or rect == start:
+        if last is not None and rect == last[0]:
+            return (sfc, None, None)
+        if rect == start:
             return
         new_sfc = pg.Surface(rect.size)
         inside = start.contains(rect)
@@ -919,7 +932,9 @@ Returns self.
 
     def _flip (self, sfc, last, x, y):
         """Backend for flip."""
-        if (last is not None and last == (x, y)) or (not x and not y):
+        if last is not None and last == (x, y):
+            return (sfc, None, None)
+        if not x and not y:
             return
         new_sfc = pg.transform.flip(sfc, x, y)
 
@@ -940,6 +955,55 @@ x, y: whether to flip over this axis.
 
 """
         return self.transform('flip', bool(x), bool(y))
+
+    def _rotate (self, sfc, last, angle, about):
+        """Backend for rotate."""
+        w_old, h_old = sfc.get_size()
+        cx, cy = w_old / 2., h_old / 2.
+        about = (cx, cy) if about is None else (about[0], about[1])
+        if last is not None:
+            last_angle, last_about = last
+            last_about = (cx, cy) if last_about is None \
+                         else (last_about[0], last_about[1])
+            if angle == last_angle and about == last_about:
+                # no change to arguments
+                return (sfc, None, None)
+        if angle == 0:
+            return
+        new_sfc = pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
+        # compute draw offset
+        w_new, h_new = new_sfc.get_size()
+        # v = c_new - about
+        vx = cx - about[0]
+        vy = cy - about[1]
+        # c - about_new = v.rotate(angle)
+        s = sin(angle)
+        c = cos(angle)
+        ax_new = w_new / 2. - (c * vx + s * vy)
+        ay_new = h_new / 2. - (-s * vx + c * vy)
+        # about = offset + about_new
+        offset = (ir(about[0] - ax_new), ir(about[1] - ay_new))
+
+        def apply_fn (g):
+            g._rot_offset = offset
+
+        def undo_fn (g):
+            g._rot_offset = (0, 0)
+
+        return (new_sfc, apply_fn, undo_fn)
+
+    def rotate (self, angle, about = None):
+        """Rotate the graphic.
+
+rotate(angle[, about]) -> self
+
+angle: the angle in radians to rotate to, anti-clockwise from the original
+       graphic.
+about: the (x, y) position relative to the top-left of the graphic to rotate
+       about; defaults to the graphic's centre.
+
+"""
+        return self.transform('rotate', angle, about)
 
     def reload (self):
         """Reload from disk if possible.

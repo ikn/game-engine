@@ -267,7 +267,7 @@ threshold: stop when amplitude is this small.  If None, never stop.  If varying
            more than one number, only stop when every number is within its
            threshold.
 signed: whether to shake around the centre.  If False, values are greater than
-        centre (not that amplitude may be signed).
+        centre (note that amplitude may be signed).
 
 f: function that returns position given the current time.
 
