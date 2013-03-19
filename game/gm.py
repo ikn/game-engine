@@ -11,7 +11,6 @@ Image
 
 TODO:
  - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
- - rotate threshold (threshold for all builtin continuous transforms?)
  - GM stuff to make it act as a Graphic, so it can be transformed and added to another GM, for multi-Graphic transforms
  - GraphicsManager.overlay, .fade
  - performance:
@@ -287,7 +286,7 @@ resize [builtin transform]
 rescale
 crop [builtin transform]
 flip [builtin transform]
-rotate
+rotate [builtin transform]
 reload
 
     ATTRIBUTES
@@ -318,6 +317,9 @@ rotate_fn: function to use for rotating; uses pygame.transform.rotozoom by
            default.  Takes the surface and angle (as passed to the rotate
            method) and returns the new rotated surface.  If you change this,
            you may want to call the reapply_transform method.
+rotate_threshold: only rotate when the angle changes by this much; defaults to
+                  2 * pi / 500.  If you change this, you may want to call the
+                  reapply_transform method.
 transforms: a list of transformations applied to the graphic.  This always
             contains the builtin transforms as strings (though they do nothing
             by default); other transforms are added through the transform
@@ -357,6 +359,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         self.scale_fn = pg.transform.smoothscale
         self.rotate_fn = lambda sfc, angle: \
             pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
+        self.rotate_threshold = 2 * pi / 500
         self._manager = None
         self._layer = layer
         self._blit_flags = blit_flags
@@ -869,7 +872,7 @@ have been applied yet.
             last_w, last_h, (last_ax, last_ay) = last
             if sz == (last_w, last_h) and about == (last_ax, last_ay):
                 # no change to arguments
-                return
+                return (None, None, None)
         if sz == start_sz and about == (0, 0):
             return (sfc, None, None)
         scale = (float(w) / start_w, float(h) / start_h)
@@ -918,7 +921,7 @@ scaling.
         """Backend for crop."""
         start = sfc.get_rect()
         if last is not None and rect == last[0]:
-            return
+            return (None, None, None)
         if rect == start:
             return (sfc, None, None)
         new_sfc = pg.Surface(rect.size)
@@ -956,7 +959,7 @@ Returns self.
     def _flip (self, sfc, last, x, y):
         """Backend for flip."""
         if last is not None and last == (x, y):
-            return
+            return (None, None, None)
         if not x and not y:
             return (sfc, None, None)
         new_sfc = pg.transform.flip(sfc, x, y)
@@ -988,10 +991,10 @@ x, y: whether to flip over this axis.
             last_angle, last_about = last
             last_about = (cx, cy) if last_about is None \
                          else (last_about[0], last_about[1])
-            if angle == last_angle and about == last_about:
+            if abs(angle - last_angle) < self.rotate_threshold and about == last_about:
                 # no change to arguments
-                return
-        if angle == 0:
+                return (None, None, None)
+        if abs(angle) < self.rotate_threshold:
             return (sfc, None, None)
         new_sfc = self.rotate_fn(sfc, angle)
         # compute draw offset
