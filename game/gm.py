@@ -10,11 +10,8 @@ Colour
 Image
 
 TODO:
- - .transforms is a property that gets ._transforms.keys(), so don't have to alter .transforms
  - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
  - rotate threshold (threshold for all builtin continuous transforms?)
- - rotate_fn
- - Graphic.angle
  - GM stuff to make it act as a Graphic, so it can be transformed and added to another GM, for multi-Graphic transforms
  - GraphicsManager.overlay, .fade
  - performance:
@@ -315,6 +312,12 @@ cropped_rect: the rect currently cropped to.
 flipped_x, flipped_y: whether flipped on each axis.
 flipped: (flipped_x, flipped_y).  Can be set to a single value to apply to both
          dimensions.
+angle: current rotation angle, anti-clockwise in radians.  Setting this rotates
+       about the graphic's centre.
+rotate_fn: function to use for rotating; uses pygame.transform.rotozoom by
+           default.  Takes the surface and angle (as passed to the rotate
+           method) and returns the new rotated surface.  If you change this,
+           you may want to call the reapply_transform method.
 transforms: a list of transformations applied to the graphic.  This always
             contains the builtin transforms as strings (though they do nothing
             by default); other transforms are added through the transform
@@ -350,9 +353,10 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         self._transforms = OrderedDict.fromkeys(
             self._builtin_transforms, (None, self.surface, None, None)
         )
-        self.transforms = self._transforms.keys()
         # for manager
         self.scale_fn = pg.transform.smoothscale
+        self.rotate_fn = lambda sfc, angle: \
+            pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
         self._manager = None
         self._layer = layer
         self._blit_flags = blit_flags
@@ -521,7 +525,21 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         else:
             self.flip(*flipped)
 
-    # for the manager
+    @property
+    def angle (self):
+        return self._angle
+
+    @angle.setter
+    def angle (self, angle):
+        self.rotate(angle)
+
+    @angle.setter
+
+    # other properties
+
+    @property
+    def transforms (self):
+        return self._transforms.keys()
 
     @property
     def manager (self):
@@ -686,7 +704,7 @@ last_args: the args passed to this method when this transformation was last
 
 and transform_fn should return the new surface after transforming.  The passed
 surface should not be altered: the new surface should be a new instance, or the
-same surface if the transformation would do nothing
+unaltered surface if the transformation would do nothing.
 
 If the results of the transformation would be exactly the same with last_args
 as with args, transform_fn may return None to indicate this.
@@ -723,7 +741,6 @@ as with args, transform_fn may return None to indicate this.
                     this_undo_fn(self)
             if ks[position] != transform_fn:
                 # insert in transforms and _transforms
-                self.transforms.insert(position, transform_fn)
                 ts = ts.items()
                 # value for this position gets set below
                 ts = ts[:position] + (position, None) + ts[position:]
@@ -732,26 +749,32 @@ as with args, transform_fn may return None to indicate this.
             # use current data
             last_new_sfc = sfc = self.surface
             last_args = apply_fn = undo_fn = None
-            self.transforms.append(transform_fn)
         builtin = isinstance(transform_fn, basestring)
-        t_fn = getattr(self, '_' + transform_fn) if builtin else transform_fn
-        new_sfc = t_fn(sfc, last_args, *args)
-        if new_sfc is None:
+        if builtin:
+            new_sfc, new_apply_fn, new_undo_fn = \
+                getattr(self, '_' + transform_fn)(sfc, last_args, *args)
+            if new_apply_fn is not None:
+                apply_fn = new_apply_fn
+            if new_undo_fn is not None:
+                undo_fn = new_undo_fn
+        else:
+            new_sfc = transform_fn(sfc, last_args, *args)
+        if new_sfc is sfc:
             # transformation would do nothing
             if not exist:
                 # add to transforms anyway
                 ts[transform_fn] = (args, sfc, None, None)
         else:
             if builtin:
-                new_sfc, new_apply_fn, new_undo_fn = new_sfc
-                if new_apply_fn is not None:
-                    apply_fn = new_apply_fn
-                if new_undo_fn is not None:
-                    undo_fn = new_undo_fn
                 if apply_fn is not None:
                     apply_fn(self) # must not modify surface or _rect.size
-            if new_sfc is sfc:
+            if new_sfc is None:
+                # didn't do anything
                 new_sfc = last_new_sfc
+                assert last_args is not None, 'transform function should ' \
+                                              'only return None if it was ' \
+                                              'passed last_args'
+                args = last_args
             self._set_sfc(new_sfc)
             ts[transform_fn] = (args, sfc, apply_fn, undo_fn)
             if position is not None:
@@ -846,9 +869,9 @@ have been applied yet.
             last_w, last_h, (last_ax, last_ay) = last
             if sz == (last_w, last_h) and about == (last_ax, last_ay):
                 # no change to arguments
-                return (sfc, None, None)
+                return
         if sz == start_sz and about == (0, 0):
-            return
+            return (sfc, None, None)
         scale = (float(w) / start_w, float(h) / start_h)
         offset = (ir((1 - scale[0]) * about[0]),
                     ir((1 - scale[1]) * about[1]))
@@ -895,9 +918,9 @@ scaling.
         """Backend for crop."""
         start = sfc.get_rect()
         if last is not None and rect == last[0]:
-            return (sfc, None, None)
-        if rect == start:
             return
+        if rect == start:
+            return (sfc, None, None)
         new_sfc = pg.Surface(rect.size)
         inside = start.contains(rect)
         if sfc.get_alpha() is None and sfc.get_colorkey() is None and inside:
@@ -933,9 +956,9 @@ Returns self.
     def _flip (self, sfc, last, x, y):
         """Backend for flip."""
         if last is not None and last == (x, y):
-            return (sfc, None, None)
-        if not x and not y:
             return
+        if not x and not y:
+            return (sfc, None, None)
         new_sfc = pg.transform.flip(sfc, x, y)
 
         def apply_fn (g):
@@ -967,10 +990,10 @@ x, y: whether to flip over this axis.
                          else (last_about[0], last_about[1])
             if angle == last_angle and about == last_about:
                 # no change to arguments
-                return (sfc, None, None)
+                return
         if angle == 0:
-            return
-        new_sfc = pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
+            return (sfc, None, None)
+        new_sfc = self.rotate_fn(sfc, angle)
         # compute draw offset
         w_new, h_new = new_sfc.get_size()
         # v = c_new - about
@@ -985,9 +1008,11 @@ x, y: whether to flip over this axis.
         offset = (ir(about[0] - ax_new), ir(about[1] - ay_new))
 
         def apply_fn (g):
+            g._angle = angle
             g._rot_offset = offset
 
         def undo_fn (g):
+            g._angle = 0
             g._rot_offset = (0, 0)
 
         return (new_sfc, apply_fn, undo_fn)
