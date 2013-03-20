@@ -8,10 +8,15 @@ Pygame (1.8 or later, probably; tested with 1.9.1)
     RUNNING
 
 To run from source, you must first compile.  This process requires GNU Make or
-equivalent, and header files for SDL and Pygame must be available on the
-system.  Just run
+equivalent or the version of Visual whatever-it's-called that was used to
+compile your Python version, and header files for SDL and Pygame must be
+available on the system.  Just run
 
     make
+
+On Windows, this requires the command-line compiler ('cl') to be on your path,
+and assumes that SDL.h is in the directory 'sdl_include' above this directory
+(horrible, I know).
 
 Now, on systems with a sh-compatible shell, do
 
