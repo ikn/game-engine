@@ -18,10 +18,10 @@ pg.mixer.pre_init(buffer = 1024)
 pg.init()
 
 from game.conf import conf
-from game.ext.sched import Scheduler
-from game.ext import evthandler as eh
+from game.sched import Scheduler
+from game import evthandler as eh
 if conf.USE_FONTS:
-    from game.ext.fonthandler import Fonts
+    from game.mltr import Fonts
 from game.util import ir, convert_sfc
 from game.world import World
 from game.level import Level

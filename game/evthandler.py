@@ -3,6 +3,7 @@
 This module consists of the EventHandler class, which is used to assign
 callbacks to events and keypresses in Pygame.
 
+Python version: 2.
 Release: 12.
 
 Licensed under the GNU General Public License, version 3; if this was not
@@ -309,7 +310,7 @@ Call this every frame.
                     self.keys_up.add(event.key)
                     up_mods[event.key] = event.mod
         pressed = pygame.key.get_pressed()
-        # form some reason this is faster than set(genexpr)
+        # for some reason this is faster than set(genexpr)
         self.keys_pressed = set([i for i in xrange(len(pressed)) if pressed[i]])
         # update repeated key counts
         held = (self._keys_handled[2] | self._keys_handled[4]) & self.keys_pressed

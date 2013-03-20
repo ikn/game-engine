@@ -30,7 +30,7 @@ TODO:
  - Graphic.opacity (as a transform)
  - Graphic subclasses:
 Text
-AnimatedImage(surface | filename[image])
+Animation(surface | filename[image])
 Tilemap
   (surface | filename[image])
       uses colours to construct tiles

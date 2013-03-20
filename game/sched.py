@@ -1,4 +1,4 @@
-"""Event scheduler by Joseph Lansdowne.
+"""Pygame event scheduler by Joseph Lansdowne.
 
 Uses Pygame's wait function if available, else the less accurate time.sleep.
 To use something else, do:

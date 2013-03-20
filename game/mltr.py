@@ -1,8 +1,9 @@
-"""Font handler by Joseph Lansdowne.
+"""Multi-line text rendering for Pygame, by Joseph Lansdowne.
 
 The Fonts class in this module can serve as a font cache, but the real point of
 this is to render multi-line text with alignment and shadow and stuff.
 
+Python version: 2.
 Release: 5.
 
 Licensed under the GNU General Public License, version 3; if this was not
