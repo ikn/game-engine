@@ -1,4 +1,4 @@
 todo
 build/*
-game/_gm.so
+game/engine/_gm.so
 *.py[co]

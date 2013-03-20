@@ -1,3 +1,4 @@
+import sys
 from platform import system
 import os
 from os.path import sep, expanduser, join as join_path
@@ -42,7 +43,7 @@ class Conf (object):
     CONF = join_path(CONF_DIR, 'conf')
 
     # data paths
-    DATA_DIR = ''
+    DATA_DIR = os.path.dirname(sys.argv[0]) + sep
     IMG_DIR = DATA_DIR + 'img' + sep
     SOUND_DIR = DATA_DIR + 'sound' + sep
     MUSIC_DIR = DATA_DIR + 'music' + sep

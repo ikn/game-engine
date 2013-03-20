@@ -71,7 +71,7 @@ dump
             if t is not None:
                 # but new value isn't: use as new type
                 self._types[k] = t
-        else:
+        elif not isinstance(v, t):
             try:
                 v = t(v)
             except (TypeError, ValueError):
