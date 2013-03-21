@@ -1,3 +1,12 @@
+"""Main loop and world handling.
+
+Only one :class:`Game` instance should ever exist, and it stores itself in
+:data:`conf.GAME`.  Start the game with :func:`run` and use the :class:`Game`
+instance for changing worlds, clearing media caches, handling the display and
+playing audio.
+
+"""
+
 import os
 from random import choice, randrange
 
@@ -15,10 +24,10 @@ from world import World
 def get_world_id (world):
     """Return the computed identifier of the given world (or world type).
 
-See Game.create_world for details.
+See :meth:`Game.create_world` for details.
 
 """
-    if hasattr(world, 'id'):
+    if world.id is not None:
         return world.id
     else:
         if not isinstance(world, type):
@@ -29,8 +38,8 @@ See Game.create_world for details.
 def run (*args, **kwargs):
     """Run the game.
 
-Takes the same arguments as Game, with an optional keyword argument t to run
-for this many seconds.
+Takes the same arguments as :class:`Game`, with an optional keyword-only
+argument ``t`` to run for this many seconds.
 
 """
     t = kwargs.get('t')
@@ -44,38 +53,7 @@ for this many seconds.
 class Game (object):
     """Handles worlds.
 
-Takes the same arguments as the create_world method and passes them to it.
-Only one game should ever exist, and it stores itself in conf.GAME.
-
-    METHODS
-
-create_world
-start_world
-get_worlds
-quit_world
-img
-render_text
-clear_caches
-play_snd
-find_music
-play_music
-run
-quit
-restart
-refresh_display
-toggle_fullscreen
-minimise
-
-    ATTRIBUTES
-
-world: the current running world.
-worlds: a list of previous (nested) worlds, most 'recent' last.
-file_cache, img_cache, text_cache: caches for loaded image cache (before
-                                   resize), images and rendered text
-                                   respectively.
-fonts: a fonthandler.Fonts instance, or None if conf.USE_FONTS is False.
-music: filenames for known music.
-screen: the main Pygame surface.
+Takes the same arguments as :meth:`create_world` and passes them to it.
 
 """
 
@@ -84,18 +62,24 @@ screen: the main Pygame surface.
         conf.RES_F = pg.display.list_modes()[0]
         self._quit = False
         self._update_again = False
+        self.world = None #: The currently running world.
+        #: A list of previous (nested) worlds, most 'recent' last.
+        self.worlds = []
         # initialise caches
-        self.file_cache = {}
-        self.img_cache = {}
-        self.text_cache = {}
+        self.file_cache = {} #: Cache for loaded images (before resize).
+        self.img_cache = {} #: Cache for images (after resize).
+        self.text_cache = {} #: Cache for rendered text.
         # load display settings
+        self.screen = None #: The main Pygame surface.
         self.refresh_display()
+        #: A :class:`mltr.Fonts` instance, or ``None`` if
+        #: :data:`conf.USE_FONTS` is ``False``.
         self.fonts = Fonts(conf.FONT_DIR) if conf.USE_FONTS else None
         # start first world
-        self.worlds = []
         self.start_world(*args, **kwargs)
         # start playing music
         pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
+        self.music = [] #: Filenames for known music.
         self.find_music()
         self.play_music()
         if not conf.MUSIC_AUTOPLAY:
@@ -108,23 +92,19 @@ screen: the main Pygame surface.
 
 create_world(cls, *args, **kwargs) -> world
 
-cls: the world class to instantiate.
-args, kwargs: positional- and keyword arguments to pass to the constructor.
+:arg cls: the world class to instantiate; must be a :class:`world.World`
+          subclass.
+:arg args: positional arguments to pass to the constructor.
+:arg kwargs: keyword arguments to pass to the constructor.
 
-world: the created world; must be a world.World subclass.
+:return: the created world.
 
-Optional world attributes:
-
-    pause(): called when the window loses focus to pause the game.
-    id: a unique identifier used for some settings in conf; if none is set,
-        type(world).__name__.lower() will be used.
-
-A world is constructed by:
+A world is constructed by::
 
     cls(scheduler, evthandler, *args, **kwargs)
 
-where scheduler and evthandler are as taken by world.World (and should be
-passed to that base class).
+where ``scheduler`` and ``evthandler`` are as taken by :class:`world.World`
+(and should be passed to that base class).
 
 """
         scheduler = Scheduler()
@@ -144,7 +124,7 @@ passed to that base class).
 
     def _select_world (self, world):
         """Set the given world as the current world."""
-        if hasattr(self, 'world'):
+        if self.world is not None:
             self._update_again = True
             self.world.scheduler.stop()
         self.world = world
@@ -164,20 +144,23 @@ passed to that base class).
     def start_world (self, *args, **kwargs):
         """Store the current world (if any) and switch to a new one.
 
-Takes a World instance, or the same arguments as create_world to create a new
-one (see that method for details).
+Takes a :class:`world.World` instance, or the same arguments as
+:meth:`create_world` to create a new one.
 
-Returns the new current world.
+:return: the new current world.
 
 """
-        if hasattr(self, 'world'):
+        if self.world is not None:
             self.worlds.append(self.world)
         return self.switch_world(*args, **kwargs)
 
     def switch_world (self, world, *args, **kwargs):
-        """Close the current world and start a new one.
+        """End the current world and start a new one.
 
-Arguments and return value are the same as for start_world.
+Takes a :class:`world.World` instance, or the same arguments as
+:meth:`create_world` to create a new one.
+
+:return: the new current world.
 
 """
         if not isinstance(world, World):
@@ -186,14 +169,14 @@ Arguments and return value are the same as for start_world.
         return world
 
     def get_worlds (self, ident, current = True):
-        """Get a list of running worlds, filtered by ID.
+        """Get a list of running worlds, filtered by identifier.
 
 get_worlds(ident, current = True) -> worlds
 
-ident: the world identifier to look for (see create_world for details).
-current: include the current world in the search.
+:arg ident: the world identifier (:attr:`world.World.id`) to look for.
+:arg current: include the current world in the search.
 
-worlds: the world list, in order of time started, most recent last.
+:return: the world list, in order of time started, most recent last.
 
 """
         worlds = []
@@ -209,9 +192,9 @@ worlds: the world list, in order of time started, most recent last.
 
 quit_world(depth = 1) -> worlds
 
-depth: quit this many (nested) worlds.
+:arg depth: quit this many (nested) worlds.
 
-worlds: a list of worlds that were quit.
+:return: a list of worlds that were quit.
 
 If this quits the last (root) world, exit the game.
 
@@ -232,11 +215,15 @@ If this quits the last (root) world, exit the game.
 
 img(filename[, size], cache = True) -> surface
 
-data: a filename to load.
-size: scale the image.  Can be an (x, y) size, a rect (in which case its
-      dimension is used), or a number to scale by.  If (x, y), either x or y
-      can be None to scale to the other with aspect ratio preserved.
-cache: whether to store this image in/retrieve it from the cache if possible.
+:arg filename: a filename to load.
+:arg size: scale the image.  Can be an ``(x, y)`` size, a rect (in which case
+           its dimensions are used), or a number to scale by.  If ``(x, y)``,
+           either ``x`` or ``y`` can be ``None`` to scale to the other with
+           aspect ratio preserved.
+:arg cache: whether to store this image in/retrieve it from the appropriate
+            cache if possible.
+
+:rtype: ``pygame.Surface``
 
 """
         # get standardised cache key
@@ -282,12 +269,12 @@ cache: whether to store this image in/retrieve it from the cache if possible.
     def render_text (self, *args, **kwargs):
         """Render text and cache the result.
 
-Takes the same arguments as fonthandler.Fonts.render, plus a keyword-only
-'cache' argument.  If passed, the text is cached under this hashable value, and
-can be retrieved from cache by calling this function with the same value for
-this argument.
+Takes the same arguments as :meth:`mltr.Fonts.render`, plus a keyword-only
+``cache`` argument.  If passed (with any value), the text is cached under this
+hashable value, and can be retrieved from cache by calling this function with
+the same value for this argument.
 
-Returns the same value as fonthandler.Fonts
+Returns the same as :meth:`mltr.Fonts.render`
 
 """
         if self.fonts is None:
@@ -310,12 +297,12 @@ Returns the same value as fonthandler.Fonts
     def clear_caches (self, *caches):
         """Clear image caches.
 
-    Takes any number of strings 'file', 'image' and 'text' as arguments, which
-    determine whether to clear the file_cache, img_cache and text_cache
-    attributes respectively (see class documentation).  If none is given, all
-    caches are cleared.
+Takes any number of strings ``'file'``, ``'image'`` and ``'text'`` as
+arguments, which determine whether to clear :attr:`file_cache`,
+:attr:`img_cache` and :attr:`text_cache` respectively.  If none are given, all
+caches are cleared.
 
-    """
+"""
         if not caches:
             caches = ('file', 'image', 'text')
         if 'file' in caches:
@@ -325,29 +312,30 @@ Returns the same value as fonthandler.Fonts
         if 'text' in caches:
             self.text_cache = {}
 
-    def play_snd (self, base_ID, volume = 1):
+    def play_snd (self, base_id, volume = 1):
         """Play a sound.
 
-play_snd(base_ID, volume = 1)
+play_snd(base_id, volume = 1)
 
-base_ID: the ID of the sound to play (we look for base_ID + i for a number i,
-         as many sounds as conf.SOUNDS[base_ID]).
-volume: float to scale volume by.
+:arg base_id: the identifier of the sound to play (we look for ``base_id + i``
+              for a number ``i``---there are as many sounds as set in
+              :data:`conf.SOUNDS`).
+:arg float volume: amount scale the playback volume by.
 
 """
-        ID = randrange(conf.SOUNDS[base_ID])
+        ident = randrange(conf.SOUNDS[base_id])
         # load sound
-        snd = conf.SOUND_DIR + base_ID + str(ID) + '.ogg'
+        snd = conf.SOUND_DIR + base_id + str(ident) + '.ogg'
         snd = pg.mixer.Sound(snd)
         if snd.get_length() < 10 ** -3:
             # no way this is valid
             return
-        volume *= conf.SOUND_VOLUME * conf.SOUND_VOLUMES[base_ID]
+        volume *= conf.SOUND_VOLUME * conf.SOUND_VOLUMES[base_id]
         snd.set_volume(volume)
         snd.play()
 
     def find_music (self):
-        """Store a list of music files."""
+        """Store a list of the available music files in :attr:`music`."""
         d = conf.MUSIC_DIR
         try:
             files = os.listdir(d)
@@ -358,7 +346,7 @@ volume: float to scale volume by.
             self.music = [d + f for f in files if os.path.isfile(d + f)]
 
     def play_music (self, event = None):
-        """Play next piece of music."""
+        """Play the next piece of music, chosen randomly from :attr:`music`."""
         if self.music:
             f = choice(self.music)
             pg.mixer.music.load(f)
@@ -370,7 +358,11 @@ volume: float to scale volume by.
     # display
 
     def refresh_display (self, *args):
-        """Update the display mode from conf, and notify the world."""
+        """Update the display mode from :obj:`conf`, and notify the world.
+
+refresh_display()
+
+"""
         # get resolution and flags
         flags = conf.FLAGS
         if conf.FULLSCREEN:
@@ -390,26 +382,31 @@ volume: float to scale volume by.
             r[1] = min(r[1], r[0] / ratio)
         conf.RES = r
         self.screen = pg.display.set_mode(conf.RES, flags)
-        if hasattr(self, 'world'):
+        if self.world is not None:
             self.world.graphics.dirty()
 
     def toggle_fullscreen (self, *args):
-        """Toggle fullscreen mode."""
+        """Toggle fullscreen mode.
+
+toggle_fullscreen()
+
+"""
         if conf.RESIZABLE:
             conf.FULLSCREEN = not conf.FULLSCREEN
             self.refresh_display()
 
     def minimise (self, *args):
-        """Minimise the display."""
+        """Minimise the display.
+
+minimise()
+
+"""
         pg.display.iconify()
 
     def _active_cb (self, event):
         """Callback to handle window focus loss."""
         if event.state == 2 and not event.gain:
-            try:
-                self.world.pause()
-            except (AttributeError, TypeError):
-                pass
+            self.world.pause()
 
     def _resize_cb (self, event):
         """Callback to handle a window resize."""
@@ -438,17 +435,31 @@ volume: float to scale volume by.
     # running
 
     def run (self, t = None):
-        """Main loop."""
+        """Main loop.
+
+run([t])
+
+:arg t: stop after this many seconds (else run forever).
+
+"""
         while not self._quit and (t is None or t > 0):
             t = self.world.scheduler.run(seconds = t)
 
     def quit (self, *args):
-        """Quit the game."""
+        """Quit the game.
+
+quit()
+
+"""
         self.world.scheduler.stop()
         self._quit = True
 
     def restart (self, *args):
-        """Restart the game."""
+        """Restart the game.
+
+restart()
+
+"""
         global restarting
         restarting = True
         self.quit()

@@ -1,14 +1,7 @@
-"""Multi-line text rendering for Pygame, by Joseph Lansdowne.
+"""Multi-line text rendering.
 
-The Fonts class in this module can serve as a font cache, but the real point of
+:class:`Fonts` in this module can serve as a font cache, but the real point of
 this is to render multi-line text with alignment and shadow and stuff.
-
-Python version: 2.
-Release: 5.
-
-Licensed under the GNU General Public License, version 3; if this was not
-included, you can find it here:
-    http://www.gnu.org/licenses/gpl-3.0.txt
 
 """
 
@@ -18,39 +11,28 @@ import pygame
 
 
 class Fonts (dict):
-    """Collection of pygame.font.Font instances.
+    """Collection of ``pygame.font.Font`` instances.
 
-    CONSTRUCTOR
+:arg font_dirs: directories in which to find fonts - so you can just pass the
+                font's filename when adding a font.
 
-Fonts(*font_dirs)
-
-font_dirs: directories to find fonts - so you can just pass the font's filename
-           when adding a font.
-
-Use the dict interface to register fonts:
+Use the ``dict`` interface to register fonts::
 
     fonts['some name'] = (filename, size[, bold = False])
 
-where the arguments are as taken by pygame.font.Font.  All directories in
-font_dirs are searched for the filename, unless it contains a path separator.
-If so, or if the search yields no results, it is used as the whole path
-(absolute or relative).
+where the arguments are as taken by ``pygame.font.Font``.  All directories in
+``font_dirs`` are searched for the filename, unless it contains a path
+separator.  If so, or if the search yields no results, it is used as the whole
+path (absolute or relative).
 
-Retrieving the font again yields a pygame.font.Font instance.  Assigning two
-different names to the same set of arguments makes the same instance available
-under both without loading the file twice.
-
-    METHODS
-
-render
-
-    ATTRIBUTES
-
-font_dirs: as given.  You may alter this list directly.
+Retrieving the font again yields a ``pygame.font.Font`` instance.  Assigning
+two different names to the same set of arguments makes the same instance
+available under both without loading the file twice.
 
 """
 
     def __init__ (self, *font_dirs):
+        #: As passed to the constructor.  You may alter this list directly.
         self.font_dirs = list(font_dirs)
         self._fonts_by_args = {}
 
@@ -95,27 +77,29 @@ render(font, text, colour[, shadow][, width], just = 0, minimise = False,
        line_spacing = 0, aa = True[, bg], pad = (0, 0, 0, 0))
     -> (surface, num_lines)
 
-font: name of a registered font.
-text: text to render.
-colour: (R, G, B) tuple.
-shadow: to draw a drop-shadow: (colour, offset) tuple, where offset is (x, y).
-width: maximum width of returned surface (wrap text).  ValueError is raised if
-       any words are too long to fit in this width.
-just: if the text has multiple lines, justify: 0 = left, 1 = centre, 2 = right.
-minimise: if width is set, treat it as a minimum instead of absolute width
-          (that is, shrink the surface after, if possible).
-line_spacing: space between lines, in pixels.
-aa: whether to anti-alias the text.
-bg: background colour; defaults to alpha.
-pad: (left, top, right, bottom) padding in pixels.  Can also be one number for
-     all sides or (left_and_right, top_and_bottom).  This treats shadow as part
-     of the text.
+:arg string font: name of a registered font.
+:arg text: text to render.
+:arg colour: ``(R, G, B)`` tuple.
+:arg shadow: to draw a drop-shadow: ``(colour, offset)`` tuple, where offset is
+             ``(x, y)``.
+:arg int width: maximum width of returned surface (wrap text).  ``ValueError``
+                is raised if any words are too long to fit in this width.
+:arg just: if the text has multiple lines, justify: :const:`0` = left,
+           :const:`1` = centre, :const:`2` = right.
+:arg minimise: if width is set, treat it as a minimum instead of absolute width
+               (that is, shrink the surface after, if possible).
+:arg int line_spacing: space between lines, in pixels.
+:arg aa: whether to anti-alias the text.
+:arg bg: background colour (``(R, G, B[, A])`` tuple); defaults to alpha.
+:arg pad: ``(left, top, right, bottom)`` padding in pixels.  Can also be one
+          number for all sides or ``(left_and_right, top_and_bottom)``.  This
+          treats shadow as part of the text.
 
-surface: pygame.Surface containing the rendered text.
-num_lines: final number of lines of text.
+:return: ``surface`` is the ``pygame.Surface`` containing the rendered text and
+         ``num_lines`` is the final number of lines of text.
 
 Newline characters split the text into lines (along with anything else caught
-by str.splitlines), as does the width restriction.
+by ``str.splitlines``), as does the width restriction.
 
 """
         font = self[font]

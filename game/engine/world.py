@@ -22,6 +22,7 @@ evthandler: the evthandler.EventHandler instance this world should use for
 
 init
 select
+pause
 update
 draw
 
@@ -31,6 +32,10 @@ scheduler, evthandler: as taken by the constructor.
 graphics: a gm.GraphicsManager instance used for drawing by default.
 
 """
+
+    #: A unique identifier used for some settings in :obj:`conf`; if ``None``,
+    #: ``type(world).__name__.lower()`` will be used.
+    id = None
 
     def __init__ (self, scheduler, evthandler):
         self.scheduler = scheduler
@@ -45,11 +50,15 @@ graphics: a gm.GraphicsManager instance used for drawing by default.
         self.select()
 
     def init (self):
-        """Called when the world is created and becomes the active world."""
+        """Called when this first becomes the active world."""
         pass
 
     def select (self):
-        """Called when this becomes the active world."""
+        """Called whenever this becomes the active world."""
+        pass
+
+    def pause (self):
+        """Called to pause the game when the window loses focus."""
         pass
 
     def update (self):

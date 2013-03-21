@@ -7,7 +7,7 @@ from glob import glob
 
 import pygame as pg
 
-import settings
+import _settings
 from util import dd
 
 
@@ -118,6 +118,6 @@ types = {
     defaultdict: translate_dd
 }
 if Conf.USE_SAVEDATA:
-    conf = settings.SettingsManager(conf, Conf.CONF, Conf.SAVE, types)
+    conf = _settings.SettingsManager(conf, Conf.CONF, Conf.SAVE, types)
 else:
-    conf = settings.DummySettingsManager(conf, types)
+    conf = _settings.DummySettingsManager(conf, types)
