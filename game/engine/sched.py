@@ -1,33 +1,13 @@
-"""Pygame event scheduler by Joseph Lansdowne.
+"""Event scheduler.
 
-Uses Pygame's wait function if available, else the less accurate time.sleep.
-To use something else, do:
+Uses Pygame's ``wait`` function if available, else the less accurate
+``time.sleep``.  To use something else, do::
 
-import sched
-sched.wait = wait_function
+    import sched
+    sched.wait = wait_function
 
 This function should take the number of milliseconds to wait for.  This will
 always be an integer.
-
-Python version: 2.
-Release: 11.
-
-Licensed under the GNU General Public License, version 3; if this was not
-included, you can find it here:
-    http://www.gnu.org/licenses/gpl-3.0.txt
-
-    CLASSES
-
-Timer
-Scheduler
-
-    FUNCTIONS
-
-interp_linear
-interp_target
-interp_round
-interp_repeat
-interp_oscillate
 
 """
 
@@ -44,12 +24,7 @@ except ImportError:
     def wait (t):
         sleep(int(t * 1000))
 
-
-def ir (x):
-    """Returns the argument rounded to the nearest integer."""
-    # this is about twice as fast as int(round(x))
-    y = int(x)
-    return (y + (x - y >= .5)) if x > 0 else (y - (y - x >= .5))
+from util import ir
 
 
 def _match_in_nest (obj, x):

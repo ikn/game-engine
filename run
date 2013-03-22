@@ -11,7 +11,7 @@ fi
 
 if [ "$1" = "debug" ]; then
     shift
-    "$p" "`dirname $0`/game.py" "$@"
+    "$p" "`dirname $0`/run.py" "$@" -b
 else
-    "$p" -O "`dirname $0`/game.py" "$@"
+    "$p" -O "`dirname $0`/run.py" "$@"
 fi

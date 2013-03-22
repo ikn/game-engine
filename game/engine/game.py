@@ -13,12 +13,12 @@ from random import choice, randrange
 import pygame as pg
 
 from conf import conf
+import gm
 from sched import Scheduler
 import evthandler as eh
 if conf.USE_FONTS:
     from mltr import Fonts
 from util import ir, convert_sfc
-from world import World
 
 
 def get_world_id (world):
@@ -48,6 +48,67 @@ argument ``t`` to run for this many seconds.
     while restarting:
         restarting = False
         Game(*args, **kwargs).run(t)
+
+
+class World (object):
+    """A world base class; to be subclassed.
+
+World(scheduler, evthandler)
+
+:arg scheduler: the :class:`sched.Scheduler` instance this world should use for
+                timing.
+:arg evthandler: the :class:`evthandler.EventHandler` instance this world
+                 should use for input.
+
+"""
+
+    #: A unique identifier used for some settings in :obj:`conf`; if ``None``,
+    #: ``type(world).__name__.lower()`` will be used.
+    id = None
+
+    def __init__ (self, scheduler, evthandler):
+        #: :class:`sched.Scheduler` instance taken by the constructor.
+        self.scheduler = scheduler
+        #: :class:`evthandler.EventHandler` instance taken by the constructor.
+        self.evthandler = evthandler
+        #: :class:`gm.GraphicsManager` instance used for drawing by default.
+        self.graphics = gm.GraphicsManager()
+        self._initialised = False
+
+    def _select (self):
+        if not self._initialised:
+            self.init()
+            self._initialised = True
+        self.select()
+
+    def init (self):
+        """Called when this first becomes the active world."""
+        pass
+
+    def select (self):
+        """Called whenever this becomes the active world."""
+        pass
+
+    def pause (self):
+        """Called to pause the game when the window loses focus."""
+        pass
+
+    def update (self):
+        """Called every frame to makes any necessary changes."""
+        pass
+
+    def draw (self):
+        """Draw to the screen.
+
+:return: A flag indicating what changes were made: ``True`` if the whole
+         display needs to be updated, something falsy if nothing needs to be
+         updated, else a list of rects to update the display in.
+
+This method should not change the state of the world, because it is not
+guaranteed to be called every frame.
+
+"""
+        return self.graphics.draw()
 
 
 class Game (object):
@@ -92,8 +153,7 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
 
 create_world(cls, *args, **kwargs) -> world
 
-:arg cls: the world class to instantiate; must be a :class:`world.World`
-          subclass.
+:arg cls: the world class to instantiate; must be a :class:`World` subclass.
 :arg args: positional arguments to pass to the constructor.
 :arg kwargs: keyword arguments to pass to the constructor.
 
@@ -103,8 +163,8 @@ A world is constructed by::
 
     cls(scheduler, evthandler, *args, **kwargs)
 
-where ``scheduler`` and ``evthandler`` are as taken by :class:`world.World`
-(and should be passed to that base class).
+where ``scheduler`` and ``evthandler`` are as taken by :class:`World` (and
+should be passed to that base class).
 
 """
         scheduler = Scheduler()
@@ -144,8 +204,8 @@ where ``scheduler`` and ``evthandler`` are as taken by :class:`world.World`
     def start_world (self, *args, **kwargs):
         """Store the current world (if any) and switch to a new one.
 
-Takes a :class:`world.World` instance, or the same arguments as
-:meth:`create_world` to create a new one.
+Takes a :class:`World` instance, or the same arguments as :meth:`create_world`
+to create a new one.
 
 :return: the new current world.
 
@@ -157,8 +217,8 @@ Takes a :class:`world.World` instance, or the same arguments as
     def switch_world (self, world, *args, **kwargs):
         """End the current world and start a new one.
 
-Takes a :class:`world.World` instance, or the same arguments as
-:meth:`create_world` to create a new one.
+Takes a :class:`World` instance, or the same arguments as :meth:`create_world`
+to create a new one.
 
 :return: the new current world.
 
@@ -173,7 +233,7 @@ Takes a :class:`world.World` instance, or the same arguments as
 
 get_worlds(ident, current = True) -> worlds
 
-:arg ident: the world identifier (:attr:`world.World.id`) to look for.
+:arg ident: the world identifier (:attr:`World.id`) to look for.
 :arg current: include the current world in the search.
 
 :return: the world list, in order of time started, most recent last.

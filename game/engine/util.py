@@ -1,19 +1,4 @@
-"""A number of utility functions.
-
-    FUNCTIONS
-
-dd
-ir
-sum_pos
-randsgn
-rand0
-weighted_rand
-position_sfc
-convert_sfc
-combine_drawn
-blank_sfc
-
-"""
+"""A number of utility functions."""
 
 from random import random, randrange
 from collections import defaultdict
@@ -21,20 +6,23 @@ from bisect import bisect
 
 import pygame as pg
 
+__all__ = ('dd', 'ir', 'sum_pos', 'randsgn', 'rand0', 'weighted_rand',
+           'position_sfc', 'convert_sfc', 'combine_drawn', 'blank_sfc')
+
 
 # abstract
 
 
 def dd (default, items = {}, **kwargs):
-    """Create a collections.defaultdict with a static default.
+    """Create a ``collections.defaultdict`` with a static default.
 
 dd(default[, items], **kwargs) -> default_dict
 
-default: the default value.
-items: dict or dict-like to initialise with.
-kwargs: extra items to initialise with.
+:arg default: the default value.
+:arg items: dict or dict-like to initialise with.
+:arg kwargs: extra items to initialise with.
 
-default_dict: the created defaultdict.
+:return: the created ``defaultdict``.
 
 """
     items.update(kwargs)
@@ -49,20 +37,24 @@ def ir (x):
 
 
 def sum_pos (*pos):
-    """Sum all give (x, y) positions component-wise."""
-    return (sum(x for x, y in pos), sum(y for x, y in pos))
+    """Sum all given ``(x, y)`` positions component-wise."""
+    sx = sy = 0
+    for x, y in pos:
+        sx +=x
+        sy +=y
+    return (sx, sy)
 
 
 # random
 
 
 def randsgn ():
-    """Randomly return 1 or -1."""
+    """Randomly return :const:`1` or :const:`-1`."""
     return 2 * randrange(2) - 1
 
 
 def rand0 ():
-    """Zero-centred random (-1 <= x < 1)."""
+    """Zero-centred random (``-1 <= x < 1``)."""
     return 2 * random() - 1
 
 
@@ -71,10 +63,10 @@ def weighted_rand (ws):
 
 weighted_rand(ws) -> index
 
-ws: weightings, either a list of numbers to weight by or a {key: weighting}
-    dict for any keys.
+:arg ws: weightings, either a list of numbers to weight by or a
+         ``{key: weighting}`` dict for any keys.
 
-index: the chosen index in the list or key in the dict.
+:return: the chosen index in the list or key in the dict.
 
 """
     if isinstance(ws, dict):
@@ -99,20 +91,22 @@ def position_sfc (sfc, dest, pos = 0, offset = (0, 0), rect = None,
 
 blit_centred(sfc, dest, pos = 0, offset = (0, 0)[, dest_rect], blit_flags = 0)
 
-sfc, dest: blit sfc onto dest.
-pos: where to position sfc relative to dest.  This is (x, y) for each axis,
-     where for each, a number < 0 is top-/left-aligned, 0 is centred, and > 0
-     is bottom-/right-aligned.  If not centred, the given edges of the surfaces
-     are made to align.  This argument can also be just a number, to position
-     in the same manner on both axes.
-offset: an (x, y) amount to offset the blit position by.
-rect: the rect within sfc to copy, defaulting to the whole surface.  If given,
-      the edges of this rect are used for alignment, as opposed to the edges of
-      the whole surface.  This can be larger than sfc.
-dest_rect: the rect within dest to align to, instead of the whole surface.
-           This only affects alignment, not whether anything is blitted outside
-           this rect.  This can be larger than dest.
-blit_flags: the special_flags argument taken by pygame.Surface.blit.
+:arg sfc: source surface to copy.
+:arg dest: destination surface to blit to.
+:arg pos: where to position ``sfc`` relative to ``dest``.  This is ``(x, y)``
+          for each axis, where for each, a number ``< 0`` is top-/left-aligned,
+          ``0`` is centred, and ``> 0`` is bottom-/right-aligned.  If not
+          centred, the given edges of the surfaces are made to align.  This
+          argument can also be just a number, to position in the same manner on
+          both axes.
+:arg offset: an ``(x, y)`` amount to offset the blit position by.
+:arg rect: the rect within ``sfc`` to copy, defaulting to the whole surface.
+           If given, the edges of this rect are used for alignment, as opposed
+           to the edges of the whole surface.  This can be larger than ``sfc``.
+:arg dest_rect: the rect within ``dest`` to align to, instead of the whole
+                surface.  This only affects alignment, not whether anything is
+                blitted outside this rect.  This can be larger than ``dest``.
+:arg blit_flags: the ``special_flags`` argument taken by ``pygame.Surface.blit``.
 
 """
     if rect is None:
@@ -147,7 +141,7 @@ def convert_sfc (sfc):
 
 
 def combine_drawn (*drawn):
-    """Combine the given drawn flags as returned by backend draw methods."""
+    """Combine the given drawn flags as returned by :meth:`game.World.draw`."""
     if True in drawn:
         return True
     rects = sum((list(d) for d in drawn if d), [])
@@ -155,7 +149,7 @@ def combine_drawn (*drawn):
 
 
 def blank_sfc (size):
-    """Create a transparent surface with the given (width, height) size."""
+    """Create a transparent surface with the given ``(width, height)`` size."""
     sfc = pg.Surface(size).convert_alpha()
     sfc.fill((0, 0, 0, 0))
     return sfc
