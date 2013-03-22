@@ -1,28 +1,11 @@
-"""Event scheduler.
-
-Uses Pygame's ``wait`` function if available, else the less accurate
-``time.sleep``.  To use something else, do::
-
-    import sched
-    sched.wait = wait_function
-
-This function should take the number of milliseconds to wait for.  This will
-always be an integer.
-
-"""
+"""Event scheduler."""
 
 from time import time
 from bisect import bisect
 from math import cos, atan, exp
 from random import randrange, expovariate
 
-try:
-    from pygame.time import wait
-except ImportError:
-    from time import sleep
-
-    def wait (t):
-        sleep(int(t * 1000))
+from pygame.time import wait
 
 from util import ir
 
@@ -45,22 +28,34 @@ x: object to compare to  (not a list or tuple).
 def call_in_nest (f, *args):
     """Collapse a number of similar data structures into one.
 
-Used in interp_* functions.
+Used in ``interp_*`` functions.
 
 call_in_nest(f, *args) -> result
 
-Each arg in args is a data structure of nested lists with a similar format (eg.
-[1, 2, 3, [4, 5], []] and ['a', 'b', 'c', ['d', 'e'], []]).  result is a new
-structure in the same format with each non-list object the result of calling f
-with the corresponding objects from each arg (eg. f = lambda n, c: str(n) + c
-produces the result ['1a', '2b', '3c', ['4d', '5e'], []]).
+:arg f: a function to call with elements of ``args``.
+:arg args: each argument is a data structure of nested lists with a similar
+           format.
+
+:return: a new structure in the same format as the given arguments with each
+         non-list object the result of calling ``f`` with the corresponding
+         objects from each arg.
+
+For example::
+
+    >>> f = lambda n, c: str(n) + c
+    >>> arg1 = [1, 2, 3, [4, 5], []]
+    >>> arg2 = ['a', 'b', 'c', ['d', 'e'], []]
+    >>> call_in_nest(f, arg1, arg2)
+    ['1a', '2b', '3c', ['4d', '5e'], []]
 
 One argument may have a list where others do not.  In this case, those that do
-not have the object in that place passed to f for each object in the (possibly
-further nested) list in the argument that does.  For example, given
-[1, 2, [3, 4]], [1, 2, 3] and 1, result is
-[f(1, 1, 1), f(2, 2, 1), [f(3, 3, 1),  f(4, 3, 1)]].  However, in args with
-lists, all lists must be the same length.
+not have the object in that place passed to ``f`` for each object in the
+(possibly further nested) list in the argument that does.  For example::
+
+    >>> call_in_nest(f, [1, 2, [3, 4]], [1, 2, 3], 1)
+    [f(1, 1, 1), f(2, 2, 1), [f(3, 3, 1),  f(4, 3, 1)]]
+
+However, in arguments with lists, all lists must be the same length.
 
 """
     is_list = [isinstance(arg, (tuple, list)) for arg in args]
@@ -90,19 +85,21 @@ def _cmp_structure (x, y):
 
 
 def interp_linear (*waypoints):
-    """Linear interpolation for Scheduler.interp.
+    """Linear interpolation for :meth:`Scheduler.interp`.
 
 interp_linear(*waypoints) -> f
 
-waypoints: each is (v, t) to set the value to v at time t.  t can be omitted
-           for any but the last waypoint; the first is 0, and other gaps are
-           filled in with equal spacing.  v is like the arguments taken by the
-           call_in_nest function in this module, and we interpolate for each number in the nested list structure of v.  Some objects in the v
-           structures may be non-numbers, in which case they will not be varied
-           (maybe your function takes another argument you don't want to vary).
+:arg waypoints: each is ``(v, t)`` to set the value to ``v`` at time ``t``.
+                ``t`` can be omitted for any but the last waypoint: the first
+                is ``0``, and other gaps are filled in with equal spacing.
+                ``v`` is like the arguments taken by :func:`call_in_nest`, and
+                we interpolate for each number in the nested list structure of
+                ``v``.  Some objects in the ``v`` structures may be
+                non-numbers, in which case they will not be varied (maybe your
+                function takes another argument you don't want to vary).
 
-f: a function for which f(t) = v for every waypoint, with intermediate values
-   linearly interpolated between waypoints.
+:return: a function for which ``f(t) = v`` for every waypoint ``(t, v)``, with
+         intermediate values linearly interpolated between waypoints.
 
 """
     # fill in missing times
@@ -171,19 +168,19 @@ def interp_target (v0, target, damp, freq = 0, speed = 0, threshold = 0):
 
 interp_target(v0, target, damp, freq = 0, speed = 0, threshold = 0) -> f
 
-v0: the initial value (a structure of numbers like arguments to this module's
-    call_in_nest function).  Elements which are not numbers are ignored.
-target: the target value (has the same form as v0).
-damp: rate we move towards the target (> 0).
-freq: if damping is low, oscillation around the target can occur, and this
-      controls the frequency.  If 0, there is no oscillation.
-speed: if frequency is non-zero, this is the initial 'speed', in the same form
-       as v0.
-threshold: stop when within this distance of the target, in the same form as
-           v0.  If None, never stop.  If varying more than one number, only
-           stop when every number is within its threshold.
+:arg v0: the initial value (a structure of numbers like arguments to
+         :func:`call_in_nest`).  Elements which are not numbers are ignored.
+:arg target: the target value (has the same form as ``v0``).
+:arg damp: rate we move towards the target (``> 0``).
+:arg freq: if ``damp`` is small, oscillation around ``target`` can occur, and
+           this controls the frequency.  If ``0``, there is no oscillation.
+:arg speed: if ``freq`` is non-zero, this is the initial 'speed', in the same
+            form as ``v0``.
+:arg threshold: stop when within this distance of ``target``; in the same form
+                as ``v0``.  If ``None``, never stop.  If varying more than one
+                number, only stop when every number is within its threshold.
 
-f: function that returns position given the current time.
+:return: a function that returns position given the current time.
 
 """
     if v0 == target: # nothing to do
@@ -232,19 +229,20 @@ def interp_shake (centre, amplitude = 1, threshold = 0, signed = True):
 
 interp(centre, amplitude = 1, threshold = 0, signed = True) -> f
 
-centre: the value to shake about; a nested list (a structure of numbers like
-        arguments to this module's call_in_nest function).  Elements which are
-        not numbers are ignored.
-amplitude: a number to multiply the value by.  This can be a function that
-           takes the elapsed time in seconds to vary in time.  Has the same
-           form as centre (return value if a function).
-threshold: stop when amplitude is this small.  If None, never stop.  If varying
-           more than one number, only stop when every number is within its
-           threshold.
-signed: whether to shake around the centre.  If False, values are greater than
-        centre (note that amplitude may be signed).
+:arg centre: the value to shake about; a nested list (a structure of numbers
+             like arguments to :func:`call_in_nest`).  Elements which are not
+             numbers are ignored.
+:arg amplitude: a number to multiply the value by.  This can be a function that
+                takes the elapsed time in seconds to vary in time.  Has the
+                same form as ``centre`` (return value does, if a function).
+:arg threshold: stop when ``amplitude`` is this small; in the same form as
+                ``centre``.  If ``None``, never stop.  If varying more than one
+                number, only stop when every number is within its threshold.
+:arg signed: whether to shake around ``centre``.  If ``False``, values are
+             always greater than ``centre`` (note that ``amplitude`` may be
+             signed).
 
-f: function that returns position given the current time.
+:return: a function that returns position given the current time.
 
 """
     def get_val (t):
@@ -273,15 +271,12 @@ def interp_round (get_val, do_round = True):
 
 interp_round(get_val, round_val = True) -> f
 
-get_val: the existing function.  The values it returns are as the arguments
-         taken by the call_in_nest function in this module.
-do_round: determines which values to round.  This is in the form of the values
-          get_val returns, a structure of lists and booleans corresponding to
-          each number in get_val.  Any list in this structure can be replaced
-          by a single boolean to apply to the entire (nested) list.  Non-number
-          objects in the value's structure are ignored.
+:arg get_val: the existing function.
+:arg do_round: determines which values to round.  This is in the form of the
+               values ``get_val`` returns, a structure of lists and booleans
+               corresponding to each number (see :func:`call_in_nest`).
 
-f: the get_val wrapper that rounds the returned value.
+:return: the ``get_val`` wrapper that rounds the returned value.
 
 """
     def round_val (do, v):
@@ -298,13 +293,15 @@ def interp_repeat (get_val, period, t_min = 0, t_start = None):
 
 interp_repeat(get_val, period, t_min = 0, t_start = t_min) -> f
 
-get_val: an existing interpolation function, as taken by Scheduler.interp.
+:arg get_val: an existing interpolation function, as taken by
+              :meth:`Scheduler.interp`.
 
 Times passed to the returned function are looped around to fit in the range
-[t_min, t_min + period), starting at t_start, and the result is passed to
-get_val.
+[``t_min``, ``t_min + period``), starting at ``t_start``, and the result is
+passed to ``get_val``.
 
-f: the get_val wrapper that repeats get_val over the given period.
+:return: the ``get_val`` wrapper that repeats ``get_val`` over the given
+         period.
 
 """
     if t_start is None:
@@ -317,14 +314,16 @@ def interp_oscillate (get_val, t_max, t_min = 0, t_start = None):
 
 interp_oscillate(get_val, t_max, t_min = 0, t_start = t_min) -> f
 
-get_val: an existing interpolation function, as taken by Scheduler.interp.
+:arg get_val: an existing interpolation function, as taken by
+              :meth:`Scheduler.interp`.
 
 Times passed to the returned function are looped and reversed to fit in the
-range [t_min, t_max), starting at t_start.  If t_start is in the range
-[t_max, 2 * t_max + - t_min), it is mapped to the 'return journey' of the
-oscillation.
+range [``t_min``, ``t_max``), starting at ``t_start``.  If ``t_start`` is in
+the range [``t_max``, ``2 * t_max - t_min``), it is mapped to the 'return
+journey' of the oscillation.
 
-f: the generated get_val wrapper.
+:return: the ``get_val`` wrapper that oscillates ``get_val`` over the given
+         range.
 
 """
     if t_start is None:
@@ -343,49 +342,51 @@ f: the generated get_val wrapper.
 class Timer (object):
     """Simple timer.
 
-Either call run once and stop if you need to, or step every time you've done
-what you need to.
-
-    CONSTRUCTOR
-
 Timer(fps = 60)
 
-fps: frames per second to aim for.
+:arg fps: frames per second to aim for.
 
-    METHODS
-
-run
-step
-stop
-
-    ATTRIBUTES
-
-fps: the current target FPS.  Set this directly.
-frame: the current length of a frame in seconds.
-t: the time at the last step, if using individual steps.
+Either call :meth:`run` once and :meth:`stop` if you need to, or :meth:`step`
+every time you've done what you need to.
 
 """
 
     def __init__ (self, fps = 60):
+        #: The current length of a frame in seconds.
+        self.frame = None
         self.fps = fps
+        #: The time at the last step, if using individual steps.
         self.t = time()
+
+    @property
+    def fps (self):
+        """The current target FPS.  Set this directly."""
+        return self._fps
+
+    @fps.setter
+    def fps (self, fps):
+        self._fps = int(round(fps))
+        self.frame = 1. / fps
 
     def run (self, cb, *args, **kwargs):
         """Run indefinitely or for a specified amount of time.
 
 run(cb, *args[, seconds][, frames]) -> remain
 
-cb: a function to call every frame.
-args: extra arguments to pass to cb.
-seconds, frames: keyword-only arguments that determine how long to run for.  If
-                 seconds is passed, frames is ignored; if neither is given, run
-                 forever (until Timer.stop is called).  Either can be a float.
-                 Time passed is based on the number of frames that have passed,
-                 so it does not necessarily reflect real time.
+:arg cb: a function to call every frame.
+:arg args: extra arguments to pass to cb.
+:arg seconds: keyword-only argument that determines how many seconds to run
+              for; can be a float.  Accounts for changes to :attr:`fps`.
+:arg frames: keyword-only argument that determines how many frames to run for;
+             can be a float.  Ignored if ``seconds`` is passed.
 
-remain: the number of frames/seconds left until the timer has been running for
-        the requested amount of time (or None, if neither were given).  This
-        may be less than 0 if cb took a long time to run.
+If neither ``seconds`` nor ``frames`` is given, run forever (until :meth:`stop`
+is called).  Time passed is based on the number of frames that have passed, so
+it does not necessarily reflect real time.
+
+:return: the number of seconds/frames left until the timer has been running for
+         the requested amount of time (or ``None``, if neither were given).
+         This may be less than ``0`` if ``cb`` took a long time to run.
 
 """
         self.stopped = False
@@ -439,30 +440,16 @@ remain: the number of frames/seconds left until the timer has been running for
             self.t = t
 
     def stop (self):
-        """Stop any current call to Timer.run."""
+        """Stop any current call to :meth:`run`."""
         self.stopped = True
-
-    @property
-    def fps (self):
-        return self._fps
-
-    @fps.setter
-    def fps (self, fps):
-        self._fps = int(round(fps))
-        self.frame = 1. / fps
 
 
 class Scheduler (Timer):
-    """Simple event scheduler (Timer subclass).
+    """Simple event scheduler (:class:`Timer` subclass).
 
-Takes the same arguments as Timer.
+Scheduler(fps = 60)
 
-    METHODS
-
-add_timeout
-rm_timeout
-interp
-interp_simple
+:arg fps: frames per second to aim for.
 
 """
 
@@ -476,7 +463,7 @@ interp_simple
 
 run([seconds][, frames]) -> remain
 
-Arguments and return value are as for Timer.run.
+Arguments and return value are as for :meth:`Timer.run`.
 
 """
         return Timer.run(self, self._update, seconds = seconds,
@@ -490,26 +477,29 @@ Arguments and return value are as for Timer.run.
         """Call a function after a delay.
 
 add_timeout(cb, *args[, seconds][, frames][, repeat_seconds][, repeat_frames])
-            -> ID
+            -> ident
 
-cb: the function to call.
-args: list of arguments to pass to cb.
-seconds: how long to wait before calling, in seconds (respects changes to FPS).
-         If passed, frames is ignored.
-frames: how long to wait before calling, in frames (same number of frames even
-        if FPS changes).
-repeat_seconds, repeat_frames:
-    how long to wait between calls; time is determined as for the seconds and
-    frames arguments.  If repeat_seconds is passed, repeat_frames is ignored;
-    if neither is passed, the initial time delay is used between calls.
+:arg cb: the function to call.
+:arg args: list of arguments to pass to cb.
+:arg seconds: how long to wait before calling, in seconds (respects changes to
+              :attr:`fps`).  If passed, ``frames`` is ignored.
+:arg frames: how long to wait before calling, in frames (same number of frames
+             even if :attr:`fps` changes).
+:arg repeat_seconds: how long to wait between calls, in seconds; time is
+                     determined as for ``seconds``.  If passed,
+                     ``repeat_frames`` is ignored; if neither is passed, the
+                     initial time delay is used between calls.
+:arg repeat_frames: how long to wait between calls, in frames (like
+                    ``repeat_seconds``).
 
-ID: an ID to pass to rm_timeout.  This is guaranteed to be unique over time.
+:return: a timeout identifier to pass to :meth:`rm_timeout`.  This is
+         guaranteed to be unique over time.
 
 Times can be floats, in which case part-frames are carried over, and time
 between calls is actually an average over a large enough number of frames.
 
-The called function can return a boolean True object to repeat the timeout;
-otherwise it will not be called again.
+``cb`` can return a boolean true object to repeat the timeout; otherwise it
+will not be called again.
 
 """
         seconds = kwargs.get('seconds')
@@ -530,7 +520,7 @@ otherwise it will not be called again.
         return self._max_id - 1
 
     def rm_timeout (self, *ids):
-        """Remove the timeouts with the given IDs."""
+        """Remove the timeouts with the given identifiers."""
         for i in ids:
             try:
                 del self._cbs[i]
@@ -570,32 +560,33 @@ otherwise it will not be called again.
 interp(get_val, set_val[, t_max][, val_min][, val_max][, end],
        round_val = False, multi_arg = False) -> timeout_id
 
-get_val: a function called with the elapsed time in seconds to obtain the
-         current value.  If this function returns None, the interpolation will
-         be canceled.  The interp_* functions in this module can be used to
-         construct such functions.  The value must actually be a list of
-         arguments to pass to set_val (unless set_val is (obj, attr)).
-set_val: a function called with the current value to set it.  This may also be
-         an (obj, attr) tuple to do obj.attr = val.
-t_max: if time becomes larger than this, cancel the interpolation.
-val_min, val_max: minimum and maximum values of the interpolated value.  If
-                  given, get_val must only return values that can be compared
-                  with these.  If the value ever falls outside of this range,
-                  set_val is called with the value at the boundary it is beyond
-                  (val_min or val_max) and the interpolation is canceled.
-end: used to do some cleanup when the interpolation is canceled (when get_val
-     returns None or t_max, val_min or val_max comes into effect, but not when
-     the rm_timeout method is called with the returned id).  This can be a
-     final value to pass to set_val, or a function to call without arguments.
-     If the function returns a (non-None) value, set_val is called with it.
-round_val: whether to round the value(s) (see the interp_round function in this
-           module for other possible values).
-multi_arg: whether values should be interpreted as lists of arguments to pass
-           to set_val instead of a single list argument.
+:arg get_val: a function called with the elapsed time in seconds to obtain the
+              current value.  If this function returns ``None``, the
+              interpolation will be canceled.  The ``interp_*`` functions in
+              this module can be used to construct such functions.
+:arg set_val: a function called with the current value to set it.  This may
+              also be an ``(obj, attr)`` tuple to do ``obj.attr = val``.
+:arg t_max: if time becomes larger than this, cancel the interpolation.
+:arg val_min: minimum value of the interpolated value.  If given, ``get_val``
+              must only return values that can be compared with these.  If the
+              value is ever smaller than this, ``set_val`` is called with
+              ``val_min`` and the interpolation is canceled.
+:arg val_max: maximum value of the interpolated value (like ``val_min``).
+:arg end: used to do some cleanup when the interpolation is canceled (when
+          ``get_val`` returns ``None`` or ``t_max``, ``val_min`` or ``val_max``
+          comes into effect, but not when the ``rm_timeout`` method is called
+          with ``timeout_id``).  This can be a final value to pass to
+          ``set_val``, or a function to call without arguments.  If the
+          function returns a (non-``None``) value, ``set_val`` is called with
+          it.
+:arg round_val: whether to round the value(s) (see :func:`interp_round` for
+                details).
+:arg multi_arg: whether values should be interpreted as lists of arguments to
+                pass to ``set_val`` instead of a single argument.
 
-timeout_id: an identifier that can be passed to the rm_timeout method to remove
-            the callback that continues the interpolation.  In this case the
-            end argument is not respected.
+:return: an identifier that can be passed to :meth:`rm_timeout` to remove the
+        callback that continues the interpolation.  In this case ``end`` is not
+        respected.
 
 """
         if round_val:
@@ -645,24 +636,25 @@ timeout_id: an identifier that can be passed to the rm_timeout method to remove
 
     def interp_simple (self, obj, attr, target, t, end_cb = None,
                        round_val = False):
-        """A simple version of the interp method.
+        """A simple version of :meth:`interp`.
 
 Varies an object's attribute linearly from its current value to a target value
 in a set amount of time.
 
-interp_simple(obj, attr, target, t[, end], round_val = False) -> timeout_id
+interp_simple(obj, attr, target, t[, end_cb], round_val = False) -> timeout_id
 
-obj, attr: this function varies the attribute attr of the object obj.
-target: a target value, in the same form as the current value in the given
-        attribute.
-t: the amount of time to take to reach the target value.
-end_cb: a function to call when the target value has been reached.
-round_val: whether to round the value(s) (see the interp_round function in this
-           module for other possible values).
+:arg obj: vary an attribute of this object.
+:arg attr: the attribute name of ``obj`` to vary.
+:arg target: a target value, in the same form as the current value in the given
+             attribute (see :func:`call_in_nest`).
+:arg t: the amount of time to take to reach the target value, in seconds.
+:arg end_cb: a function to call when the target value has been reached.
+:arg round_val: whether to round the value(s) (see :func:`interp_round` for
+                details).
 
-timeout_id: an identifier that can be passed to the rm_timeout method to remove
-            the callback that continues the interpolation.  In this case end_cb
-            is not called.
+:return: an identifier that can be passed to :meth:`rm_timeout` to remove the
+        callback that continues the interpolation.  In this case ``end`` is not
+        respected.
 
 """
         get_val = interp_linear(getattr(obj, attr), (target, t))

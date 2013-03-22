@@ -1,13 +1,6 @@
 """Graphics manager for handling drawing things.
 
-    CLASSES
-
-GraphicsManager
-GraphicsGroup
-Graphic
-ResizableGraphic
-Colour
-Image
+---NODOC---
 
 TODO:
  - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
@@ -43,6 +36,8 @@ Tilemap
           filename[text]/string: whitespace-delimited tiles indices; either also take width, or use \n\r for row delimiters, others for column delimiters
           list: tiles indices; either also take width, or is list of rows
 
+---NODOC---
+
 """
 
 from math import sin, cos, pi
@@ -59,42 +54,36 @@ from _gm import fastdraw
 class GraphicsManager (object):
     """Handles intelligently drawing things to a surface.
 
-Graphics are meant to be used with only one GraphicsManager at a time.
-
-    CONSTRUCTOR
-
 GraphicsManager(*graphics[, surface])
 
-graphics: any number of Graphic or GraphicsGroup instances.
-surface (keyword-only): a pygame.Surface to draw to; if not given, no drawing
-                        occurs.
+:arg graphics: any number of :class:`Graphic` or :class:`GraphicsGroup`
+               instances.
+:arg surface: a ``pygame.Surface`` to draw to; if not given, no drawing occurs
+              (keyword-only).
 
-    METHODS
-
-add
-rm
-dirty
-draw
-
-    ATTRIBUTES
-
-surface: as taken by constructor; set this directly (can be None to do nothing).
-graphics: {layer: graphics} dict, where graphics is a set of the graphics in
-          the layer, each as taken by the add method.
-layers: a list of layers that contain graphics, lowest first.
+:class:`Graphic` instances are meant to be used with only one
+:class:`GraphicsManager` at a time.
 
 """
 
     def __init__ (self, *graphics, **kw):
-        self.graphics = {}
-        self.layers = []
-        self._dirty = []
         self._surface = None
         self.surface = kw.get('surface')
+        #: ``{layer: graphics}`` dict, where ``graphics`` is a set of the
+        #: graphics in layer ``layer``, each as taken by :meth:`add`.
+        self.graphics = {}
+        #: A list of layers that contain graphics, lowest first.
+        self.layers = []
+        self._dirty = []
         self.add(*graphics)
 
     @property
     def surface (self):
+        """As taken by the constructor.
+
+Set this directly (can be ``None`` to do nothing).
+
+"""
         return self._surface
 
     @surface.setter
@@ -108,7 +97,7 @@ layers: a list of layers that contain graphics, lowest first.
     def add (self, *graphics):
         """Add graphics.
 
-Takes any number of Graphic or GraphicsGroup instances.
+Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
 
 """
         all_gs = self.graphics
@@ -133,7 +122,7 @@ Takes any number of Graphic or GraphicsGroup instances.
     def rm (self, *graphics):
         """Remove graphics.
 
-Takes any number of Graphic or GraphicsGroup instances.
+Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
 
 """
         all_graphics = self.graphics
@@ -163,6 +152,8 @@ Takes any number of Graphic or GraphicsGroup instances.
     def dirty (self, *rects, **kw):
         """Force redrawing some or all of the screen.
 
+dirty(*rects)
+
 Takes any number of rects to flag as dirty.  If none are given, the whole of
 the current surface is flagged.
 
@@ -178,8 +169,8 @@ the current surface is flagged.
     def draw (self):
         """Update the display.
 
-Returns a list of rects that cover changed parts of the surface, or False if
-nothing changed.
+Returns ``True`` if the entire surface changed, or a list of rects that cover
+changed parts of the surface, or ``False`` if nothing changed.
 
 """
         layers = self.layers
@@ -195,20 +186,14 @@ nothing changed.
 class GraphicsGroup (list):
     """Convenience wrapper for grouping a number of graphics in a simple way.
 
-Takes any number of Graphic instances or lists of arguments to pass to Graphic
-to create one.  This is a list subclass, containing graphics, so add and remove
-graphics using list methods.
+Takes any number of :class:`Graphic` instances or lists of arguments to pass to
+:class:`Graphic` to create one.  This is a ``list`` subclass, containing
+graphics, so add and remove graphics using list methods.
 
-    METHODS
-
-opaque_in
-move_by
-
-    ATTRIBUTES
-
-scale_fn, manager, layer, blit_flags, visible:
-    as for Graphic; these give a list of values for each contained graphic; set
-    them to a single value to apply to all contained graphics.
+Has ``scale_fn``, ``manager``, ``layer``, ``blit_flags`` and ``visible``
+properties as for :class:`Graphic`.  These give a list of values for each
+contained graphic; set them to a single value to apply to all contained
+graphics.
 
 """
 
@@ -232,7 +217,8 @@ scale_fn, manager, layer, blit_flags, visible:
     def opaque_in (self, rect):
         """Whether the contained graphics are opaque in the given rect.
 
-Returns True if any graphic draws opaque pixels in the whole of the given rect.
+Returns ``True`` if any graphic draws opaque pixels in the whole of the given
+rect.
 
 """
         return any(g.opaque_in(rect) for g in self)
@@ -250,87 +236,28 @@ move_by(dx = 0, dy = 0)
 class Graphic (object):
     """Something that can be drawn to the screen.
 
-Many properties of a graphic, such as its position and size, can be changed in
-two main ways: by setting the attribute directly, or by calling the
+Graphic(img, pos, layer = 0, blit_flags = 0)
+
+:arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.
+:arg pos: initial ``(x, y)`` position.
+:arg layer: the layer to draw in, lower being closer to the 'front'. This can
+            actually be any hashable object, as long as all layers used in the
+            same :class:`GraphicsManager` can be ordered with respect to each
+            other.
+:arg blit_flags: when blitting the surface to the screen, this is passed as the
+                 ``special_flags`` argument.
+
+Many properties of a graphic, such as :attr:`pos` and :attr:`size`, can be
+changed in two main ways: by setting the attribute directly, or by calling the
 corresponding method.  The former is more natural, and is useful for
-sched.interp, while the latter all return the graphic, and so can be chained
-together.
+:meth:`sched.Scheduler.interp`, while the latter all return the graphic, and so
+can be chained together.
 
 Position and size can also be retrieved and altered using list indexing, like
 with Pygame rects.
 
-    CONSTRUCTOR
-
-Graphic(img, pos, layer = 0, blit_flags = 0)
-
-img: surface or filename (under conf.IMG_DIR) to load.
-pos: initial (x, y) position.
-layer: the layer to draw in, lower being closer to the 'front'. This can
-       actually be any hashable object, as long as all layers used in the same
-       GraphicsManager can be ordered with respect to each other.
-blit_flags: when blitting the surface to the screen, this is passed as the
-            special_flags argument.
-
-    METHODS
-
-opaque_in
-snapshot
-move_to
-move_by
-align
-transform
-undo_transforms
-reapply_transform
-sfc_before_transform
-resize [builtin transform]
-rescale
-crop [builtin transform]
-flip [builtin transform]
-rotate [builtin transform]
-reload
-
-    ATTRIBUTES
-
-fn: filename of the loaded image, or None if a surface was given.
-surface: the (possibly transformed) surface that will be used for drawing.
-rect: pygame.Rect giving the on-screen area covered; may be set directly, but
-      not altered in-place.
-last_rect: rect at the time of the last draw.
-x, y: co-ordinates of the top-left corner of rect.
-pos: (x, y).
-w, h: width and height of rect; they use the resize method.
-size: (w, h).
-scale_x, scale_y: scaling ratio of the image on each axis; thy use the rescale
-                  method.
-scale: (scale_x, scale_y).  Can be set to a single number to scale both
-       dimensions by.
-scale_fn: function to use for scaling; defaults to pygame.transform.smoothscale
-          (and should have the same signature as this default).  If you change
-          this, you may want to call the reapply_transform method.
-cropped_rect: the rect currently cropped to.
-flipped_x, flipped_y: whether flipped on each axis.
-flipped: (flipped_x, flipped_y).  Can be set to a single value to apply to both
-         dimensions.
-angle: current rotation angle, anti-clockwise in radians.  Setting this rotates
-       about the graphic's centre.
-rotate_fn: function to use for rotating; uses pygame.transform.rotozoom by
-           default.  Takes the surface and angle (as passed to the rotate
-           method) and returns the new rotated surface.  If you change this,
-           you may want to call the reapply_transform method.
-rotate_threshold: only rotate when the angle changes by this much; defaults to
-                  2 * pi / 500.  If you change this, you may want to call the
-                  reapply_transform method.
-transforms: a list of transformations applied to the graphic.  This always
-            contains the builtin transforms as strings (though they do nothing
-            by default); other transforms are added through the transform
-            method, and are functions.
-manager: the GraphicsManager this graphic is associated with, or None; this may
-         be changed directly.  (A graphic should only be used with one manager
-         at a time.)
-layer, blit_flags: as taken by constructor.
-visible: whether currently (supposed to be) visible on-screen.
-was_visible: visible at the time of the last draw; do not change.
-opaque: whether this draws opaque pixels in the entire rect; do not change.
+:meth:`resize`, :meth:`crop`, :meth:`flip` and :meth:`rotate` correspond to
+builtin transforms (see :meth:`transform`).
 
 """
 
@@ -338,6 +265,8 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     def __init__ (self, img, pos, layer = 0, blit_flags = 0):
         if isinstance(img, basestring):
+            #: Filename of the loaded image, or ``None`` if a surface was
+            #: given.
             self.fn = img
             img = conf.GAME.img(img)
         else:
@@ -349,21 +278,40 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         self._rect = self._postrot_rect = Rect(pos, img.get_size())
         self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
         self._transforms = OrderedDict() # required by _set_sfc
+        #: The (possibly transformed) surface that will be used for drawing.
+        self.surface = None
+        #: Whether this draws opaque pixels in the entire rect; do not change.
+        self.opaque = None
         self._set_sfc(img)
+        #: :attr:`rect` at the time of the last draw.
         self.last_rect = self._last_postrot_rect = Rect(self._rect)
         # {function: (args, previous_surface, apply_fn, undo_fn)}
         self._transforms = OrderedDict.fromkeys(
             self._builtin_transforms, (None, self.surface, None, None)
         )
         # for manager
+        #: Function to use for scaling; defaults to
+        #: ``pygame.transform.smoothscale`` (and should have the same signature
+        #: as this default).  If you change this, you may want to call
+        #: :meth:`reapply_transform`.
         self.scale_fn = pg.transform.smoothscale
+        #: Function to use for rotating; uses ``pygame.transform.rotozoom`` by
+        #: default.  Takes the surface and angle (as passed to :meth:`rotate`)
+        # and returns the new rotated surface.  If you change this, you may
+        # want to call :meth:`reapply_transform`.
         self.rotate_fn = lambda sfc, angle: \
             pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
+        #: only rotate when the angle changes by this much; defaults to
+        #: ``2 * pi / 500``.  If you change this, you may want to call
+        #: :meth:`reapply_transform`.
         self.rotate_threshold = 2 * pi / 500
         self._manager = None
         self._layer = layer
         self._blit_flags = blit_flags
+        #: Whether currently (supposed to be) visible on-screen.
         self.visible = True
+        #: Whether this graphic was visible at the time of the last draw; do
+        #: not change.
         self.was_visible = False
         self._dirty = [] # gets used (and reset) by GraphicsManager
 
@@ -389,6 +337,11 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def rect (self):
+        """``pygame.Rect`` giving the on-screen area covered.
+
+May be set directly, but not altered in-place.
+
+"""
         return self._rect
 
     @rect.setter
@@ -409,6 +362,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def x (self):
+        """``x`` co-ordinate of the top-left corner of :attr:`rect`."""
         return self._rect[0]
 
     @x.setter
@@ -419,6 +373,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def y (self):
+        """``y`` co-ordinate of the top-left corner of :attr:`rect`."""
         return self._rect[1]
 
     @y.setter
@@ -429,6 +384,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def pos (self):
+        """``(``:attr:`x` ``,`` :attr:`y` ``)``."""
         return self._rect.topleft
 
     @pos.setter
@@ -437,6 +393,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def w (self):
+        """Width of :attr:`rect`; uses :meth:`resize`."""
         return self._rect[2]
 
     @w.setter
@@ -447,6 +404,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def h (self):
+        """Height of :attr:`rect`; uses :meth:`resize`."""
         return self._rect[3]
 
     @h.setter
@@ -457,6 +415,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def size (self):
+        """``(``:attr:`w` ``,`` :attr:`h` ``)``."""
         return self._rect.size
 
     @size.setter
@@ -465,6 +424,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def scale_x (self):
+        """Scaling ratio of the graphic on the x-axis; uses :meth:`rescale`."""
         return self._scale[0]
 
     @scale_x.setter
@@ -473,6 +433,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def scale_y (self):
+        """Scaling ratio of the graphic on the y-axis; uses :meth:`rescale`."""
         return self._scale[1]
 
     @scale_y.setter
@@ -481,6 +442,11 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def scale (self):
+        """``(``:attr:`scale_x` ``,`` :attr:`scale_y` ``)``.
+
+Can be set to a single number to scale by in both dimensions.
+
+"""
         return self._scale
 
     @scale.setter
@@ -492,6 +458,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def cropped_rect (self):
+        """The rect currently cropped to."""
         if self._cropped_rect is None:
             return self.sfc_before_transform('crop').get_rect()
         else:
@@ -503,6 +470,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def flipped_x (self):
+        """Whether flipped on the x-axis."""
         return self._flipped[0]
 
     @flipped_x.setter
@@ -511,6 +479,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def flipped_y (self):
+        """Whether flipped on the y-axis."""
         return self._flipped[0]
 
     @flipped_x.setter
@@ -519,6 +488,11 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def flipped (self):
+        """``(``:attr:`flipped_x` ``,`` :attr:`flipped_y` ``)``.
+
+Can be set to a single value to apply to both dimensions.
+
+"""
         return self._flipped
 
     @flipped.setter
@@ -530,6 +504,11 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def angle (self):
+        """Current rotation angle, anti-clockwise in radians.
+
+Setting this rotates about the graphic's centre.
+
+"""
         return self._angle
 
     @angle.setter
@@ -542,10 +521,22 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def transforms (self):
+        """A list of transformations applied to the graphic.
+
+This always contains the builtin transforms as strings (though they do nothing
+by default); other transforms are added through :meth:`transform`, and are
+functions.
+
+"""
         return self._transforms.keys()
 
     @property
     def manager (self):
+        """The :class:`GraphicsManager` this graphic is associated with.
+
+May be ``None``.  This may be changed directly.  (A graphic should only be used with one manager at a time.)
+
+"""
         return self._manager
 
     @manager.setter
@@ -556,6 +547,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def layer (self):
+        """As taken by the constructor."""
         return self._layer
 
     @layer.setter
@@ -571,6 +563,7 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
 
     @property
     def blit_flags (self):
+        """As taken by the constructor."""
         return self._blit_flags
 
     @blit_flags.setter
@@ -587,7 +580,8 @@ opaque: whether this draws opaque pixels in the entire rect; do not change.
         """Return a copy of this graphic.
 
 The copy is shallow, which means the new graphic will not appear to be
-transformed, even if this one is, but will be an exact copy.
+transformed, even if this one is, but will be an exact copy of the *current
+state*.
 
 """
         g = Graphic(self.surface, self._postrot_rect[:2], self._layer,
@@ -610,9 +604,9 @@ transformed, even if this one is, but will be an exact copy.
     # appearance methods
 
     def move_to (self, x = None, y = None):
-        """Move to the given postition.
+        """Move to the given position.
 
-move([x][, y]) -> self
+move_to([x][, y]) -> self
 
 Omitted arguments are unchanged.
 
@@ -640,14 +634,15 @@ move_by(dx = 0, dy = 0) -> self
 align(pos = 0, pad = 0, offset = 0, rect = self.manager.surface.get_rect())
     -> self
 
-pos: (x, y) alignment; each is < 0 for left-aligned, 0 for centred, > 0 for
-     right-aligned.  Can be just one number to use on both axes.
-pad: (x, y) padding to leave around the inner edge of the rect.  Can be
-     negative to allow positioning outside of the rect, and can be just one
-     number to use on both axes.
-pos: (x, y) amounts to offset by after all other positioning; can be just one
-     number to use on both axes.
-rect: Pygame-style rect to align in.
+:arg pos: ``(x, y)`` alignment; each is ``< 0`` for left-aligned, ``0`` for
+          centred, ``> 0`` for right-aligned.  Can be just one number to use on
+          both axes.
+:arg pad: ``(x, y)`` padding to leave around the inner edge of ``rect``.  Can
+          be negative to allow positioning outside of ``rect``, and can be just
+          one number to use on both axes.
+:arg offset: ``(x, y)`` amounts to offset by after all other positioning; can
+             be just one number to use on both axes.
+:arg rect: Pygame-style rect to align in.
 
 """
         pos = [pos, pos] if isinstance(pos, (int, float)) else list(pos)
@@ -680,37 +675,42 @@ rect: Pygame-style rect to align in.
 
 transform(transform_fn, *args[, position][, before][, after]) -> self
 
-transform_fn: a function to apply a transform, or a string for a builtin
-              transform such as 'resize' (see method list in class
-              documentation).
-position: a keyword-only argument giving the index in the transforms attribute
-          to insert this transform at.  If this is omitted, the transform is
-          appended to the end if new (not in transforms already), else left
-          where it is.
-before: (keyword-only) if position is not given, this gives the transform
-        function (as in the transforms attribute) to insert this transform
-        before.  If not in transforms, append to the end.
-after: (keyword-only) if position and before are not given, insert after this
-       transform function (or at the end).
+:arg transform_fn: a function to apply a transform, or a string for a builtin
+                   transform such as ``'resize'`` (see class documentation).
+:arg args: passed to the transformation function as positional arguments, after
+           compulsory arguments.
+:arg position: a keyword-only argument giving the index in :attr:`transforms`
+               to insert this transform at.  If this is omitted, the transform
+               is appended to the end if new (not in transforms already), else
+               left where it is.
+:arg before: (keyword-only) if ``position`` is not given, this gives the
+             transform function (as in :attr:`transforms`) to insert this
+             transform before.  If not in :attr:`transforms`, append to the
+             end.
+after: (keyword-only) if ``position`` and ``before`` are not given, insert
+       after this transform function (string or function), or at the end if it
+       doesn't exist.
 
-Builtin transforms should not be moved after rotation; behaviour in this case
-is undefined.
+Builtin transforms should not be moved after rotation (``'rotate'``); behaviour
+in this case is undefined.
 
-Calls transform_fn(sfc, last_args, *args) to apply the transformation, where:
+Calls ``transform_fn(sfc, last_args, *args)`` to apply the transformation,
+where:
 
-sfc: surface before this transformation was last applied (or the current
-     surface if it never has been).
-last_args: the args passed to this method when this transformation was last
-           applied, as a tuple (or None if it never has been).
+- ``sfc`` is the surface before this transformation was last applied (or the
+  current surface if it never has been).
+- ``last_args`` is the ``args`` passed to this method when this transformation
+  was last applied, as a tuple (or ``None`` if it never has been).
 
-and transform_fn should return the new surface after transforming, which should
-already be converted for blitting (the given sfc is guaranteed to be
+and ``transform_fn`` should return the new surface after transforming, which
+should already be converted for blitting (the given ``sfc`` is guaranteed to be
 converted).  The passed surface should not be altered: the new surface should
 be a new instance, or the unaltered surface if the transformation would do
 nothing.
 
-If the results of the transformation would be exactly the same with last_args
-as with args, transform_fn may return None to indicate this.
+If the results of the transformation would be exactly the same with
+``last_args`` as with ``args``, ``transform_fn`` may return ``None`` to
+indicate this.
 
 """
         # determine position
@@ -795,8 +795,8 @@ as with args, transform_fn may return None to indicate this.
     def undo_transforms (self, upto):
         """Undo transforms up and including the given transform function.
 
-Argument may be an index in the transforms attribute, a function, or a string
-for a builtin.
+Argument may be an index in :attr:`transforms`, a function, or a string for a
+builtin transform.
 
 """
         ts = self._transforms
@@ -819,10 +819,10 @@ for a builtin.
         self._set_sfc(sfc)
 
     def reapply_transform (self, start = 0):
-        """Reapply the given transformation (index or function).
+        """Reapply the given transformation.
 
-Index is the order the transform was applied, 0 first; function is as passed
-to the transform method.
+Argument may be an index in :attr:`transforms`, a function, or a string for a
+builtin transform.
 
 """
         ts = self._transforms
@@ -838,7 +838,7 @@ to the transform method.
         self._transforms = OrderedDict(ts[:start])
         ts = ts[start:]
         if ts:
-            args, sfc = ts[0]
+            args, sfc, apply_fn, undo_fn = ts[0]
             self.surface = sfc
             self._rect = Rect(self._rect[:2], sfc.get_size())
             # if any transforms do anything, they will set opaque, etc. (else
@@ -849,7 +849,7 @@ to the transform method.
     def sfc_before_transform (self, transform_fn):
         """Return surface before the given transform.
 
-Takes a transform function as taken by the transform method that may or may not
+Takes a transform function as taken by :meth:`transform` that may or may not
 have been applied yet.
 
 """
@@ -858,6 +858,20 @@ have been applied yet.
             return ts[transform_fn][1]
         else:
             return self.surface
+
+    def reload (self):
+        """Reload from disk if possible.
+
+If successful, all transformations are reapplied afterwards, if any.
+
+"""
+        if self.fn is not None:
+            self._set_sfc(conf.GAME.img(self.fn, cache = False))
+            self._mk_dirty()
+            ts = self._transforms
+            self._transforms = OrderedDict()
+            for fn, t in ts:
+                self.transform(fn, *t[0])
 
     def _resize (self, sfc, last, w, h, about = (0, 0)):
         """Backend for resize."""
@@ -896,9 +910,12 @@ have been applied yet.
 
 resize([w][, h], about = (0, 0)) -> self
 
-w, h: the new width and height.  No scaling occurs in omitted dimensions.
-about: the (x, y) position relative to the top-left of the graphic to scale
-       about.
+:arg w: the new width.
+:arg h: the new height.
+:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
+            scale about.
+
+No scaling occurs in omitted dimensions.
 
 """
         return self.transform('resize', w, h, about)
@@ -906,8 +923,10 @@ about: the (x, y) position relative to the top-left of the graphic to scale
     def rescale (self, w = None, h = None, about = (0, 0)):
         """A convenience wrapper around resize to scale by a ratio.
 
-Arguments are as taken by resize, but w and h are ratios of the size before
-scaling.
+resize([w][, h], about = (0, 0)) -> self
+
+Arguments are as taken by :meth:`resize`, but ``w`` and ``h`` are ratios of the
+size before scaling.
 
 """
         if w is None:
@@ -948,9 +967,9 @@ scaling.
     def crop (self, rect):
         """Crop the surface to the given rect.
 
-The rect need not be contained in the current surface rect.
+crop(rect) -> self
 
-Returns self.
+``rect`` need not be contained in the current surface rect.
 
 """
         return self.transform('crop', Rect(rect))
@@ -976,7 +995,8 @@ Returns self.
 
 flip(x = False, y = False) -> self
 
-x, y: whether to flip over this axis.
+:arg x: whether to flip over the x-axis.
+:arg y: whether to flip over the y-axis.
 
 """
         return self.transform('flip', bool(x), bool(y))
@@ -1024,28 +1044,13 @@ x, y: whether to flip over this axis.
 
 rotate(angle[, about]) -> self
 
-angle: the angle in radians to rotate to, anti-clockwise from the original
-       graphic.
-about: the (x, y) position relative to the top-left of the graphic to rotate
-       about; defaults to the graphic's centre.
+:arg angle: the angle in radians to rotate to, anti-clockwise from the original
+            graphic.
+:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
+            rotate about; defaults to the graphic's centre.
 
 """
         return self.transform('rotate', angle, about)
-
-    def reload (self):
-        """Reload from disk if possible.
-
-If successful, all transformations are reapplied afterwards.
-
-"""
-        if self.fn is not None:
-            sfc = conf.GAME.img(self.fn, cache = False)
-            self._set_sfc(sfc)
-            self._mk_dirty()
-            ts = self._transforms
-            self._transforms = OrderedDict()
-            for fn, (args, sfc) in ts:
-                self.transform(fn, *args)
 
     def _mk_dirty (self):
         """Mark as dirty."""
@@ -1073,24 +1078,18 @@ Should never alter any state that is not internal to the graphic.
 
 
 class Colour (Graphic):
-    """A solid rect of colour (Graphic subclass).
-
-    CONSTRUCTOR
+    """A solid rect of colour (:class:`Graphic` subclass).
 
 Colour(colour, rect, layer = 0, blit_flags = 0)
 
-colour: a Pygame-style (R, G, B[, A = 255]) colour to draw.
-rect: (left, top, width, height) rect (of ints) to draw in (or anything taken
-      by pygame.Rect, like a Rect, or ((left, top), (width, height))).
-layer, blit_flags: as taken by Graphic.
+:arg colour: a Pygame-style ``(R, G, B[, A = 255])`` colour to draw.
+:arg rect: ``(left, top, width, height)`` rect (of ints) to draw in (or
+           anything taken by ``pygame.Rect``, like a ``Rect``, or
+           ``((left, top), (width, height))``).
+:arg layer: as taken by :class:`Graphic`.
+:arg blit_flags: as taken by :class:`Graphic`.
 
-    METHODS
-
-fill [builtin transform]
-
-    ATTRIBUTES
-
-colour: as taken by constructor; set as necessary.
+:meth:`fill` corresponds to a builtin transform.
 
 """
 
@@ -1108,6 +1107,7 @@ colour: as taken by constructor; set as necessary.
 
     @property
     def colour (self):
+        """As taken by constructor; set as necessary."""
         return self._colour
 
     @colour.setter
@@ -1133,6 +1133,7 @@ colour: as taken by constructor; set as necessary.
         return (sfc, None, None)
 
     def fill (self, colour):
+        """Fill with the given colour (like :attr:`colour`)."""
         self.transform('fill', colour)
         self._colour = colour
         return self
