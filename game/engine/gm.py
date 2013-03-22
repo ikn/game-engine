@@ -14,7 +14,7 @@ TODO:
  - GM stuff to make it act as a Graphic, so it can be transformed and added to another GM, for multi-Graphic transforms
  - GraphicsManager.overlay, .fade
  - performance:
-    - updating in rects is slow with lots of rects
+    - updating in rects is slow with lots of rects - if more than 60, return True instead (and remove similar code in game.Game._update)
     - ignore off-screen things
     - reduce number of rects created by mk_disjoint
     - if GM is fully dirty, draw everything without any rect checks (but still nothing under opaque)

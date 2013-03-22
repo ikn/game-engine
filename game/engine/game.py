@@ -11,6 +11,7 @@ import os
 from random import choice, randrange
 
 import pygame as pg
+from pygame.display import update as update_display
 
 from conf import conf
 import gm
@@ -487,9 +488,12 @@ minimise()
         drawn = self.world.draw()
         # update display
         if drawn is True:
-            pg.display.flip()
+            update_display()
         elif drawn:
-            pg.display.update(drawn)
+            if len(drawn) > 60: # empirical - faster to update everything
+                update_display()
+            else:
+                update_display(drawn)
         return True
 
     # running
