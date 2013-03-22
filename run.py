@@ -16,9 +16,9 @@ if __name__ == '__main__':
         if len(argv) >= 3:
             t = int(argv[2])
         else:
-            t = conf.DEFAULT_PROFILE_TIME
-        fn = conf.PROFILE_STATS_FILE
-        run('engine.game.run(entry_world, t)', fn, locals())
+            t = engine.conf.DEFAULT_PROFILE_TIME
+        fn = engine.conf.PROFILE_STATS_FILE
+        run('engine.game.run(entry_world, t = t)', fn, locals())
         Stats(fn).strip_dirs().sort_stats('cumulative').print_stats(30)
         os.unlink(fn)
     else:

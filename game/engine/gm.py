@@ -52,7 +52,7 @@ import pygame as pg
 from pygame import Rect
 
 from conf import conf
-from util import ir, convert_sfc, blank_sfc
+from util import ir
 from _gm import fastdraw
 
 
@@ -599,10 +599,8 @@ transformed, even if this one is, but will be an exact copy.
     def _set_sfc (self, sfc):
         """Set new surface and opacity and modify rects."""
         if sfc.get_alpha() is None and sfc.get_colorkey() is None:
-            sfc = sfc.convert()
             self.opaque = True
         else:
-            sfc = sfc.convert_alpha()
             self.opaque = False
         self.surface = sfc
         self._rect = r = Rect(self._rect[:2],
@@ -705,9 +703,11 @@ sfc: surface before this transformation was last applied (or the current
 last_args: the args passed to this method when this transformation was last
            applied, as a tuple (or None if it never has been).
 
-and transform_fn should return the new surface after transforming.  The passed
-surface should not be altered: the new surface should be a new instance, or the
-unaltered surface if the transformation would do nothing.
+and transform_fn should return the new surface after transforming, which should
+already be converted for blitting (the given sfc is guaranteed to be
+converted).  The passed surface should not be altered: the new surface should
+be a new instance, or the unaltered surface if the transformation would do
+nothing.
 
 If the results of the transformation would be exactly the same with last_args
 as with args, transform_fn may return None to indicate this.
@@ -926,13 +926,12 @@ scaling.
             return (sfc, None, None)
         new_sfc = pg.Surface(rect.size)
         inside = start.contains(rect)
-        if sfc.get_alpha() is None and sfc.get_colorkey() is None and inside:
-            new_sfc = new_sfc.convert()
-        else:
+        if sfc.get_alpha() is None and sfc.get_colorkey() is None and \
+           not inside:
+            # was opaque before, not any more
             new_sfc = new_sfc.convert_alpha()
-            if not inside:
-                # fill with alpha so area outside borders is transparent
-                new_sfc.fill((0, 0, 0, 0))
+            # fill with alpha so area outside borders is transparent
+            new_sfc.fill((0, 0, 0, 0))
         dx, dy = rect[:2]
         new_sfc.blit(sfc, rect.move(-dx, -dy), rect)
 

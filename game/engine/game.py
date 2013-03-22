@@ -42,7 +42,7 @@ Takes the same arguments as :class:`Game`, with an optional keyword-only
 argument ``t`` to run for this many seconds.
 
 """
-    t = kwargs.get('t')
+    t = kwargs.pop('t', None)
     global restarting
     restarting = True
     while restarting:
