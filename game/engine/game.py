@@ -17,15 +17,14 @@ from conf import conf
 import gm
 from sched import Scheduler
 import evthandler as eh
-if conf.USE_FONTS:
-    from mltr import Fonts
+from mltr import Fonts
 from util import ir, convert_sfc
 
 
 def get_world_id (world):
     """Return the computed identifier of the given world (or world type).
 
-See :meth:`Game.create_world` for details.
+See :attr:`World.id` for details.
 
 """
     if world.id is not None:
@@ -134,9 +133,8 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         # load display settings
         self.screen = None #: The main Pygame surface.
         self.refresh_display()
-        #: A :class:`mltr.Fonts` instance, or ``None`` if
-        #: :data:`conf.USE_FONTS` is ``False``.
-        self.fonts = Fonts(conf.FONT_DIR) if conf.USE_FONTS else None
+        #: A :class:`mltr.Fonts` instance.
+        self.fonts = Fonts(conf.FONT_DIR)
         # start first world
         self.start_world(*args, **kwargs)
         # start playing music
@@ -193,10 +191,9 @@ should be passed to that base class).
         world.graphics.dirty()
         i = get_world_id(world)
         # set some per-world things
-        if conf.USE_FONTS:
-            fonts = self.fonts
-            for k, v in conf.REQUIRED_FONTS[i].iteritems():
-                fonts[k] = v
+        fonts = self.fonts
+        for k, v in conf.REQUIRED_FONTS[i].iteritems():
+            fonts[k] = v
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
         world._select()
@@ -338,9 +335,6 @@ the same value for this argument.
 Returns the same as :meth:`mltr.Fonts.render`
 
 """
-        if self.fonts is None:
-            raise ValueError('conf.USE_FONTS is False: text rendering isn\'t'
-                             'supported')
         cache = 'cache' in kwargs
         if cache:
             key = kwargs['cache']

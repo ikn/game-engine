@@ -13,15 +13,14 @@ from util import dd
 
 class Conf (object):
 
-    IDENT = 'game'
-    USE_SAVEDATA = False
-    USE_FONTS = False
-
     # the Game instance; should only really be used to load media with caching
     GAME = None
-
-    # save data
+    IDENT = 'game'
+    USE_SAVEDATA = False
     SAVE = ()
+    FPS = dd(60) # per-backend
+
+    # paths
     # need to take care to get unicode path
     if system() == 'Windows':
         try:
@@ -41,8 +40,6 @@ class Conf (object):
     else:
         CONF_DIR = join_path(os.path.expanduser(u'~'), '.config', IDENT)
     CONF = join_path(CONF_DIR, 'conf')
-
-    # data paths
     DATA_DIR = os.path.dirname(sys.argv[0]) + sep
     IMG_DIR = DATA_DIR + 'img' + sep
     SOUND_DIR = DATA_DIR + 'sound' + sep
@@ -62,19 +59,12 @@ class Conf (object):
     MIN_RES_W = (320, 180)
     ASPECT_RATIO = None
 
-    # timing
-    FPS = dd(60) # per-backend
-
-    # debug
-    PROFILE_STATS_FILE = '.profile_stats'
-    DEFAULT_PROFILE_TIME = 5
-
     # input
-    KEYS_NEXT = (pg.K_RETURN, pg.K_SPACE, pg.K_KP_ENTER)
-    KEYS_BACK = (pg.K_ESCAPE, pg.K_BACKSPACE)
     KEYS_MINIMISE = (pg.K_F10,)
     KEYS_FULLSCREEN = (pg.K_F11, (pg.K_RETURN, pg.KMOD_ALT, True),
                     (pg.K_KP_ENTER, pg.KMOD_ALT, True))
+    KEYS_NEXT = (pg.K_RETURN, pg.K_SPACE, pg.K_KP_ENTER)
+    KEYS_BACK = (pg.K_ESCAPE, pg.K_BACKSPACE)
     KEYS_LEFT = (pg.K_LEFT, pg.K_a, pg.K_q)
     KEYS_RIGHT = (pg.K_RIGHT, pg.K_d, pg.K_e)
     KEYS_UP = (pg.K_UP, pg.K_w, pg.K_z, pg.K_COMMA)
@@ -106,7 +96,7 @@ class Conf (object):
     REQUIRED_FONTS = dd({})
 
 
-def translate_dd (d):
+def _translate_dd (d):
     if isinstance(d, defaultdict):
         return defaultdict(d.default_factory, d)
     else:
@@ -115,7 +105,7 @@ def translate_dd (d):
 conf = dict((k, v) for k, v in Conf.__dict__.iteritems()
             if k.isupper() and not k.startswith('__'))
 types = {
-    defaultdict: translate_dd
+    defaultdict: _translate_dd
 }
 if Conf.USE_SAVEDATA:
     conf = _settings.SettingsManager(conf, Conf.CONF, Conf.SAVE, types)

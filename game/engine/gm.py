@@ -687,9 +687,9 @@ transform(transform_fn, *args[, position][, before][, after]) -> self
              transform function (as in :attr:`transforms`) to insert this
              transform before.  If not in :attr:`transforms`, append to the
              end.
-after: (keyword-only) if ``position`` and ``before`` are not given, insert
-       after this transform function (string or function), or at the end if it
-       doesn't exist.
+:arg after: (keyword-only) if ``position`` and ``before`` are not given, insert
+            after this transform function (string or function), or at the end
+            if it doesn't exist.
 
 Builtin transforms should not be moved after rotation (``'rotate'``); behaviour
 in this case is undefined.
@@ -923,7 +923,7 @@ No scaling occurs in omitted dimensions.
     def rescale (self, w = None, h = None, about = (0, 0)):
         """A convenience wrapper around resize to scale by a ratio.
 
-resize([w][, h], about = (0, 0)) -> self
+rescale([w][, h], about = (0, 0)) -> self
 
 Arguments are as taken by :meth:`resize`, but ``w`` and ``h`` are ratios of the
 size before scaling.

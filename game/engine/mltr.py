@@ -1,7 +1,7 @@
 """Multi-line text rendering.
 
-:class:`Fonts` in this module can serve as a font cache, but the real point of
-this is to render multi-line text with alignment and shadow and stuff.
+The :class:`Fonts` class in this module can serve as a font cache, but the real
+point of this is to render multi-line text with alignment and shadow and stuff.
 
 """
 
