@@ -19,6 +19,7 @@ class Conf (object):
     USE_SAVEDATA = False
     SAVE = ()
     FPS = dd(60) # per-backend
+    DEBUG = False
 
     # paths
     # need to take care to get unicode path
