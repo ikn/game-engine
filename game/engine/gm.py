@@ -3,6 +3,9 @@
 ---NODOC---
 
 TODO:
+ [BUG] eg. .rescale(.1).rescale(1) leaves at .1
+ [BUG] GM not at (0, 0) is broken
+ [BUG] GM.rotate doesn't end up with alpha
  - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
  - GM stuff to make it act as a Graphic, so it can be transformed and added to another GM, for multi-Graphic transforms
  - GraphicsManager.overlay, .fade
@@ -51,188 +54,6 @@ from util import ir
 from _gm import fastdraw
 
 
-class GraphicsManager (object):
-    """Handles intelligently drawing things to a surface.
-
-GraphicsManager(*graphics[, surface])
-
-:arg graphics: any number of :class:`Graphic` or :class:`GraphicsGroup`
-               instances.
-:arg surface: a ``pygame.Surface`` to draw to; if not given, no drawing occurs
-              (keyword-only).
-
-:class:`Graphic` instances are meant to be used with only one
-:class:`GraphicsManager` at a time.
-
-"""
-
-    def __init__ (self, *graphics, **kw):
-        self._surface = None
-        self.surface = kw.get('surface')
-        #: ``{layer: graphics}`` dict, where ``graphics`` is a set of the
-        #: graphics in layer ``layer``, each as taken by :meth:`add`.
-        self.graphics = {}
-        #: A list of layers that contain graphics, lowest first.
-        self.layers = []
-        self._dirty = []
-        self.add(*graphics)
-
-    @property
-    def surface (self):
-        """As taken by the constructor.
-
-Set this directly (can be ``None`` to do nothing).
-
-"""
-        return self._surface
-
-    @surface.setter
-    def surface (self, sfc):
-        if sfc is not self._surface:
-            self._surface = sfc
-            if sfc is not None:
-                self._rect = sfc.get_rect()
-                self.dirty()
-
-    def add (self, *graphics):
-        """Add graphics.
-
-Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
-
-"""
-        all_gs = self.graphics
-        ls = set(self.layers)
-        graphics = list(graphics)
-        for g in graphics:
-            if isinstance(g, Graphic):
-                # add to graphics
-                l = g.layer
-                if l in ls:
-                    all_gs[l].add(g)
-                else:
-                    all_gs[l] = set((g,))
-                    ls.add(l)
-                g._manager = self
-                # don't draw over any possible previous location
-                g.was_visible = False
-            else: # GraphicsGroup
-                graphics.extend(g.contents)
-        self.layers = sorted(ls)
-
-    def rm (self, *graphics):
-        """Remove graphics.
-
-Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
-
-"""
-        all_graphics = self.graphics
-        ls = set(self.layers)
-        graphics = list(graphics)
-        for g in graphics:
-            if isinstance(g, Graphic):
-                l = g.layer
-                if l in ls:
-                    all_gs = all_graphics[l]
-                    if g in all_gs:
-                        # remove from graphics
-                        all_gs.remove(g)
-                        g._manager = None
-                        # draw over previous location
-                        if g.was_visible:
-                            self.dirty(g.last_rect)
-                        # remove layer
-                        if not all_gs:
-                            del all_graphics[l]
-                            ls.remove(l)
-                # else not added: fail silently
-            else: # GraphicsGroup
-                graphics.extend(g.contents)
-        self.layers = sorted(ls)
-
-    def dirty (self, *rects, **kw):
-        """Force redrawing some or all of the screen.
-
-dirty(*rects)
-
-Takes any number of rects to flag as dirty.  If none are given, the whole of
-the current surface is flagged.
-
-"""
-        if self._surface is None:
-            # nothing to mark as dirty (happens in assigning a surface)
-            return
-        if rects:
-            self._dirty += [Rect(r) for r in rects]
-        else:
-            self._dirty = [self._rect]
-
-    def draw (self):
-        """Update the display.
-
-Returns ``True`` if the entire surface changed, or a list of rects that cover
-changed parts of the surface, or ``False`` if nothing changed.
-
-"""
-        layers = self.layers
-        sfc = self._surface
-        if not layers or sfc is None:
-            return False
-        graphics = self.graphics
-        dirty = self._dirty
-        self._dirty = []
-        return fastdraw(layers, sfc, graphics, dirty)
-
-
-class GraphicsGroup (list):
-    """Convenience wrapper for grouping a number of graphics in a simple way.
-
-Takes any number of :class:`Graphic` instances or lists of arguments to pass to
-:class:`Graphic` to create one.  This is a ``list`` subclass, containing
-graphics, so add and remove graphics using list methods.
-
-Has ``scale_fn``, ``manager``, ``layer``, ``blit_flags`` and ``visible``
-properties as for :class:`Graphic`.  These give a list of values for each
-contained graphic; set them to a single value to apply to all contained
-graphics.
-
-"""
-
-    def __init__ (self, *graphics):
-        list.__init__(self, (g if isinstance(g, Graphic) else Graphic(*g)
-                             for g in graphics))
-
-    def __getattr__ (self, attr):
-        if attr in ('scale_fn', 'manager', 'layer', 'blit_flags', 'visible'):
-            return [getattr(g, attr) for g in self]
-        else:
-            return list.__getattr__(self, attr)
-
-    def __setattr__ (self, attr, val):
-        if attr in ('scale_fn', 'manager', 'layer', 'blit_flags', 'visible'):
-            for g in self:
-                setattr(g, attr, val)
-        else:
-            return list.__setattr__(self, attr, val)
-
-    def opaque_in (self, rect):
-        """Whether the contained graphics are opaque in the given rect.
-
-Returns ``True`` if any graphic draws opaque pixels in the whole of the given
-rect.
-
-"""
-        return any(g.opaque_in(rect) for g in self)
-
-    def move_by (self, *args, **kwargs):
-        """Move each contained graphic by the given number of pixels.
-
-move_by(dx = 0, dy = 0)
-
-"""
-        for g in self:
-            g.move_by(*args, **kwargs)
-
-
 class Graphic (object):
     """Something that can be drawn to the screen.
 
@@ -271,15 +92,15 @@ builtin transforms (see :meth:`transform`).
             img = conf.GAME.img(img)
         else:
             self.fn = None
+        self._surface = None
         self._scale = (1, 1)
         self._cropped_rect = None
         self._flipped = (False, False)
+        self._angle = 0
         # postrot is the rect drawn in
         self._rect = self._postrot_rect = Rect(pos, img.get_size())
         self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
         self._transforms = OrderedDict() # required by _set_sfc
-        #: The (possibly transformed) surface that will be used for drawing.
-        self.surface = None
         #: Whether this draws opaque pixels in the entire rect; do not change.
         self.opaque = None
         self._set_sfc(img)
@@ -287,7 +108,7 @@ builtin transforms (see :meth:`transform`).
         self.last_rect = self._last_postrot_rect = Rect(self._rect)
         # {function: (args, previous_surface, apply_fn, undo_fn)}
         self._transforms = OrderedDict.fromkeys(
-            self._builtin_transforms, (None, self.surface, None, None)
+            self._builtin_transforms, (None, self._surface, None, None)
         )
         # for manager
         #: Function to use for scaling; defaults to
@@ -332,6 +153,15 @@ builtin transforms (see :meth:`transform`).
         else:
             r[i] = v
         self.rect = r
+
+    @property
+    def surface (self):
+        """The (possibly transformed) surface that will be used for drawing."""
+        return self._surface
+
+    @surface.setter
+    def surface (self, sfc):
+        self._surface = surface
 
     # appearance properties
 
@@ -584,7 +414,7 @@ transformed, even if this one is, but will be an exact copy of the *current
 state*.
 
 """
-        g = Graphic(self.surface, self._postrot_rect[:2], self._layer,
+        g = Graphic(self._surface, self._postrot_rect[:2], self._layer,
                     self.blit_flags)
         g.visible = self.visible
         g.scale_fn = self.scale_fn
@@ -596,7 +426,7 @@ state*.
             self.opaque = True
         else:
             self.opaque = False
-        self.surface = sfc
+        self._surface = sfc
         self._rect = r = Rect(self._rect[:2],
                               self.sfc_before_transform('rotate').get_size())
         self._postrot_rect = Rect(r.move(self._rot_offset)[:2], sfc.get_size())
@@ -735,7 +565,7 @@ indicate this.
             last_args, sfc, apply_fn, undo_fn = ts[ks[position]]
             if position == len(ks) - 1:
                 # last transform: last result is current surface
-                last_new_sfc = self.surface
+                last_new_sfc = self._surface
             else:
                 last_new_sfc = ts[ks[position + 1]][1]
             for i, (this_args, this_sfc, this_apply_fn, this_undo_fn) \
@@ -750,7 +580,7 @@ indicate this.
                 self._transforms = ts = OrderedDict(ts)
         else:
             # use current data
-            last_new_sfc = sfc = self.surface
+            last_new_sfc = sfc = self._surface
             last_args = apply_fn = undo_fn = None
         builtin = isinstance(transform_fn, basestring)
         if builtin:
@@ -826,25 +656,28 @@ builtin transform.
 
 """
         ts = self._transforms
-        if isinstance(start, basestring):
-            start = getattr(self, '_' + start)
-        if callable(start):
+        if isinstance(start, basestring) or callable(start):
             if start not in ts:
                 return
             start = ts.keys().index(start)
-        ts = ts.items()
+        elif start >= len(ts):
+            return
+        tsi = ts.items()
         # removes from _transforms and transforms; transform will add them back
         self.undo_transforms(start)
-        self._transforms = OrderedDict(ts[:start])
-        ts = ts[start:]
-        if ts:
-            args, sfc, apply_fn, undo_fn = ts[0]
-            self.surface = sfc
+        self._transforms = ts = OrderedDict(tsi[:start])
+        tsi = tsi[start:]
+        if tsi:
+            args, sfc, apply_fn, undo_fn = tsi[0][1]
+            self._surface = sfc
             self._rect = Rect(self._rect[:2], sfc.get_size())
             # if any transforms do anything, they will set opaque, etc. (else
             # the surface won't change and we just keep the current values)
-            for fn, (args, sfc, apply_fn, undo_fn) in ts[start:]:
-                self.transform(fn, *args)
+            for fn, (args, sfc, apply_fn, undo_fn) in tsi:
+                if args is None:
+                    ts[fn] = (args, self._surface, apply_fn, undo_fn)
+                else:
+                    self.transform(fn, *args)
 
     def sfc_before_transform (self, transform_fn):
         """Return surface before the given transform.
@@ -857,7 +690,7 @@ have been applied yet.
         if transform_fn in ts:
             return ts[transform_fn][1]
         else:
-            return self.surface
+            return self._surface
 
     def reload (self):
         """Reload from disk if possible.
@@ -1056,6 +889,10 @@ rotate(angle[, about]) -> self
         """Mark as dirty."""
         self._dirty = [self._last_postrot_rect, self._postrot_rect]
 
+    def _pre_draw (self):
+        """Called by GraphicsManager before drawing."""
+        pass
+
     def _draw (self, dest, rects):
         """Draw the graphic.
 
@@ -1067,7 +904,7 @@ rects: list of rects to draw in.
 Should never alter any state that is not internal to the graphic.
 
 """
-        sfc = self.surface
+        sfc = self._surface
         blit = dest.blit
         flags = self._blit_flags
         offset = (-self._postrot_rect[0], -self._postrot_rect[1])
@@ -1075,6 +912,210 @@ Should never alter any state that is not internal to the graphic.
             blit(sfc, r, r.move(offset), flags)
         self._last_postrot_rect = self._postrot_rect
         self.last_rect = self._rect
+
+
+class GraphicsGroup (list):
+    """Convenience wrapper for grouping a number of graphics in a simple way.
+
+Takes any number of :class:`Graphic` instances or lists of arguments to pass to
+:class:`Graphic` to create one.  This is a ``list`` subclass, containing
+graphics, so add and remove graphics using list methods.
+
+Has ``scale_fn``, ``manager``, ``layer``, ``blit_flags`` and ``visible``
+properties as for :class:`Graphic`.  These give a list of values for each
+contained graphic; set them to a single value to apply to all contained
+graphics.
+
+"""
+
+    def __init__ (self, *graphics):
+        list.__init__(self, (g if isinstance(g, Graphic) else Graphic(*g)
+                             for g in graphics))
+
+    def __getattr__ (self, attr):
+        if attr in ('scale_fn', 'manager', 'layer', 'blit_flags', 'visible'):
+            return [getattr(g, attr) for g in self]
+        else:
+            return list.__getattr__(self, attr)
+
+    def __setattr__ (self, attr, val):
+        if attr in ('scale_fn', 'manager', 'layer', 'blit_flags', 'visible'):
+            for g in self:
+                setattr(g, attr, val)
+        else:
+            return list.__setattr__(self, attr, val)
+
+    def opaque_in (self, rect):
+        """Whether the contained graphics are opaque in the given rect.
+
+Returns ``True`` if any graphic draws opaque pixels in the whole of the given
+rect.
+
+"""
+        return any(g.opaque_in(rect) for g in self)
+
+    def move_by (self, *args, **kwargs):
+        """Move each contained graphic by the given number of pixels.
+
+move_by(dx = 0, dy = 0)
+
+"""
+        for g in self:
+            g.move_by(*args, **kwargs)
+
+
+class GraphicsManager (Graphic):
+    """Handles intelligently drawing things to a surface.
+
+GraphicsManager([sfc], pos = (0, 0), layer = 0, blit_flags = 0)
+
+:arg sfc: the surface to draw to; can be a ``(width, height)`` tuple to create
+          a new surface of this size.  If not given or ``None``, nothing is
+          drawn.
+
+Other arguments are as taken by :class:`Graphic`.  Since this is a Graphic
+subclass, it can be added to other GraphicsManager and supports
+transformations.
+
+"""
+
+    def __init__ (self, sfc = None, pos = (0, 0), layer = 0, blit_flags = 0):
+        self._init_as_graphic = False
+        self._init_as_graphic_args = (pos, layer, blit_flags)
+        self._surface = None
+        self.surface = sfc
+        #: ``{layer: graphics}`` dict, where ``graphics`` is a set of the
+        #: graphics in layer ``layer``, each as taken by :meth:`add`.
+        self.graphics = {}
+        #: A list of layers that contain graphics, lowest first.
+        self.layers = []
+        self._gm_dirty = []
+
+    @property
+    def surface (self):
+        """As taken by the constructor.
+
+Set this directly (can be ``None`` to do nothing).
+
+"""
+        return self._surface
+
+    @surface.setter
+    def surface (self, sfc):
+        if sfc is not None and not isinstance(sfc, pg.Surface):
+            sfc = pg.Surface(sfc)
+        if sfc is not self._surface:
+            self._surface = sfc
+            if sfc is not None:
+                self._rect = sfc.get_rect()
+                self.dirty()
+                if not self._init_as_graphic:
+                    Graphic.__init__(self, sfc, *self._init_as_graphic_args)
+                    self._init_as_graphic = True
+                    del self._init_as_graphic_args
+
+    def add (self, *graphics):
+        """Add graphics.
+
+Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
+
+"""
+        all_gs = self.graphics
+        ls = set(self.layers)
+        graphics = list(graphics)
+        for g in graphics:
+            if isinstance(g, Graphic):
+                # add to graphics
+                l = g.layer
+                if l in ls:
+                    all_gs[l].add(g)
+                else:
+                    all_gs[l] = set((g,))
+                    ls.add(l)
+                g._manager = self
+                # don't draw over any possible previous location
+                g.was_visible = False
+            else: # GraphicsGroup
+                graphics.extend(g.contents)
+        self.layers = sorted(ls)
+
+    def rm (self, *graphics):
+        """Remove graphics.
+
+Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
+
+"""
+        all_graphics = self.graphics
+        ls = set(self.layers)
+        graphics = list(graphics)
+        for g in graphics:
+            if isinstance(g, Graphic):
+                l = g.layer
+                if l in ls:
+                    all_gs = all_graphics[l]
+                    if g in all_gs:
+                        # remove from graphics
+                        all_gs.remove(g)
+                        g._manager = None
+                        # draw over previous location
+                        if g.was_visible:
+                            self.dirty(g.last_rect)
+                        # remove layer
+                        if not all_gs:
+                            del all_graphics[l]
+                            ls.remove(l)
+                # else not added: fail silently
+            else: # GraphicsGroup
+                graphics.extend(g.contents)
+        self.layers = sorted(ls)
+
+    def dirty (self, *rects, **kw):
+        """Force redrawing some or all of the screen.
+
+dirty(*rects)
+
+Takes any number of rects to flag as dirty.  If none are given, the whole of
+the current surface is flagged.
+
+"""
+        if self._surface is None:
+            # nothing to mark as dirty (happens in assigning a surface)
+            return
+        if rects:
+            self._gm_dirty += [Rect(r) for r in rects]
+        else:
+            self._gm_dirty = [self._rect]
+
+    def draw (self):
+        """Update the display.
+
+Returns ``True`` if the entire surface changed, or a list of rects that cover
+changed parts of the surface, or ``False`` if nothing changed.
+
+"""
+        layers = self.layers
+        sfc = self._surface
+        if not layers or sfc is None:
+            return False
+        graphics = self.graphics
+        dirty = self._gm_dirty
+        self._gm_dirty = []
+        return fastdraw(layers, sfc, graphics, dirty)
+
+    def _pre_draw (self):
+        # set surface to original surface
+        ts = self._transforms
+        if ts:
+            t = ts.items()[0]
+            self._surface = t[1][1]
+        # draw to it
+        drawn = self.draw()
+        if drawn:
+            # dirty as Graphic (might not happen in reapply_transform)
+            self._dirty += drawn
+            if ts:
+                # reapply transforms, starting from the first
+                self.reapply_transform(t[0])
 
 
 class Colour (Graphic):

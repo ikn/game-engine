@@ -26,7 +26,7 @@ if __name__ == '__main__':
                       type = 'string', help = 'defaults to \'.profile_stats\'')
         op.add_option('-s', '--sort-stats', action = 'store', type = 'string',
                       help = 'profile stats sort mode; defaults to ' \
-                      '\'cumulative\'')
+                      '\'cumulative\' (see pstats.Stats.sort_stats doc)')
         op.set_defaults(debug = False, profile_time = 5, num_stats = 30,
                         profile_file = '.profile_stats', sort_stats = 'cumulative')
         options = op.parse_args()[0]

@@ -138,9 +138,9 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
     // and layers is sorted
     PyObject* layers_in, * sfc, * graphics_in, * dirty;
     PyObject** layers, *** graphics, ** gs, * g, * g_dirty, * g_rect, * r_o,
-            ** graphics_obj, * tmp, * clip, * dbl_tmp[2], * rtn, * opaque_in,
-            * dirty_opaque, * l_dirty_opaque, ** dirty_by_layer, * rs,
-            * draw_in, * draw;
+            ** graphics_obj, * tmp, * pre_draw, * clip, * dbl_tmp[2], * rtn,
+            * opaque_in, * dirty_opaque, * l_dirty_opaque, ** dirty_by_layer,
+            * rs, * draw_in, * draw;
     char* dbl[4] = {"was_visible", "visible", "_last_postrot_rect",
                     "_postrot_rect"};
     int n_layers, * n_graphics, i, j, k, l, n, n_dirty, r_new, r_good;
@@ -149,7 +149,8 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                            &graphics_in, &dirty))
         return NULL;
 
-    clip = PyString_FromString("clip"); // NOTE: ref[+1]
+    pre_draw = PyString_FromString("_pre_draw"); // NOTE: ref[+1a]
+    clip = PyString_FromString("clip"); // NOTE: ref[+1b]
     // get arrays of layers, graphics and sizes
     // NOTE: ref[+2]
     layers_in = PySequence_Fast(layers_in, "layers: expected sequence");
@@ -172,6 +173,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
         gs = graphics[i];
         for (j = 0; j < n_graphics[i]; j++) { // gs
             g = gs[j];
+            PyObject_CallMethodObjArgs(g, pre_draw, NULL);
             // NOTE: ref[+4] (list)
             g_dirty = PyObject_GetAttrString(g, "_dirty");
             for (k = 0; k < 2; k++) // last/current
@@ -187,7 +189,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                 PyObject_SetAttrString(g, "_dirty", g_dirty);
             }
             n = PyList_GET_SIZE(g_dirty);
-            for (k = 0; k < 2; k++) {
+            for (k = 0; k < 2; k++) { // last/current
                 if (dbl_tmp[k] == Py_True) {
                     // NOTE: ref[+6] (pygame.Rect)
                     g_rect = PyObject_GetAttrString(g, dbl[k + 2]);
@@ -321,7 +323,8 @@ end:
     PyMem_Free(n_graphics); // NOTE: alloc[-2]
     PyMem_Free(graphics_obj); // NOTE: alloc[-1]
     Py_DECREF(layers_in); // NOTE: ref[-2]
-    Py_DECREF(clip); // NOTE: ref[-1]
+    Py_DECREF(clip); // NOTE: ref[-1b]
+    Py_DECREF(pre_draw); // NOTE: ref[-1a]
     return rtn;
 }
 
