@@ -5,7 +5,7 @@
 TODO:
  [BUG] eg. .rescale(.1).rescale(1) leaves at .1
  [BUG] GM not at (0, 0) is broken
- [BUG] GM.rotate doesn't end up with alpha
+ - Graphic.rescale_to(w, h): scale to w/h with constant AR
  - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
  - GM stuff to make it act as a Graphic, so it can be transformed and added to another GM, for multi-Graphic transforms
  - GraphicsManager.overlay, .fade
@@ -848,6 +848,9 @@ flip(x = False, y = False) -> self
                 return (None, None, None)
         if abs(angle) < self.rotate_threshold:
             return (sfc, None, None)
+        # if not already alpha, convert to alpha
+        if sfc.get_alpha() is None and sfc.get_colorkey() is None:
+            sfc = sfc.convert_alpha()
         new_sfc = self.rotate_fn(sfc, angle)
         # compute draw offset
         w_new, h_new = new_sfc.get_size()
@@ -965,7 +968,7 @@ move_by(dx = 0, dy = 0)
 
 
 class GraphicsManager (Graphic):
-    """Handles intelligently drawing things to a surface.
+    """Draws things to a surface intelligently.  :class:`Graphic` subclass.
 
 GraphicsManager([sfc], pos = (0, 0), layer = 0, blit_flags = 0)
 
