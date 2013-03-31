@@ -16,7 +16,7 @@ from pygame.display import update as update_display
 from conf import conf
 import gm
 from sched import Scheduler
-import evthandler as eh
+import eh
 from mltr import Fonts
 from util import ir, convert_sfc
 
@@ -57,8 +57,8 @@ World(scheduler, evthandler)
 
 :arg scheduler: the :class:`sched.Scheduler` instance this world should use for
                 timing.
-:arg evthandler: the :class:`evthandler.EventHandler` instance this world
-                 should use for input.
+:arg evthandler: the :class:`eh.EventHandler` instance this world should use
+                 for input.
 
 """
 
@@ -69,7 +69,7 @@ World(scheduler, evthandler)
     def __init__ (self, scheduler, evthandler):
         #: :class:`sched.Scheduler` instance taken by the constructor.
         self.scheduler = scheduler
-        #: :class:`evthandler.EventHandler` instance taken by the constructor.
+        #: :class:`eh.EventHandler` instance taken by the constructor.
         self.evthandler = evthandler
         #: :class:`gm.GraphicsManager` instance used for drawing by default.
         self.graphics = gm.GraphicsManager()

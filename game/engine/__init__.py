@@ -1,7 +1,7 @@
 import pygame as pg
 
+import game, sched, eh, gm, mltr, util, sched
 from conf import conf
-import game, world, gm, util, sched, evthandler, mltr
 
 pg.mixer.pre_init(buffer = 1024)
 
