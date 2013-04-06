@@ -3,10 +3,8 @@
 ---NODOC---
 
 TODO:
- [BUG] GM not at (0, 0) is broken
  - Graphic.rescale_to(w, h): scale to w/h with constant AR
  - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
- - GM stuff to make it act as a Graphic, so it can be transformed and added to another GM, for multi-Graphic transforms
  - GraphicsManager.overlay, .fade
  - performance:
     - updating in rects is slow with lots of rects - if more than 60, return True instead (and remove similar code in game.Game._update)
@@ -1116,7 +1114,10 @@ changed parts of the surface, or ``False`` if nothing changed.
         drawn = self.draw()
         if drawn:
             # dirty as Graphic (might not happen in reapply_transform)
-            self._dirty += drawn
+            dirty = self._dirty
+            pos = self._postrot_rect[:2]
+            for r in drawn:
+                dirty.append(r.move(pos))
             if ts:
                 # reapply transforms, starting from the first
                 self.reapply_transform(t[0])
