@@ -973,8 +973,8 @@ class GraphicsManager (Graphic):
 GraphicsManager([sfc], pos = (0, 0), layer = 0, blit_flags = 0)
 
 :arg sfc: the surface to draw to; can be a ``(width, height)`` tuple to create
-          a new surface of this size.  If not given or ``None``, nothing is
-          drawn.
+          a new transparent surface of this size.  If not given or ``None``,
+          nothing is drawn.
 
 Other arguments are as taken by :class:`Graphic`.  Since this is a Graphic
 subclass, it can be added to other GraphicsManager and supports
@@ -1006,7 +1006,8 @@ Set this directly (can be ``None`` to do nothing).
     @surface.setter
     def surface (self, sfc):
         if sfc is not None and not isinstance(sfc, pg.Surface):
-            sfc = pg.Surface(sfc)
+            sfc = pg.Surface(sfc).convert_alpha()
+            sfc.fill((0, 0, 0, 0))
         if sfc is not self._surface:
             self._surface = sfc
             if sfc is not None:
