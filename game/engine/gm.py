@@ -3,7 +3,6 @@
 ---NODOC---
 
 TODO:
- [BUG] eg. .rescale(.1).rescale(1) leaves at .1
  [BUG] GM not at (0, 0) is broken
  - Graphic.rescale_to(w, h): scale to w/h with constant AR
  - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
@@ -597,6 +596,7 @@ indicate this.
             if not exist:
                 # add to transforms anyway
                 ts[transform_fn] = (args, sfc, None, None)
+            self._set_sfc(new_sfc)
         else:
             if builtin:
                 if apply_fn is not None:
