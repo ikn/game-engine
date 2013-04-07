@@ -3,7 +3,6 @@
 ---NODOC---
 
 TODO:
- - Graphic.rescale_to(w, h): scale to w/h with constant AR
  - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
  - GraphicsManager.overlay, .fade
  - performance:
@@ -751,21 +750,31 @@ No scaling occurs in omitted dimensions.
 """
         return self.transform('resize', w, h, about)
 
-    def rescale (self, w = None, h = None, about = (0, 0)):
+    def rescale (self, w = 1, h = 1, about = (0, 0)):
         """A convenience wrapper around resize to scale by a ratio.
 
-rescale([w][, h], about = (0, 0)) -> self
+rescale(w = 1, h = 1, about = (0, 0)) -> self
 
-Arguments are as taken by :meth:`resize`, but ``w`` and ``h`` are ratios of the
-size before scaling.
+:arg w: the new width; ratio of the width before scaling.
+:arg h: the new height; ratio of the height before scaling.
+:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
+            scale about.
 
 """
-        if w is None:
-            w = 1
-        if h is None:
-            h = 1
         ow, oh = self.sfc_before_transform('resize').get_size()
         return self.resize(ir(w * ow), ir(h * oh), about)
+
+    def rescale_both (self, scale = 1, about = (0, 0)):
+        """A convenience wrapper around rescale to scale the same on both axes.
+
+rescale_both(scale = 1, about = (0, 0)) -> self
+
+:arg scale: ratio to scale both width and height by.
+:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
+            scale about.
+
+"""
+        return self.rescale(scale, scale, about)
 
     def _crop (self, sfc, last, rect):
         """Backend for crop."""
