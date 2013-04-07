@@ -4,8 +4,8 @@
 
 TODO:
  - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
- - GraphicsManager.fade
  - performance:
+    - fading is really slow (should directly fill instead of fill/blit)
     - ignore off-screen things
     - reduce number of rects created by mk_disjoint
     - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
@@ -977,8 +977,10 @@ move_by(dx = 0, dy = 0)
 class GraphicsManager (Graphic):
     """Draws things to a surface intelligently.  :class:`Graphic` subclass.
 
-GraphicsManager([sfc], pos = (0, 0), layer = 0, blit_flags = 0)
+GraphicsManager(scheduler[, sfc], pos = (0, 0), layer = 0, blit_flags = 0)
 
+:arg scheduler: a :class:`sched.Scheduler` instance this manager should use for
+                timing.
 :arg sfc: the surface to draw to; can be a ``(width, height)`` tuple to create
           a new transparent surface of this size.  If not given or ``None``,
           nothing is drawn.
@@ -989,12 +991,16 @@ transformations.
 
 """
 
-    def __init__ (self, sfc = None, pos = (0, 0), layer = 0, blit_flags = 0):
+    def __init__ (self, scheduler, sfc = None, pos = (0, 0), layer = 0,
+                  blit_flags = 0):
+        #: The ``scheduler`` argument passed to the constructor.
+        self.scheduler = scheduler
         self._init_as_graphic = False
         self._init_as_graphic_args = (pos, layer, blit_flags)
         self._surface = None
         self.surface = sfc
         self._overlay = None
+        self._fade_id = None
         #: ``{layer: graphics}`` dict, where ``graphics`` is a set of the
         #: graphics in layer ``layer``, each as taken by :meth:`add`.
         self.graphics = {}
@@ -1108,6 +1114,37 @@ Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
                 graphics.extend(g.contents)
         self.layers = sorted(ls)
 
+    def fade_to (self, colour, t):
+        """Fade to a colour.
+
+:arg colour: the ``(R, G, B[, A = 255])`` colour to fade to.
+:arg t: how many seconds to take to reach ``colour``.
+
+If already fading, the current colour is used as the initial colour; otherwise,
+the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
+``colour``.  After fading, the overlay persists; set :attr:`overlay` to
+``None`` to remove it.
+
+"""
+        colour = list(colour)
+        if len(colour) < 4:
+            colour.append(255)
+        if self._fade_id is None:
+            # doesn't already exist
+            self.overlay = Colour(colour[:3] + [0], ((0, 0), self._rect.size))
+        else:
+            self.cancel_fade()
+        self._fade_id = self.scheduler.interp_simple(self._overlay, 'colour',
+                                                     colour, t,
+                                                     round_val = True)
+
+    def cancel_fade (self):
+        """Cancel any currently running fade and remove the overlay."""
+        if self._fade_id is not None:
+            self.scheduler.rm_timeout(self._fade_id)
+            self._fade_id = None
+            self.overlay = None
+
     def dirty (self, *rects, **kw):
         """Force redrawing some or all of the screen.
 
@@ -1201,9 +1238,9 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
         if last_args is not None:
             # compare colours
             lcolour = last_args[0]
-            lr, lg, lb = lcolour
+            lr, lg, lb = lcolour[:3]
             la = 255 if len(lcolour) < 4 else lcolour[3]
-            r, g, b = colour
+            r, g, b = colour[:3]
             a = 255 if len(colour) < 4 else colour[3]
             if (lr, lg, lb, la) == (r, g, b, a):
                 return

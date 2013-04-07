@@ -72,7 +72,7 @@ World(scheduler, evthandler)
         #: :class:`eh.EventHandler` instance taken by the constructor.
         self.evthandler = evthandler
         #: :class:`gm.GraphicsManager` instance used for drawing by default.
-        self.graphics = gm.GraphicsManager()
+        self.graphics = gm.GraphicsManager(scheduler)
         self._initialised = False
 
     def _select (self):

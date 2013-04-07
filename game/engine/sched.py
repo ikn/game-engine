@@ -96,7 +96,9 @@ interp_linear(*waypoints) -> f
                 we interpolate for each number in the nested list structure of
                 ``v``.  Some objects in the ``v`` structures may be
                 non-numbers, in which case they will not be varied (maybe your
-                function takes another argument you don't want to vary).
+                function takes another argument you don't want to vary);
+                objects may be ``None`` to always use the initial value in that
+                position.
 
 :return: a function for which ``f(t) = v`` for every waypoint ``(t, v)``, with
          intermediate values linearly interpolated between waypoints.
@@ -132,8 +134,8 @@ interp_linear(*waypoints) -> f
         dt = float(ts[i1] - t0) / (i1 - (i0 - 1))
         for i in xrange(i0, i1):
             ts[i] = t0 + dt * (i - (i0 - 1))
-    interp_val = lambda r, v1, v2: (r * (v2 - v1) + v1) \
-                                   if isinstance(v1, (int, float)) else v1
+    interp_val = lambda r, v1, v2, v0: (r * (v2 - v1) + v1) \
+                                       if isinstance(v2, (int, float)) else v0
 
     def val_gen ():
         t = yield
@@ -145,17 +147,19 @@ interp_linear(*waypoints) -> f
                 t = yield vs[0]
             elif i == len(ts):
                 # past end: use final value, then end
-                t = yield vs[-1]
+                last_val = lambda vl, v0: vl if isinstance(vl, (int, float)) \
+                                             else v0
+                t = yield call_in_nest(last_val, vs[-1], vs[0])
                 yield None # to avoid StopIteration issues
                 return
             else:
-                v0 = vs[i - 1]
-                v1 = vs[i]
-                t0 = ts[i - 1]
-                t1 = ts[i]
+                v1 = vs[i - 1]
+                v2 = vs[i]
+                t1 = ts[i - 1]
+                t2 = ts[i]
                 # get ratio of the way between waypoints
-                r = 1 if t1 == t0 else (t - t0) / (t1 - t0) # t is always float
-                t = yield call_in_nest(interp_val, r, v0, v1)
+                r = 1 if t2 == t1 else (t - t1) / (t2 - t1) # t is always float
+                t = yield call_in_nest(interp_val, r, v1, v2, vs[0])
 
     # start the generator; get_val is its send method
     g = val_gen()
