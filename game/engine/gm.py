@@ -4,14 +4,11 @@
 
 TODO:
  - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
- - GraphicsManager.overlay, .fade
+ - GraphicsManager.fade
  - performance:
-    - updating in rects is slow with lots of rects - if more than 60, return True instead (and remove similar code in game.Game._update)
     - ignore off-screen things
     - reduce number of rects created by mk_disjoint
-    - if GM is fully dirty, draw everything without any rect checks (but still nothing under opaque)
-    - something to duplicate a graphic, changing position only?  Maybe only images?
-    - GM.busy to redraw all every frame
+    - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
     - can set/unset a scroll function to call every draw
@@ -58,9 +55,9 @@ Graphic(img, pos, layer = 0, blit_flags = 0)
 :arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.
 :arg pos: initial ``(x, y)`` position.
 :arg layer: the layer to draw in, lower being closer to the 'front'. This can
-            actually be any hashable object, as long as all layers used in the
-            same :class:`GraphicsManager` can be ordered with respect to each
-            other.
+            actually be any hashable object except ``None``, as long as all
+            layers used in the same :class:`GraphicsManager` can be ordered
+            with respect to each other.
 :arg blit_flags: when blitting the surface to the screen, this is passed as the
                  ``special_flags`` argument.
 
@@ -369,7 +366,10 @@ May be ``None``.  This may be changed directly.  (A graphic should only be used 
     def manager (self, manager):
         if self._manager is not None:
             self._manager.rm(self)
-        manager.add(self) # changes value in _manager
+        if manager is not None:
+            manager.add(self) # changes value in _manager
+        else:
+            self._manager = None
 
     @property
     def layer (self):
@@ -994,6 +994,7 @@ transformations.
         self._init_as_graphic_args = (pos, layer, blit_flags)
         self._surface = None
         self.surface = sfc
+        self._overlay = None
         #: ``{layer: graphics}`` dict, where ``graphics`` is a set of the
         #: graphics in layer ``layer``, each as taken by :meth:`add`.
         self.graphics = {}
@@ -1025,6 +1026,31 @@ Set this directly (can be ``None`` to do nothing).
                     self._init_as_graphic = True
                     del self._init_as_graphic_args
 
+    @property
+    def overlay (self):
+        """A :class:`Graphic` which is always drawn on top, or ``None``.
+
+There may only every be one overlay; changing this attribute removes any
+previous overlay from the :class:`GraphicsManager`.
+
+"""
+        return self._overlay
+
+    @overlay.setter
+    def overlay (self, overlay):
+        # remove any previous overlay
+        if self._overlay is not None:
+            self.rm(self._overlay)
+        # set now since used in add()
+        self._overlay = overlay
+        if overlay is not None:
+            # remove any current manager
+            overlay.manager = None
+            # put in the reserved layer None (sorts less than any other object)
+            overlay._layer = None
+            # add to this manager
+            self.add(overlay)
+
     def add (self, *graphics):
         """Add graphics.
 
@@ -1038,6 +1064,8 @@ Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
             if isinstance(g, Graphic):
                 # add to graphics
                 l = g.layer
+                if l is None and g is not self._overlay:
+                    raise ValueError('a graphic\'s layer must not be None')
                 if l in ls:
                     all_gs[l].add(g)
                 else:
