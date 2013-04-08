@@ -3,15 +3,13 @@
 ---NODOC---
 
 TODO:
- - resize, rotate don't transform if only 'about' changes - return (sfc, new_apply_fn, new_undo_fn)
  - performance:
-    - fading is really slow (should directly fill instead of fill/blit)
+    - fading is really slow - maybe Colour should only create surface if transformed or blitted more than twice
     - ignore off-screen things
     - reduce number of rects created by mk_disjoint
     - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
-    - can set/unset a scroll function to call every draw
     - implementation:
         - in first loop, for each graphic, offset _rect by -offset
         - when using, offset old graphic dirty rects by -last_offset, current by -offset

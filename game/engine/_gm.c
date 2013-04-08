@@ -53,7 +53,8 @@ int set_add (int *arr, int n, int x) {
 
 PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
     // both arguments are [pygame.Rect]
-    int n_rects[2], n_edges[2], i, j, k, l, row0, row1, col0, col1;
+    int n_rects[2], n_edges[2], i, j, k, l, row0, row1, col0, col1, in_rect,
+        r_i, r_left, w, h;
     PyRectObject** rects[2];
     GAME_Rect r;
     int* edges[2], * grid;
@@ -109,18 +110,45 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
     }
     // generate subrects
     rs = PyList_New(0);
+    in_rect = 0;
     for (i = 0; i < n_edges[1] - 1; i++) { // rows
         for (j = 0; j < n_edges[0] - 1; j++) { // cols
-            if (grid[(n_edges[0] - 1) * i + j] == 3) { // add and not rm
-                k = edges[0][j];
-                l = edges[1][i];
+            if (in_rect && i != r_i) {
+                // on a different row: rect ended
+                in_rect = 0;
+                k = edges[1][r_i];
                 // NOTE: ref[+3]
-                r_o = PyRect_New4(k, l, edges[0][j + 1] - k,
-                                  edges[1][i + 1] - l);
+                r_o = PyRect_New4(r_left, k, edges[0][n_edges[0] - 1] - r_left,
+                                  edges[1][r_i + 1] - k);
+                PyList_Append(rs, r_o);
+                Py_DECREF(r_o); // NOTE: ref[-3]
+            }
+            if (grid[(n_edges[0] - 1) * i + j] == 3) { // add and not rm
+                if (!in_rect) {
+                    in_rect = 1;
+                    r_i = i;
+                    r_left = edges[0][j];
+                }
+            } else if (in_rect) {
+                // rect ended
+                in_rect = 0;
+                k = edges[1][r_i];
+                // NOTE: ref[+3]
+                r_o = PyRect_New4(r_left, k, edges[0][j] - r_left,
+                                  edges[1][r_i + 1] - k);
                 PyList_Append(rs, r_o);
                 Py_DECREF(r_o); // NOTE: ref[-3]
             }
         }
+    }
+    if (in_rect) {
+        // last rect ended
+        k = edges[1][r_i];
+        // NOTE: ref[+3]
+        r_o = PyRect_New4(r_left, k, edges[0][n_edges[0] - 1] - r_left,
+                          edges[1][r_i + 1] - k);
+        PyList_Append(rs, r_o);
+        Py_DECREF(r_o); // NOTE: ref[-3]
     }
     // cleanup
     PyMem_Free(grid); // NOTE: alloc[-2]

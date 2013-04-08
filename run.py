@@ -17,8 +17,8 @@ if __name__ == '__main__':
         op = OptionParser(prog = 'run')
         op.add_option('-b', '--debug', action = 'store_true', dest = 'debug')
         op.add_option('-p', '--profile', action = 'store_true')
-        op.add_option('-t', '--profile-time', action = 'store', type = 'float',
-                      help = 'float seconds to profile for; defaults to 5')
+        op.add_option('-t', '--time', action = 'store', type = 'float',
+                      help = 'float seconds to run for')
         op.add_option('-n', '--num-stats', action = 'store', type = 'int',
                       help = 'number of functions to show when profiling; ' \
                       'defaults to 30')
@@ -27,7 +27,7 @@ if __name__ == '__main__':
         op.add_option('-s', '--sort-stats', action = 'store', type = 'string',
                       help = 'profile stats sort mode; defaults to ' \
                       '\'cumulative\' (see pstats.Stats.sort_stats doc)')
-        op.set_defaults(debug = False, profile_time = 5, num_stats = 30,
+        op.set_defaults(debug = False, time = None, num_stats = 30,
                         profile_file = '.profile_stats', sort_stats = 'cumulative')
         options = op.parse_args()[0]
         # debug
@@ -39,13 +39,13 @@ if __name__ == '__main__':
             from cProfile import run
             from pstats import Stats
             args = ', '.join(repr(arg) for arg in args)
-            code = 'engine.game.run(entry_world, {0}t = options.profile_time)'
+            code = 'engine.game.run(entry_world, {0}t = options.time)'
             run(code.format(args), options.profile_file, locals())
             Stats(options.profile_file).strip_dirs() \
                 .sort_stats(options.sort_stats).print_stats(options.num_stats)
             os.unlink(options.profile_file)
         else:
-            engine.game.run(entry_world, *args)
+            engine.game.run(entry_world, *args, t = options.time)
     else:
         engine.game.run(entry_world)
 
