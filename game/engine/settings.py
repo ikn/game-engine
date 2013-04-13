@@ -1,6 +1,7 @@
-"""Settings module.
+"""Settings handling.
 
-Use DummySettingsManager or SettingsManager (syncs to disk).
+Provides :class:`DummySettingsManager` and :class:`SettingsManager` (syncs to
+disk).
 
 """
 
@@ -27,7 +28,7 @@ class DummySettingsManager (object):
 
     CONSTRUCTOR
 
-DummySettingsManager(settings[, types])
+DummySettingsManager(settings, types = {})
 
 settings: a dict used to store the settings, which are already set to default
           values.
@@ -44,16 +45,17 @@ dump
 
 """
 
-    def __init__ (self, settings, types):
-        self._settings = settings
-        self._defaults = deepcopy(settings)
-        self._types = ts = {}
-        for k, v in self._settings.iteritems():
-            if v is None:
-                ts[k] = None
-            else:
-                t = type(v)
-                ts[k] = types.get(t, t)
+    def __init__ (self, settings, types = {}):
+        self._settings = {}
+        self._defaults = {}
+        self._types = {}
+        self._tricky_types = types
+        self.add(settings)
+
+    def add (self, settings):
+        """Add more settings; takes a dict like the constructor."""
+        for k, v in settings.iteritems():
+            setattr(self, k, v)
 
     def __getattr__ (self, k):
         return self._settings[k]
@@ -64,13 +66,13 @@ dump
             self.__dict__[k] = v
             return (True, None)
         # ensure type
-        t = self._types[k]
+        t = self._types.get(k)
         if t is None:
-            # default is None
-            t = type(v)
-            if t is not None:
-                # but new value isn't: use as new type
-                self._types[k] = t
+            # new setting: use as new default
+            self._defaults[k] = deepcopy(v)
+            if v is not None:
+                t = type(v)
+                self._types[k] = self._tricky_types.get(t, t)
         elif not isinstance(v, t):
             try:
                 v = t(v)
@@ -80,7 +82,7 @@ dump
                       'back to default'.format(repr(v), k)
                 v = self._defaults[k]
         # check if different
-        if v == self._settings[k]:
+        if k in self._settings and v == self._settings[k]:
             return (True, None)
         # store
         self._settings[k] = v
@@ -99,40 +101,56 @@ class SettingsManager (DummySettingsManager):
 
     CONSTRUCTOR
 
-SettingsManager(settings, fn, save[, types])
+SettingsManager(settings, fn, save = (), types = {})
 
 settings, types: as take by DummySettingsManager.
 fn: filename to save settings in.
 save: a list containing the names of the settings to save to fn (others are
       stored in memory only).
 
+
+    METHODS
+
+
+
 """
 
-    def __init__ (self, settings, fn, save, types = {}):
-        DummySettingsManager.__init__(self, settings, types)
-        self._fn = fn
-        # create directory
-        d = os.path.dirname(fn)
-        try:
-            os.makedirs(d)
-        except OSError, e:
-            if e.errno != 17: # 17 means already exists
-                print 'warning: can\'t create directory: \'{0}\''.format(d)
+    def __init__ (self, settings, fn, save = (), types = {}):
         # load settings
         try:
             with open(fn) as f:
-                settings = json.load(f)
+                new_settings = json.load(f)
         except IOError:
-            print 'warning: can\'t read file: \'{0}\''.format(self._fn)
-            settings = {}
+            new_settings = {}
         except ValueError:
             print 'warning: invalid JSON: \'{0}\''.format(self._fn)
-            settings = {}
-        for k, v in settings.iteritems():
+            new_settings = {}
+        for k, v in new_settings.iteritems():
             if k in save:
-                DummySettingsManager.__setattr__(self, k, v)
-        settings = self._settings
-        self._save = dict((k, settings[k]) for k in save)
+                settings[k] = v
+        # initialise
+        self._fn = fn
+        self._save = {}
+        DummySettingsManager.__init__(self, settings, types)
+        self.save(*save)
+
+    def save (self, *save):
+        """Register more settings for saving to disk.
+
+Takes any number of strings corresponding to setting names.  Does not save
+existing settings, only those changed later.
+
+"""
+        if save:
+            # create directory
+            d = os.path.dirname(self._fn)
+            try:
+                os.makedirs(d)
+            except OSError, e:
+                if e.errno != 17: # 17 means already exists
+                    print 'warning: can\'t create directory: \'{0}\''.format(d)
+            settings = self._settings
+            self._save.update((k, settings.get(k)) for k in save)
 
     def __setattr__ (self, k, v):
         done, v = DummySettingsManager.__setattr__(self, k, v)

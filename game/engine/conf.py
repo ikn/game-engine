@@ -2,12 +2,12 @@ import sys
 from platform import system
 import os
 from os.path import sep, expanduser, join as join_path
-from collections import defaultdict
 from glob import glob
+from collections import defaultdict
 
 import pygame as pg
 
-import _settings
+import settings
 from util import dd
 
 
@@ -16,8 +16,6 @@ class Conf (object):
     # the Game instance; should only really be used to load media with caching
     GAME = None
     IDENT = 'game'
-    USE_SAVEDATA = False
-    SAVE = ()
     FPS = dd(60) # per-backend
     DEBUG = False
 
@@ -56,7 +54,6 @@ class Conf (object):
     RESIZABLE = True # also determines whether fullscreen togglable
     RES_W = (960, 540)
     RES_F = None
-    RES = RES_W
     MIN_RES_W = (320, 180)
     ASPECT_RATIO = None
 
@@ -103,12 +100,11 @@ def _translate_dd (d):
     else:
         # should be (default, dict)
         return dd(*d)
+
+
 conf = dict((k, v) for k, v in Conf.__dict__.iteritems()
             if k.isupper() and not k.startswith('__'))
-types = {
+_types = {
     defaultdict: _translate_dd
 }
-if Conf.USE_SAVEDATA:
-    conf = _settings.SettingsManager(conf, Conf.CONF, Conf.SAVE, types)
-else:
-    conf = _settings.DummySettingsManager(conf, types)
+conf = settings.SettingsManager(conf, Conf.CONF, (), _types)

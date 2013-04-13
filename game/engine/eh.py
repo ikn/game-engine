@@ -6,6 +6,7 @@ callbacks to events and keypresses.
 ---NODOC---
 
  - input recording and playback would be good
+ - joy axes as buttons: direction, threshold
 
  - Event(*evts)
     - evts is one or more pg.Events
