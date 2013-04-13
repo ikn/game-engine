@@ -22,7 +22,7 @@ Now, on systems with a sh-compatible shell, do
 
     ./run
 
-On other systems (Windows, for example), run game.py with your Python 2
+On other systems (Windows, for example), run run.py with your Python 2
 executable.
 
     CONTROLS

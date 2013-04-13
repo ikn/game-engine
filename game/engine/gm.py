@@ -3,10 +3,10 @@
 ---NODOC---
 
 TODO:
+ - Graphic.resize_both([w][, h])
  - performance:
     - fading is really slow - maybe Colour should only create surface if transformed or blitted more than twice
     - ignore off-screen things
-    - reduce number of rects created by mk_disjoint
     - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
@@ -48,10 +48,12 @@ from _gm import fastdraw
 class Graphic (object):
     """Something that can be drawn to the screen.
 
-Graphic(img, pos, layer = 0, blit_flags = 0)
+Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
 
 :arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.
-:arg pos: initial ``(x, y)`` position.
+:arg pos: initial ``(x, y)`` position.  The existence of a default is because
+          you might use :meth:`align` immediately on adding to a
+          :class:`GraphicsManager`.
 :arg layer: the layer to draw in, lower being closer to the 'front'. This can
             actually be any hashable object except ``None``, as long as all
             layers used in the same :class:`GraphicsManager` can be ordered
@@ -75,7 +77,7 @@ builtin transforms (see :meth:`transform`).
 
     _builtin_transforms = ('crop', 'flip', 'resize', 'rotate')
 
-    def __init__ (self, img, pos, layer = 0, blit_flags = 0):
+    def __init__ (self, img, pos = (0, 0), layer = 0, blit_flags = 0):
         if isinstance(img, basestring):
             #: Filename of the loaded image, or ``None`` if a surface was
             #: given.
@@ -1185,7 +1187,7 @@ changed parts of the surface, or ``False`` if nothing changed.
         # draw to it
         drawn = self.draw()
         if drawn:
-            # dirty as Graphic (might not happen in reapply_transform)
+            # dirty as Graphic (might not happen in reapply_transforms)
             dirty = self._dirty
             pos = self._postrot_rect[:2]
             for r in drawn:

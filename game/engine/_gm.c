@@ -54,7 +54,7 @@ int set_add (int *arr, int n, int x) {
 PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
     // both arguments are [pygame.Rect]
     int n_rects[2], n_edges[2], i, j, k, l, row0, row1, col0, col1, in_rect,
-        r_i, r_left, w, h;
+        r_i, r_left;
     PyRectObject** rects[2];
     GAME_Rect r;
     int* edges[2], * grid;
