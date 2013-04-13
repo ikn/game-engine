@@ -26,22 +26,15 @@ class _JSONEncoder (json.JSONEncoder):
 class DummySettingsManager (object):
     """An object for handling settings.
 
-    CONSTRUCTOR
+:arg settings: a dict used to store the settings.
+:arg types: the types of settings are preserved when changes are made by
+            casting to their initial types.  For types for which this will not
+            work, this argument can be passed as a ``{from_type: to_type}``
+            dict to use ``to_type`` whenever ``from_type`` would otherwise be
+            used.
 
-DummySettingsManager(settings, types = {})
-
-settings: a dict used to store the settings, which are already set to default
-          values.
-types: the types of settings are preserved when changes are made by casting to
-       their initial types.  For types for which this will not work, this
-       argument can be passed as a {from_type: to_type} dict to use to_type
-       whenever from_type would otherwise be used.
-
-To restore a setting to its default value, delete it.
-
-    METHODS
-
-dump
+To access and change settings, use attributes of this object.  To restore a
+setting to its default (initial) value, delete it.
 
 """
 
@@ -97,21 +90,11 @@ dump
 
 
 class SettingsManager (DummySettingsManager):
-    """An object for handling settings; DummySettingsManager subclass.
+    """An object for handling settings; :class:`DummySettingsManager` subclass.
 
-    CONSTRUCTOR
-
-SettingsManager(settings, fn, save = (), types = {})
-
-settings, types: as take by DummySettingsManager.
-fn: filename to save settings in.
-save: a list containing the names of the settings to save to fn (others are
-      stored in memory only).
-
-
-    METHODS
-
-
+:arg fn: filename to save settings in.
+:arg save: a list containing the names of the settings to save to ``fn``
+          (others are stored in memory only).
 
 """
 
@@ -163,7 +146,11 @@ existing settings, only those changed later.
             self.dump(False)
 
     def dump (self, public = True):
-        """Force saving all settings."""
+        """Force saving all settings.
+
+dump()
+
+"""
         if public:
             print 'info: saving settings'
         try:

@@ -350,17 +350,15 @@ Timer(fps = 60)
 
 :arg fps: frames per second to aim for.
 
-Either call :meth:`run` once and :meth:`stop` if you need to, or :meth:`step`
-every time you've done what you need to.
-
 """
 
     def __init__ (self, fps = 60):
         #: The current length of a frame in seconds.
         self.frame = None
         self.fps = fps
-        #: The time at the last step, if using individual steps.
-        self.t = time()
+        #: The amount of time in seconds that has elapsed since the start of
+        #: the current call to :meth:`run`, if any.
+        self.t = 0
 
     @property
     def fps (self):
@@ -393,7 +391,8 @@ it does not necessarily reflect real time.
          This may be less than ``0`` if ``cb`` took a long time to run.
 
 """
-        self.stopped = False
+        self.t = 0
+        self._stopped = False
         seconds = kwargs.get('seconds')
         frames = kwargs.get('frames')
         if seconds is not None:
@@ -407,7 +406,7 @@ it does not necessarily reflect real time.
             cb(*args)
             t = time()
             t_gone = min(t - t0, frame)
-            if self.stopped:
+            if self._stopped:
                 if seconds is not None:
                     return seconds - t_gone
                 elif frames is not None:
@@ -424,6 +423,7 @@ it does not necessarily reflect real time.
                 t0 = t + t_left
             else:
                 t0 = t
+            self.t += frame
             if seconds is not None:
                 seconds -= t_gone + t_left
                 if seconds <= 0:
@@ -433,19 +433,9 @@ it does not necessarily reflect real time.
                 if frames <= 0:
                     return frames
 
-    def step (self):
-        """Step forwards one frame."""
-        t = time()
-        t_left = self.t + self.frame - t
-        if t_left > 0:
-            wait(int(1000 * t_left))
-            self.t = t + t_left
-        else:
-            self.t = t
-
     def stop (self):
-        """Stop any current call to :meth:`run`."""
-        self.stopped = True
+        """Stop the current call to :meth:`run`, if any."""
+        self._stopped = True
 
 
 class Scheduler (Timer):
@@ -472,10 +462,6 @@ Arguments and return value are as for :meth:`Timer.run`.
 """
         return Timer.run(self, self._update, seconds = seconds,
                          frames = frames)
-
-    def step (self):
-        self._update()
-        Timer.step(self)
 
     def add_timeout (self, cb, *args, **kwargs):
         """Call a function after a delay.
