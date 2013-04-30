@@ -1,4 +1,3 @@
-todo
 build/*
 game/engine/_gm.so
 *.py[co]

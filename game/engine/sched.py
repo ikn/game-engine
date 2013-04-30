@@ -231,7 +231,7 @@ interp_target(v0, target, damp, freq = 0, speed = 0, threshold = 0) -> f
 def interp_shake (centre, amplitude = 1, threshold = 0, signed = True):
     """Shake randomly.
 
-interp(centre, amplitude = 1, threshold = 0, signed = True) -> f
+interp_shake(centre, amplitude = 1, threshold = 0, signed = True) -> f
 
 :arg centre: the value to shake about; a nested list (a structure of numbers
              like arguments to :func:`call_in_nest`).  Elements which are not
