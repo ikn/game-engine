@@ -34,6 +34,7 @@ Tilemap
 
 """
 
+import sys
 from math import sin, cos, pi
 from collections import OrderedDict
 
@@ -42,7 +43,11 @@ from pygame import Rect
 
 from conf import conf
 from util import ir
-from _gm import fastdraw
+try:
+    from _gm import fastdraw
+except ImportError:
+    print >> sys.stderr, 'error: couldn\'t import _gm; did you remember to `make\'?'
+    sys.exit(1)
 
 
 class Graphic (object):
@@ -673,6 +678,10 @@ builtin transform.
                     ts[fn] = (args, self._surface, apply_fn, undo_fn)
                 else:
                     self.transform(fn, *args)
+
+    def orig_sfc (self):
+        """Return surface before any transforms."""
+        return self.sfc_before_transform(self.transforms[0])
 
     def sfc_before_transform (self, transform_fn):
         """Return surface before the given transform.
