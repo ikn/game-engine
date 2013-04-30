@@ -11,6 +11,7 @@ from game.level import Level as entry_world
 if __name__ == '__main__':
     engine.init()
 
+    args = ()
     if len(argv) > 1:
         # got some command-line arguments
         from optparse import OptionParser
@@ -33,7 +34,6 @@ if __name__ == '__main__':
         # debug
         engine.conf.DEBUG = options.debug
         # construct world args
-        args = ()
         # run game
         if options.profile:
             from cProfile import run
@@ -47,6 +47,6 @@ if __name__ == '__main__':
         else:
             engine.game.run(entry_world, *args, t = options.time)
     else:
-        engine.game.run(entry_world)
+        engine.game.run(entry_world, *args)
 
     engine.quit()

@@ -66,23 +66,30 @@ World(scheduler, evthandler)
     #: ``type(world).__name__.lower()`` will be used.
     id = None
 
-    def __init__ (self, scheduler, evthandler):
+    def __init__ (self, scheduler, evthandler, *args):
         #: :class:`sched.Scheduler` instance taken by the constructor.
         self.scheduler = scheduler
         #: :class:`eh.EventHandler` instance taken by the constructor.
         self.evthandler = evthandler
         #: :class:`gm.GraphicsManager` instance used for drawing by default.
         self.graphics = gm.GraphicsManager(scheduler)
+        self._extra_args = args
         self._initialised = False
 
     def _select (self):
         if not self._initialised:
-            self.init()
+            self.init(*self._extra_args)
             self._initialised = True
+            del self._extra_args
         self.select()
 
     def init (self):
-        """Called when this first becomes the active world."""
+        """Called when this first becomes the active world.
+
+This receives the extra arguments passed in constructing the world through the
+:class:`Game` instance.
+
+"""
         pass
 
     def select (self):
