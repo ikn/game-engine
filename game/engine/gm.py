@@ -608,7 +608,7 @@ indicate this.
                                               'only return None if it was ' \
                                               'passed last_args'
                 args = last_args
-            self._set_sfc(new_sfc)
+            sfc_set = False
             ts[transform_fn] = (args, sfc, apply_fn, undo_fn)
             if position is not None:
                 # reapply from this transform onwards: call after setting
@@ -618,7 +618,11 @@ indicate this.
                 self._transforms = OrderedDict(ts[:position + 1])
                 for fn, (args, sfc, apply_fn, undo_fn) in ts[position + 1:]:
                     if args is not None:
+                        sfc_set = True
                         self.transform(fn, *args)
+            if not sfc_set:
+                # haven't set the surface yet
+                self._set_sfc(new_sfc)
             self._mk_dirty()
         return self
 
