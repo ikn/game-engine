@@ -685,7 +685,11 @@ builtin transform.
 
     def orig_sfc (self):
         """Return surface before any transforms."""
-        return self.sfc_before_transform(self.transforms[0])
+        ts = self._transforms
+        if ts:
+            return ts[next(ts.iterkeys())][1]
+        else:
+            return self._surface
 
     def sfc_before_transform (self, transform_fn):
         """Return surface before the given transform.
@@ -905,6 +909,18 @@ rotate(angle[, about]) -> self
 
 """
         return self.transform('rotate', angle, about)
+
+    def dirty (self, *rects):
+        """Mark some or all of the graphic as changed.
+
+This is to be used when you alter the original surface (obtained by
+:meth:`orig_sfc`) - do not alter any other (transformed) surfaces.  Takes any
+number of rects to flag as dirty.  If none are given, the whole of the graphic
+is flagged.
+
+"""
+        self.reapply_transform()
+        self._mk_dirty()
 
     def _mk_dirty (self):
         """Mark as dirty."""
