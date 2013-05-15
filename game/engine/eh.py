@@ -13,7 +13,8 @@ callbacks to events and keypresses.
     - call cbs at most once per frame
     - has .cb(cb, *args, **kwargs) - can do multiple times
         - returns self, so can pass Event(...).cb(...) to EventHandler.add
-     - cbs get Event (but use function.func_code.co_{varnames,argcount} to check if takes any, and only then pass it)
+     - cbs get Event (but use function.func_code.co_{varnames,argcount} to
+       check if takes any, and only then pass it)
  - Button(type, device, btn, *mods)
     - go to .type (kb, mouse, joy), .device (ie. joy number), .btn (key/btn id)
     - key(btn, *mods), mouse(btn, *mods), joy(device, btn, *mods) return Button
@@ -23,7 +24,8 @@ callbacks to events and keypresses.
     - buttons are Buttons or Button argument tuples
     - evt is bitwise or of one or more of down, up, held
     - has .held_delay = 1 (>= 0), .held_repeat_delay = 1 (> 0)
-    - key_event, mouse_event, joy_event return ButtonEvent and use key, mouse, joy instead of Button (but can take Buttons too)
+    - key_event, mouse_event, joy_event return ButtonEvent and use key, mouse,
+      joy instead of Button (but can take Buttons too)
     - when call cb, set self.evt to one of down, held, up
     - calls cbs at most once per frame per evt type
  - can register new button types
@@ -303,9 +305,11 @@ Call this every frame.
                     up_mods[event.key] = event.mod
         pressed = pygame.key.get_pressed()
         # for some reason this is faster than set(genexpr)
-        self.keys_pressed = set([i for i in xrange(len(pressed)) if pressed[i]])
+        self.keys_pressed = set([i for i in xrange(len(pressed))
+                                 if pressed[i]])
         # update repeated key counts
-        held = (self._keys_handled[2] | self._keys_handled[4]) & self.keys_pressed
+        held = (self._keys_handled[2] | self._keys_handled[4]) & \
+               self.keys_pressed
         for k in set(self.repeat_count) - held:
             # no longer being held
             del self.repeat_count[k]
@@ -338,5 +342,6 @@ Call this every frame.
                             # a key might be used for both repeating and not
                             # repeating modes, and both uses will end up here
                             continue
-                        if count >= initial and (count - initial) % repeat == 0:
+                        if count >= initial and \
+                           (count - initial) % repeat == 0:
                             self._call_key_cbs(cbs, key_data, 2, pressed_mods)

@@ -60,6 +60,7 @@ class Conf (object):
     ASPECT_RATIO = None
 
     # input
+    KEYS_QUIT = ((pg.K_F4, pg.KMOD_ALT, True),)
     KEYS_MINIMISE = (pg.K_F10,)
     KEYS_FULLSCREEN = (pg.K_F11, (pg.K_RETURN, pg.KMOD_ALT, True),
                     (pg.K_KP_ENTER, pg.KMOD_ALT, True))

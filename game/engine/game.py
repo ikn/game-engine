@@ -180,6 +180,7 @@ should be passed to that base class).
             pg.VIDEORESIZE: self._resize_cb,
             conf.EVENT_ENDMUSIC: self.play_music
         }, [
+            (conf.KEYS_QUIT, self.quit, eh.MODE_ONDOWN),
             (conf.KEYS_FULLSCREEN, self.toggle_fullscreen, eh.MODE_ONDOWN),
             (conf.KEYS_MINIMISE, self.minimise, eh.MODE_ONDOWN)
         ], False, self.quit)
