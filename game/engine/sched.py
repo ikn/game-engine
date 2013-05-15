@@ -543,12 +543,12 @@ will not be called again.
                 elif i in cbs: # else removed in above call
                     del cbs[i]
 
-    def interp (self, get_val, set_val, t_max = None, val_min = None,
-                val_max = None, end = None, round_val = False, multi_arg = False):
+    def interp (self, get_val, set_val, t_max = None, bounds = None,
+                end = None, round_val = False, multi_arg = False):
         """Vary a value over time.
 
-interp(get_val, set_val[, t_max][, val_min][, val_max][, end],
-       round_val = False, multi_arg = False) -> timeout_id
+interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
+       multi_arg = False) -> timeout_id
 
 :arg get_val: a function called with the elapsed time in seconds to obtain the
               current value.  If this function returns ``None``, the
@@ -557,11 +557,11 @@ interp(get_val, set_val[, t_max][, val_min][, val_max][, end],
 :arg set_val: a function called with the current value to set it.  This may
               also be an ``(obj, attr)`` tuple to do ``obj.attr = val``.
 :arg t_max: if time becomes larger than this, cancel the interpolation.
-:arg val_min: minimum value of the interpolated value.  If given, ``get_val``
-              must only return values that can be compared with these.  If the
-              value is ever smaller than this, ``set_val`` is called with
-              ``val_min`` and the interpolation is canceled.
-:arg val_max: maximum value of the interpolated value (like ``val_min``).
+:arg bounds: a function that takes the value returned from ``get_val`` and
+             checks if it is outside of some boundaries, and returns the
+             boundary value ``bdy`` if so (else None).  If the value falls out
+             of bounds, ``set_val`` is called with ``bdy`` and the
+             interpolation is canceled.
 :arg end: used to do some cleanup when the interpolation is canceled (when
           ``get_val`` returns ``None`` or ``t_max``, ``val_min`` or ``val_max``
           comes into effect, but not when the ``rm_timeout`` method is called
@@ -598,12 +598,11 @@ interp(get_val, set_val[, t_max][, val_min][, val_max][, end],
                 elif t_max is not None and t > t_max:
                     done = True
                 else:
-                    if val_min is not None and v < val_min:
-                        done = True
-                        v = val_min
-                    elif val_max is not None and v > val_max:
-                        done = True
-                        v = val_max
+                    if bounds is not None:
+                        bdy = bounds(v)
+                        if bdy is not None:
+                            done = True
+                            v = bdy
                     if v != last_v:
                         set_val(*v) if multi_arg else set_val(v)
                         last_v = v
