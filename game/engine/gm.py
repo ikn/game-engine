@@ -3,7 +3,21 @@
 ---NODOC---
 
 TODO:
- - Graphic.resize_both([w][, h])
+ - partial transforms
+    - on .dirty(), only queue transforms - never call any until .draw() or .snapshot() (in '.render()' or '.prepare()')
+    - .dirty() marks for original surface, and use in .render() to partial transform
+    - final returned dirty from transforms is for manager (once translated)
+    - no ._mk_dirty(): .render() checks for change in .rect after transforming
+    - transform functions:
+        - take src, dest, last_args, args, dirty
+        - dest/last_args None if never done
+        - will need to transform dirty
+        - can do nothing: return (src, False)
+        - full transform: (new_sfc, True)
+        - partial transform: (dest, dirty)
+        - same as last time: (dest, False)
+    - need a way to appear to have been transformed before drawing
+        - eg. rect, angle, transforms must be correct
  - performance:
     - fading is really slow - maybe Colour should only create surface if transformed or blitted more than twice
     - ignore off-screen things
@@ -764,6 +778,23 @@ No scaling occurs in omitted dimensions.
 
 """
         return self.transform('resize', w, h, about)
+
+    def resize_both (self, w = None, h = None, about = (0, 0)):
+        """Resize with constant aspect ratio.
+
+resize_both([w][, h], about = (0, 0)) -> self
+
+:arg w, h: the new width/height; pass only one of these.
+:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
+            scale about.
+
+"""
+        ow, oh = self.sfc_before_transform('resize').get_size()
+        if w is None:
+            w = ir(ow * float(h) / oh)
+        else:
+            h = ir(oh * float(w) / ow)
+        return self.resize(w, h, about)
 
     def rescale (self, w = 1, h = 1, about = (0, 0)):
         """A convenience wrapper around resize to scale by a ratio.
