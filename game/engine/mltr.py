@@ -9,6 +9,8 @@ from os.path import isfile, abspath, sep as path_sep, join as join_path
 
 import pygame
 
+# TODO: maybe a maximum height (binary search to get best size)
+
 
 class Fonts (dict):
     """Collection of ``pygame.font.Font`` instances.

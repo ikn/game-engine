@@ -7,6 +7,7 @@ callbacks to events and keypresses.
 
  - input recording and playback would be good
  - joy axes as buttons: direction, threshold
+ - <x> as <y> framework, eg. the above, mouse/joy axes as 'axes'
 
  - Event(*evts)
     - evts is one or more pg.Events

@@ -6,8 +6,9 @@ from bisect import bisect
 
 import pygame as pg
 
-__all__ = ('dd', 'ir', 'sum_pos', 'randsgn', 'rand0', 'weighted_rand',
-           'position_sfc', 'convert_sfc', 'combine_drawn', 'blank_sfc')
+__all__ = ('dd', 'ir', 'sum_pos', 'normalise_colour', 'randsgn', 'rand0',
+           'weighted_rand', 'position_sfc', 'convert_sfc', 'combine_drawn',
+           'blank_sfc')
 
 
 # abstract
@@ -43,6 +44,12 @@ def sum_pos (*pos):
         sx +=x
         sy +=y
     return (sx, sy)
+
+
+def normalise_colour (c):
+    r, g, b = c[:3]
+    a = 255 if len(c) < 4 else c[3]
+    return (r, g, b, a)
 
 
 # random

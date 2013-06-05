@@ -3,8 +3,13 @@
 ---NODOC---
 
 TODO:
+ - is display.update much slower with duplicates?
+ - in graphics, store n (5?) last # frames between changes to the surface (by transform or altering the original)
+    - if the average > x or current length < n, do some things:
+        - turn opacity into a list of rects the graphic is opaque in (x = 4?)
+        - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
  - partial transforms
-    - on .dirty(), only queue transforms - never call any until .draw() or .snapshot() (in '.render()' or '.prepare()')
+    - on .dirty(), only queue transforms - never call any until ._pre_draw() or .snapshot() (in '.render()' or '.prepare()')
     - .dirty() marks for original surface, and use in .render() to partial transform
     - final returned dirty from transforms is for manager (once translated)
     - no ._mk_dirty(): .render() checks for change in .rect after transforming
@@ -18,10 +23,8 @@ TODO:
         - same as last time: (dest, False)
     - need a way to appear to have been transformed before drawing
         - eg. rect, angle, transforms must be correct
- - performance:
-    - fading is really slow - maybe Colour should only create surface if transformed or blitted more than twice
-    - ignore off-screen things
-    - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
+ - ignore off-screen things
+ - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
     - implementation:
@@ -50,13 +53,12 @@ Tilemap
 
 import sys
 from math import sin, cos, pi
-from collections import OrderedDict
 
 import pygame as pg
 from pygame import Rect
 
 from conf import conf
-from util import ir
+from util import ir, normalise_colour
 try:
     from _gm import fastdraw
 except ImportError:
@@ -104,25 +106,39 @@ builtin transforms (see :meth:`transform`).
             img = conf.GAME.img(img)
         else:
             self.fn = None
-        self._surface = None
+        self._orig_sfc = self._surface = img
+        # postrot is the rect drawn in
+        self._postrot_rect = self._rect = Rect(pos, img.get_size())
+        self._last_postrot_rect = Rect(self._postrot_rect)
+        #: :attr:`rect` at the time of the last draw.
+        self.last_rect = Rect(self._rect)
+        self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
+        #: A list of transformations applied to the graphic.  Always contains
+        #: the builtin transforms as strings (though they do nothing
+        #: by default); other transforms are added through :meth:`transform`,
+        #: and are functions.
+        self.transforms = list(self._builtin_transforms)
+        self._last_transforms = list(self.transforms)
+        # {function: (args, previous_surface, resulting_surface)}
+        self._transforms = {}
+        self._queued_transforms = {}
+        if img.get_alpha() is None and img.get_colorkey() is None:
+            #: Whether this is opaque in the entire rect; do not change.
+            self.opaque = True
+        else:
+            self.opaque = False
+        self._manager = None
+        self._layer = layer
+        self._blit_flags = blit_flags
+        #: Whether currently (supposed to be) visible on-screen.
+        self.visible = True
+        #: Whether this graphic was visible at the time of the last draw; do
+        #: not change.
+        self.was_visible = False
         self._scale = (1, 1)
         self._cropped_rect = None
         self._flipped = (False, False)
         self._angle = 0
-        # postrot is the rect drawn in
-        self._rect = self._postrot_rect = Rect(pos, img.get_size())
-        self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
-        self._transforms = OrderedDict() # required by _set_sfc
-        #: Whether this draws opaque pixels in the entire rect; do not change.
-        self.opaque = None
-        self._set_sfc(img)
-        #: :attr:`rect` at the time of the last draw.
-        self.last_rect = self._last_postrot_rect = Rect(self._rect)
-        # {function: (args, previous_surface, apply_fn, undo_fn)}
-        self._transforms = OrderedDict.fromkeys(
-            self._builtin_transforms, (None, self._surface, None, None)
-        )
-        # for manager
         #: Function to use for scaling; defaults to
         #: ``pygame.transform.smoothscale`` (and should have the same signature
         #: as this default).  If you change this, you may want to call
@@ -134,18 +150,11 @@ builtin transforms (see :meth:`transform`).
         # want to call :meth:`reapply_transform`.
         self.rotate_fn = lambda sfc, angle: \
             pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
-        #: only rotate when the angle changes by this much; defaults to
+        #: Only rotate when the angle changes by this much; defaults to
         #: ``2 * pi / 500``.  If you change this, you may want to call
         #: :meth:`reapply_transform`.
         self.rotate_threshold = 2 * pi / 500
-        self._manager = None
-        self._layer = layer
-        self._blit_flags = blit_flags
-        #: Whether currently (supposed to be) visible on-screen.
-        self.visible = True
-        #: Whether this graphic was visible at the time of the last draw; do
-        #: not change.
-        self.was_visible = False
+        self._orig_dirty = [] # where original surface is changed
         self._dirty = [] # gets used (and reset) by GraphicsManager
 
     def __getitem__ (self, i):
@@ -175,6 +184,16 @@ builtin transforms (see :meth:`transform`).
     def surface (self, sfc):
         self._surface = surface
 
+    @property
+    def orig_sfc (self):
+        """The surface before any transforms."""
+        return self._orig_sfc
+
+    @orig_sfc.setter
+    def orig_sfc (self, sfc):
+        self._orig_sfc = sfc
+        self._orig_dirty = True
+
     # appearance properties
 
     @property
@@ -189,18 +208,10 @@ May be set directly, but not altered in-place.
     @rect.setter
     def rect (self, rect):
         # need to set dirty in old and new rects (if changed)
-        last = self._rect
         rect = Rect(rect)
-        if rect != last:
-            sz = rect.size
-            if sz != last.size:
-                self.resize(*sz)
-            else:
-                # handled in resize
-                self._rect = rect
-                self._postrot_rect = Rect(rect.move(self._rot_offset)[:2],
-                                          self._postrot_rect[2:])
-                self._mk_dirty()
+        self._rect = Rect(rect.topleft, self._rect.size)
+        if rect.size != self.last_rect.size:
+            self.resize(*rect.size)
 
     @property
     def x (self):
@@ -360,17 +371,6 @@ Setting this rotates about the graphic's centre.
     # other properties
 
     @property
-    def transforms (self):
-        """A list of transformations applied to the graphic.
-
-This always contains the builtin transforms as strings (though they do nothing
-by default); other transforms are added through :meth:`transform`, and are
-functions.
-
-"""
-        return self._transforms.keys()
-
-    @property
     def manager (self):
         """The :class:`GraphicsManager` this graphic is associated with.
 
@@ -439,7 +439,6 @@ state*.
             self.opaque = True
         else:
             self.opaque = False
-        self._surface = sfc
         self._rect = r = Rect(self._rect[:2],
                               self.sfc_before_transform('rotate').get_size())
         self._postrot_rect = Rect(r.move(self._rot_offset)[:2], sfc.get_size())
@@ -556,6 +555,36 @@ If the results of the transformation would be exactly the same with
 indicate this.
 
 """
+        # add to/reorder transforms list, and queue for transforming later
+        ts = self.transforms
+        q = self._queued_transforms
+        i = kwargs.get('position')
+        if i is None:
+            fn = kwargs.get('before')
+            if fn is not None:
+                try:
+                    i = ts.index(fn)
+                except ValueError:
+                    pass
+            else:
+                fn = kwargs.get('after')
+                try:
+                    i = ts.index(fn) + 1
+                except ValueError:
+                    pass
+        if i is None:
+            try:
+                i = ts.index(transform_fn)
+            except ValueError:
+                pass
+        if i is None or i == len(ts):
+            ts.append(transform_fn)
+        else:
+            ts[i] = transform_fn
+        q[transform_fn] = args
+
+        return
+
         # determine position
         ts = self._transforms
         ks = ts.keys()
@@ -697,14 +726,6 @@ builtin transform.
                 else:
                     self.transform(fn, *args)
 
-    def orig_sfc (self):
-        """Return surface before any transforms."""
-        ts = self._transforms
-        if ts:
-            return ts[next(ts.iterkeys())][1]
-        else:
-            return self._surface
-
     def sfc_before_transform (self, transform_fn):
         """Return surface before the given transform.
 
@@ -725,12 +746,7 @@ If successful, all transformations are reapplied afterwards, if any.
 
 """
         if self.fn is not None:
-            self._set_sfc(conf.GAME.img(self.fn, cache = False))
-            self._mk_dirty()
-            ts = self._transforms
-            self._transforms = OrderedDict()
-            for fn, t in ts:
-                self.transform(fn, *t[0])
+            self.orig_sfc = conf.GAME.img(self.fn, cache = False)
 
     def _resize (self, sfc, last, w, h, about = (0, 0)):
         """Backend for resize."""
@@ -944,22 +960,107 @@ rotate(angle[, about]) -> self
     def dirty (self, *rects):
         """Mark some or all of the graphic as changed.
 
-This is to be used when you alter the original surface (obtained by
-:meth:`orig_sfc`) - do not alter any other (transformed) surfaces.  Takes any
-number of rects to flag as dirty.  If none are given, the whole of the graphic
-is flagged.
+This is to be used when you alter the original surface (:attr:`orig_sfc`) - do
+not alter any other (transformed) surfaces.  Takes any number of rects to flag
+as dirty.  If none are given, the whole of the graphic is flagged.
 
 """
-        self.reapply_transform()
-        self._mk_dirty()
+        if self.orig_dirty is True:
+            return
+        if rects:
+            self._orig_dirty.extend(Rect(r) for r in rects)
+        else:
+            self._orig_dirty = True
 
-    def _mk_dirty (self):
-        """Mark as dirty."""
-        self._dirty = [self._last_postrot_rect, self._postrot_rect]
+    def render (self):
+        """Update the final surface.
+
+This propagates changes from queued transformations and changes to the original
+surface.
+
+"""
+        t_ks = self.transforms
+        q = self._queued_transforms
+        ts = self._transforms
+        self._queued_transforms = {}
+        # work out where to start (re)applying transforms from
+        dirty = self._orig_dirty
+        if dirty:
+            i = 0
+        elif q:
+            i = min(t_ks.index(fn) for fn in q)
+            last_t_ks = self._last_transforms
+            i = min(i, *(last_t_ks.index(fn) for fn in q if fn in last_t_ks))
+        else:
+            i = len(t_ks)
+        # apply transforms
+        changed = False
+        before_rot = sfc = self._orig_sfc
+        passed_rot = False
+        for j, fn in enumerate(t_ks):
+            if not changed and fn in ts:
+                sfc = ts[fn][1]
+                if not passed_rot:
+                    before_rot = sfc
+                    if fn == 'rotate':
+                        passed_rot = True
+                # transform dirty rects
+                if isinstance(fn, basestring):
+                    dirty = bool(dirty) #self._transform_dirty(fn)
+            if j < i:
+                continue
+            if fn in ts:
+                # done this transform before
+                last_args, prev_sfc, dest = ts[fn]
+            else:
+                last_args = dest = None
+            if fn in q:
+                # got new args
+                args = q[fn]
+            elif last_args is not None:
+                # transform with same args
+                args = last_args
+            else:
+                # does nothing
+                continue
+            f = getattr(self, '_' + fn) if isinstance(fn, basestring) else fn
+            new_sfc, this_changed = f(sfc, dest, dirty, last_args, *args)
+            if this_changed:
+                # did a transform
+                changed = True
+                dirty = this_changed
+                ts[fn] = (args, sfc, new_sfc)
+            elif dest is not None:
+                changed = False
+            sfc = new_sfc
+        self._last_transforms = list(t_ks)
+        r = self._rect
+        last_r = self.last_rect
+        if changed:
+            # change current surface and rect
+            self._surface = sfc
+            if sfc.get_alpha() is None and sfc.get_colorkey() is None:
+                self.opaque = True
+            else:
+                self.opaque = False
+            r = Rect(r.topleft, before_rot.get_size())
+        elif r != last_r:
+            changed = True
+        if changed:
+            pr = self._postrot_rect
+            self._postrot_rect = pr = r.move(self._rot_offset)
+            pr.size = sfc.get_size()
+            #print 'render', self._last_postrot_rect, pr
+            if r != last_r or dirty is True:
+                dirty = [self._last_postrot_rect, pr]
+            else:
+                # translate dirty rects
+                dirty = [d_r.move(pr) for d_r in dirty]
+            self._dirty = dirty
 
     def _pre_draw (self):
         """Called by GraphicsManager before drawing."""
-        pass
+        self.render()
 
     def _draw (self, dest, rects):
         """Draw the graphic.
@@ -975,10 +1076,11 @@ Should never alter any state that is not internal to the graphic.
         sfc = self._surface
         blit = dest.blit
         flags = self._blit_flags
-        offset = (-self._postrot_rect[0], -self._postrot_rect[1])
+        pr = self._postrot_rect
+        offset = (-pr[0], -pr[1])
         for r in rects:
             blit(sfc, r, r.move(offset), flags)
-        self._last_postrot_rect = self._postrot_rect
+        self._last_postrot_rect = pr
         self.last_rect = self._rect
 
 
@@ -1162,7 +1264,7 @@ Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
                         g._manager = None
                         # draw over previous location
                         if g.was_visible:
-                            self.dirty(g.last_rect)
+                            self.dirty(g._last_postrot_rect)
                         # remove layer
                         if not all_gs:
                             del all_graphics[l]
@@ -1292,23 +1394,28 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
     def colour (self, colour):
         self.fill(colour)
 
-    def _fill (self, sfc, last_args, colour):
+    def _fill (self, sfc, dest, dirty, last_args, colour):
+        colour = normalise_colour(colour)
+        changed = True
         if last_args is not None:
             # compare colours
-            lcolour = last_args[0]
-            lr, lg, lb = lcolour[:3]
-            la = 255 if len(lcolour) < 4 else lcolour[3]
-            r, g, b = colour[:3]
-            a = 255 if len(colour) < 4 else colour[3]
-            if (lr, lg, lb, la) == (r, g, b, a):
-                return
-        # need a new surface anyway
-        sfc = pg.Surface(sfc.get_size())
-        if len(colour) == 4 and colour[3] < 255:
-            # non-opaque: need to convert to alpha
-            sfc = sfc.convert_alpha()
-        sfc.fill(colour)
-        return (sfc, None, None)
+            if normalise_colour(last_args[0]) == colour:
+                if not dirty:
+                    return (dest or sfc, False)
+                else:
+                    changed = False
+        if changed or dirty is True:
+            # full fill
+            sfc = pg.Surface(sfc.get_size())
+            if colour[3] < 255:
+                # non-opaque: need to convert to alpha
+                sfc = sfc.convert_alpha()
+            sfc.fill(colour)
+            return (sfc, True)
+        else:
+            # partial fill
+            for r in dirty:
+                dest.fill(colour, r)
 
     def fill (self, colour):
         """Fill with the given colour (like :attr:`colour`)."""
