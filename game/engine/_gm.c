@@ -85,12 +85,12 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
     quicksort(edges[0], n_edges[0]);
     quicksort(edges[1], n_edges[1]);
     // generate grid of (rows of) subrects and mark contents
-    // each has 2 if add, has no 1 if rm
+    // each has 2 if add, 1 if rm
     i = (n_edges[0] - 1) * (n_edges[1] - 1);
     grid = PyMem_New(int, i); // NOTE: alloc[+2]
-    for (j = 0; j < i; j++) grid[j] = 1;
-    for (i = 0; i < 2; i++) { // rects
-        for (j = 0; j < n_rects[i]; j++) { // add|rm
+    for (j = 0; j < i; j++) grid[j] = 0;
+    for (i = 0; i < 2; i++) { // add|rm
+        for (j = 0; j < n_rects[i]; j++) { // rects
             r = rects[i][j]->r;
             if (r.w > 0 && r.h > 0) {
                 row0 = find(edges[1], n_edges[1], r.y, 0);
@@ -102,7 +102,7 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
                         if (i == 0) // add
                             grid[(n_edges[0] - 1) * k + l] |= 2;
                         else // rm (i == 1)
-                            grid[(n_edges[0] - 1) * k + l] ^= 1;
+                            grid[(n_edges[0] - 1) * k + l] |= 1;
                     }
                 }
             }
@@ -123,7 +123,7 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
                 PyList_Append(rs, r_o);
                 Py_DECREF(r_o); // NOTE: ref[-3]
             }
-            if (grid[(n_edges[0] - 1) * i + j] == 3) { // add and not rm
+            if (grid[(n_edges[0] - 1) * i + j] == 2) { // add and not rm
                 if (!in_rect) {
                     in_rect = 1;
                     r_i = i;
@@ -276,7 +276,8 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                 // NOTE: ref[+7]
                 tmp = PyObject_CallMethodObjArgs(g, opaque_in, (PyObject*) r,
                                                  NULL);
-                r_good = r->r.w > 0 && r->r.h > 0 && tmp == Py_True;
+                r_good = r->r.w > 0 && r->r.h > 0 && \
+                         PyObject_RichCompareBool(tmp, Py_True, Py_EQ);
                 Py_DECREF(tmp); // NOTE: ref[-7]
                 if (!r_good) break;
             }
