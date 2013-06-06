@@ -212,6 +212,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                 Py_DECREF(g_dirty); // NOTE: ref[-4]
                 g_dirty = PyList_New(1); // NOTE: ref[+4]
                 // NOTE: ref[+6]
+                // FIXME: should get _last_postrot_rect depending on which of dbl_tmp[i] is True?
                 g_rect = PyObject_GetAttrString(g, "_postrot_rect");
                 PyList_SET_ITEM(g_dirty, 0, g_rect); // NOTE: ref[-6]
                 PyObject_SetAttrString(g, "_dirty", g_dirty);
@@ -249,7 +250,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
         goto end;
     }
 
-    opaque_in = PyString_FromString("opaque_in"); // NOTE: ref[+4]
+    opaque_in = PyString_FromString("_opaque_in"); // NOTE: ref[+4]
     dirty_opaque = PyList_New(0); // NOTE: ref[+5]
     dirty_by_layer = PyMem_New(PyObject*, n_layers); // NOTE: alloc[+4]
     for (i = 0; i < n_layers; i++) { // graphics

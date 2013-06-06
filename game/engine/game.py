@@ -107,7 +107,7 @@ This receives the extra arguments passed in constructing the world through the
     def draw (self):
         """Draw to the screen.
 
-:return: A flag indicating what changes were made: ``True`` if the whole
+:return: a flag indicating what changes were made: ``True`` if the whole
          display needs to be updated, something falsy if nothing needs to be
          updated, else a list of rects to update the display in.
 
