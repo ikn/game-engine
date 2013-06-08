@@ -11,16 +11,7 @@ TODO:
  - partial transforms
     - reimplement apply_fn/undo_fn (must happen when altering queue (.transform(), .untransform(), etc.)
     - rewrite builtin transforms
-    - .transform() doc
     - GM as graphic
-    - transform functions:
-        - take src, dest, last_args, args, dirty
-        - dest/last_args None if never done
-        - will need to transform dirty
-        - can do nothing: return (src, False)
-        - full transform: (new_sfc, True)
-        - partial transform: (dest, dirty)
-        - same as last time: (dest, False)
  - ignore off-screen things
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
@@ -504,37 +495,50 @@ transform(transform_fn, *args[, position][, before][, after]) -> self
 :arg args: passed to the transformation function as positional arguments, after
            compulsory arguments.
 :arg position: a keyword-only argument giving the index in :attr:`transforms`
-               to insert this transform at.  If this is omitted, the transform
-               is appended to the end if new (not in transforms already), else
+               to insert this transform at.  If not given, the transform is
+               appended to the end if new (not in transforms already), else
                left where it is.
 :arg before: (keyword-only) if ``position`` is not given, this gives the
              transform function (as in :attr:`transforms`) to insert this
-             transform before.  If not in :attr:`transforms`, append to the
-             end.
+             transform before.  If ``before`` is not in :attr:`transforms`, the
+             transform is put at the end.
 :arg after: (keyword-only) if ``position`` and ``before`` are not given, insert
-            after this transform function (string or function), or at the end
-            if it doesn't exist.
+            after this transform function, or at the end if it doesn't exist.
 
 Builtin transforms should not be moved after rotation (``'rotate'``); behaviour
 in this case is undefined.
 
-Calls ``transform_fn(sfc, last_args, *args)`` to apply the transformation,
-where:
+Calls ``transform_fn(src, dest, last_args, args, dirty)`` to apply the
+transformation, where:
 
-- ``sfc`` is the surface before this transformation was last applied (or the
+- ``src`` is the surface before this transformation was last applied (or the
   current surface if it never has been).
+- ``dest`` is the surface last produced by this transformation, or ``None`` if
+  the transform is new.
 - ``last_args`` is the ``args`` passed to this method when this transformation
   was last applied, as a tuple (or ``None`` if it never has been).
+- ``args`` is as passed to this method.
+- ``dirty`` defines what has changed in ``src`` since the last time this
+  transform was applied - ``True`` if the whole surface has changed, or a list
+  of rects, or ``False`` if nothing has changed.  This allows for partial
+  transformations by altering ``dest``, if given.
 
-and ``transform_fn`` should return the new surface after transforming, which
-should already be converted for blitting (the given ``sfc`` is guaranteed to be
-converted).  The passed surface should not be altered: the new surface should
-be a new instance, or the unaltered surface if the transformation would do
-nothing.
+``transform_fn`` should return ``(sfc, dirty)``, where:
 
-If the results of the transformation would be exactly the same with
-``last_args`` as with ``args``, ``transform_fn`` may return ``None`` to
-indicate this.
+- ``sfc`` is the resulting pygame Surface.
+- ``dirty`` is a corresponding definition of changed areas in the resulting
+  surface.
+
+``src`` should never be altered, but may be returned as ``sfc`` if the
+transform does nothing.  Possible modes of operation are:
+
+- full transform: return ``(new_sfc, True)``.
+- partial transform: return ``(dest, dirty)`` (``dirty`` might also be
+  ``False`` here).
+- do nothing: return ``(src, False)``.
+
+If creating and returning a new surface, it should already be converted for
+blitting.
 
 """
         # add to/reorder transforms list, and queue for transforming later
