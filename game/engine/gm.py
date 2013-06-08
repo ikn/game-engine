@@ -9,9 +9,11 @@ TODO:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
  - partial transforms
-    - reimplement apply_fn/undo_fn (must happen when altering queue (.transform(), .untransform(), etc.)
+    - reimplement apply_fn/undo_fn - must happen in .transform(), .untransform(), .orig_sfc.setter
     - rewrite builtin transforms
     - GM as graphic
+    - sz_before_transform, and use in place of sfc_before_transform (use implementation in .transform())
+ - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
  - ignore off-screen things
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
@@ -108,9 +110,12 @@ builtin transforms (see :meth:`transform`).
         #: and are functions.
         self.transforms = list(self._builtin_transforms)
         self._last_transforms = list(self.transforms)
-        # {function: (args, previous_surface, resulting_surface)}
+        # {function: (args, previous_surface, resulting_surface, apply_fn,
+        #             undo_fn)}
+        # last 2 None for non-builtins
         self._transforms = {}
-        # {function: args}
+        # {function: (args, previous_size, resulting_size, apply_fn, undo_fn)}
+        # last 4 None for non-builtins
         self._queued_transforms = {}
         if img.get_alpha() is None and img.get_colorkey() is None:
             #: Whether this is opaque in the entire rect; do not change.
@@ -168,16 +173,6 @@ builtin transforms (see :meth:`transform`).
         self.rect = r
 
     @property
-    def surface (self):
-        """The (possibly transformed) surface that will be used for drawing.
-
-Accessing this will cause all queued transformations to be applied.
-
-"""
-        self.render()
-        return self._surface
-
-    @property
     def orig_sfc (self):
         """The surface before any transforms."""
         return self._orig_sfc
@@ -186,6 +181,16 @@ Accessing this will cause all queued transformations to be applied.
     def orig_sfc (self, sfc):
         self._orig_sfc = sfc
         self._orig_dirty = True
+
+    @property
+    def surface (self):
+        """The (possibly transformed) surface that will be used for drawing.
+
+Accessing this will cause all queued transformations to be applied.
+
+"""
+        self.render()
+        return self._surface
 
     # appearance properties
 
@@ -397,26 +402,7 @@ May be ``None``.  This may be changed directly.  (A graphic should only be used 
             if m is not None:
                 m.add(self)
 
-    def _opaque_in (self, rect):
-        """Whether this draws opaque pixels in the whole of the given rect."""
-        return self.opaque and self._postrot_rect.contains(rect)
-
-    def snapshot (self):
-        """Return a copy of this graphic.
-
-The copy is shallow, which means the new graphic will not appear to be
-transformed, even if this one is, but will be an exact copy of the *current
-state*.
-
-"""
-        self.render()
-        g = Graphic(self._surface, self._postrot_rect[:2], self._layer,
-                    self.blit_flags)
-        for attr in ('visible', 'scale_fn', 'rotate_fn', 'rotate_threshold'):
-            setattr(g, attr, getattr(self, attr))
-        return g
-
-    # appearance methods
+    # movement
 
     def move_to (self, x = None, y = None):
         """Move to the given position.
@@ -484,6 +470,104 @@ align(pos = 0, pad = 0, offset = 0, rect = self.manager.surface.get_rect())
         return self
 
     # transform
+
+    def last_transform_args (self, transform_fn):
+        """Return the last (tuple of) arguments passed to the given transform.
+
+This is all arguments passed to the transform when it was last applied/queued.
+Takes a transform function as taken by :meth:`transform`.  If it has not been
+applied/queued yet, the return value is ``None`` (builtin transformations are
+always applied).
+
+"""
+        try:
+            return self._queued_transforms[transform_fn][0]
+        except KeyError:
+            try:
+                return self._transforms[transform_fn][0]
+            except KeyError:
+                return None
+
+    def sfc_before_transform (self, transform_fn):
+        """Return the value of :attr:`surface` before the given transform.
+
+Takes a transform function as taken by :meth:`transform`.  If it has not been
+applied/queued yet, the return value is ``None`` (builtin transformations are
+always applied).  Calling this causes all queued transformations to be applied.
+
+"""
+        self.render()
+        t_ks = self.transforms
+        ts = self._transforms
+        if transform_fn in ts:
+            return ts[transform_fn][1]
+        else:
+            if transform_fn in t_ks:
+                # must be a default-valued builtin
+                i = t_ks.index(transform_fn)
+                return self._orig_sfc if i == 0 else ts[t_ks[i - 1]][1]
+            else:
+                return None
+
+    def _alter_transforms (self, action, transform_fn):
+        """Undo/apply transform modifiers.
+
+action is 'remove' or 'insert'.  The actual removal/insertion is not performed
+(should happen after calling for removal, before for insertion - so that
+transform_fn is in transforms).
+
+"""
+        t_ks = self.transforms
+        index = t_ks.index(transform_fn)
+        # undo modifiers up to index
+        following = []
+        for fn in t_ks[-1:index - 1:-1]:
+            if not isinstance(fn, basestring):
+                # nothing to undo/reapply, and isn't transform_fn
+                continue
+            if fn in q:
+                args, src_sz, dest_sz, apply_fn, undo_fn = q[fn]
+                pool = q
+            elif fn in ts:
+                args, src, dest, apply_fn, undo_fn = ts[fn]
+                pool = ts
+            else:
+                # non-applied builtin
+                continue
+            if fn == transform_fn:
+                # don't reapply if removing
+                if action == 'insert':
+                    following.append((fn, pool))
+                # don't undo
+                break
+            following.append((fn, pool))
+            undo_fn()
+        # last loop was for transform_fn
+        if pool == ts:
+            src_sz = src.get_size()
+            dest_sz = dest.get_size()
+        regen = src_sz != dest_sz
+        src_sz = dest_sz
+        # reapply, possibly including a new transform
+        for fn, pool in reversed(following):
+            if not regen:
+                continue
+            # else size has changed, so need to regenerate
+            args, src, dest, apply_fn, undo_fn = pool[fn]
+            gen_mods = getattr(self, '_gen_mods_' + fn)
+            # second arg is first_time, and determines whether size-independent
+            # transforms can skip regenerating the results
+            mods, dest_sz = gen_mods(src_sz, False, *args)
+            if mods is not None:
+                undo_fn, apply_fn = mods
+            # else didn't change
+            apply_fn()
+            # update in transform store
+            if pool == q:
+                src = src_sz
+                dest = dest_sz
+            pool[fn] = (args, src, dest, apply_fn, undo_fn)
+            src_sz = dest_sz
 
     def transform (self, transform_fn, *args, **kwargs):
         """Apply a transformation to the graphic.
@@ -567,22 +651,37 @@ blitting.
             ts.append(transform_fn)
         else:
             ts[i] = transform_fn
-        q[transform_fn] = args
-
-    def untransform (self, transform_fn):
-        """Remove an applied transformation.
-
-Takes a transformation function like :meth:`transform`.
-
-"""
-        for ts in (self._queued_transforms, self._transforms):
-            if transform_fn in ts:
-                del ts[transform_fn]
-        if not isinstance(transform_fn, basestring):
-            try:
-                self.transforms.remove(transform_fn)
-            except ValueError:
-                pass
+        if isinstance(transform_fn, basestring):
+            # get starting size
+            if i is None:
+                i = len(ts)
+            while True:
+                if i == 0:
+                    # first transform
+                    src_sz = self._orig_sfc.get_size()
+                else:
+                    # use previous transform's final size
+                    i -= 1
+                    fn = ts[i]
+                    if not isinstance(fn, basestring):
+                        # doesn't change size, and doesn't store it if in queue
+                        continue
+                    if fn in q:
+                        src_sz = q[fn][1]
+                    elif fn in ts:
+                        src_sz = ts[fn][1].get_size()
+                    else:
+                        continue
+                break
+            # generate modifiers
+            gen_mods = getattr(self, '_gen_mods_' + transform_fn)
+            (apply_fn, undo_fn), dest_sz = gen_mods(src_sz, True, *args)
+            q[transform_fn] = (args, src_sz, dest_sz, apply_fn, undo_fn)
+            self._alter_transforms('insert', transform_fn)
+        else:
+            # no need to handle mods if not builtin, since then _gen_mods args
+            # don't change for any builtins
+            q[transform_fn] = (args, None, None, None, None)
 
     def retransform (self, transform_fn):
         """Reapply the given transformation (if already applied).
@@ -591,49 +690,38 @@ Takes a transformation function like :meth:`transform`.
 
 """
         try:
-            args = self._transforms[transform_fn][0]
+            args, src, dest, apply_fn, undo_fn = self._transforms[transform_fn]
         except KeyError:
+            # either doesn't exist or already queued
             pass
         else:
-            self._queued_transforms[transform_fn] = args
+            # no need to regenerate modifiers - nothing changed
+            self._queued_transforms[transform_fn] = \
+                (args, src.get_size(), dest.get_size(), apply_fn, undo_fn)
 
-    def last_transform_args (self, transform_fn):
-        """Return the last (tuple of) arguments passed to the given transform.
+    def untransform (self, transform_fn):
+        """Remove an applied transformation.
 
-This is all arguments passed to the transform when it was last applied/queued.
-Takes a transform function as taken by :meth:`transform`.  If it has not been
-applied/queued yet, the return value is ``None`` (builtin transformations are
-always applied).
-
-"""
-        try:
-            return self._queued_transforms[transform_fn]
-        except KeyError:
-            try:
-                return self._transforms[transform_fn][0]
-            except KeyError:
-                return None
-
-    def sfc_before_transform (self, transform_fn):
-        """Return the value of :attr:`surface` before the given transform.
-
-Takes a transform function as taken by :meth:`transform`.  If it has not been
-applied/queued yet, the return value is ``None`` (builtin transformations are
-always applied).  Calling this causes all queued transformations to be applied.
+Takes a transformation function like :meth:`transform`.
 
 """
-        self.render()
         t_ks = self.transforms
         ts = self._transforms
-        if transform_fn in ts:
-            return ts[transform_fn][1]
+        q = self._queued_transforms
+        if transform_fn not in ts and transform_fn not in q:
+            return
+        if isinstance(transform_fn, basestring):
+            # no need to handle mods if not builtin, since then _gen_mods args
+            # don't change for any builtins
+            self._alter_transforms('remove', transform_fn)
         else:
-            if transform_fn in t_ks:
-                # must be a default-valued builtin
-                i = t_ks.index(transform_fn)
-                return self._orig_sfc if i == 0 else ts[t_ks[i - 1]][1]
-            else:
-                return None
+            # don't remove builtins from transforms list
+            self.transforms.remove(transform_fn)
+        # remove data
+        if transform_fn in ts:
+            del ts[transform_fn]
+        if transform_fn in q:
+            del q[transform_fn]
 
     def reload (self):
         """Reload from disk if possible.
@@ -642,6 +730,7 @@ If successful, all transformations are reapplied afterwards, if any.
 
 """
         if self.fn is not None:
+            # this calls a setter
             self.orig_sfc = conf.GAME.img(self.fn, cache = False)
 
     def _resize (self, sfc, last, w, h, about = (0, 0)):
@@ -853,6 +942,27 @@ rotate(angle[, about]) -> self
 """
         return self.transform('rotate', angle, about)
 
+    # drawing
+
+    def _opaque_in (self, rect):
+        """Whether this draws opaque pixels in the whole of the given rect."""
+        return self.opaque and self._postrot_rect.contains(rect)
+
+    def snapshot (self):
+        """Return a copy of this graphic.
+
+The copy is shallow, which means the new graphic will not appear to be
+transformed, even if this one is, but will be an exact copy of the *current
+state*.
+
+"""
+        self.render()
+        g = Graphic(self._surface, self._postrot_rect[:2], self._layer,
+                    self.blit_flags)
+        for attr in ('visible', 'scale_fn', 'rotate_fn', 'rotate_threshold'):
+            setattr(g, attr, getattr(self, attr))
+        return g
+
     def dirty (self, *rects):
         """Mark some or all of the graphic as changed.
 
@@ -904,12 +1014,12 @@ surface.
                 continue
             if fn in ts:
                 # done this transform before
-                last_args, prev_sfc, dest = ts[fn]
+                last_args, src, dest, apply_fn, undo_fn = ts[fn]
             else:
                 last_args = dest = None
             if fn in q:
                 # got new args
-                args = q[fn]
+                args, src_sz, dest_sz, apply_fn, undo_fn = q[fn]
             elif last_args is not None:
                 # transform with same args
                 args = last_args
@@ -921,7 +1031,8 @@ surface.
             if dirty or dest is None:
                 # transformed for the first time or something changed in
                 # retransforming
-                ts[fn] = (args, sfc, new_sfc)
+                # have modifier functions following code above
+                ts[fn] = (args, sfc, new_sfc, apply_fn, undo_fn)
             sfc = new_sfc
         if len(last_t_ks) > len(t_ks):
             # might have just removed transforms from the end
