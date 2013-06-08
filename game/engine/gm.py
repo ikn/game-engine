@@ -3,7 +3,7 @@
 ---NODOC---
 
 TODO:
- - is display.update much slower with duplicates?
+ - is display.update much slower with duplicates?  If so, maybe merge layers' dirty rects.
  - in graphics, store n (5?) last # frames between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
@@ -142,17 +142,17 @@ builtin transforms (see :meth:`transform`).
         #: Function to use for scaling; defaults to
         #: ``pygame.transform.smoothscale`` (and should have the same signature
         #: as this default).  If you change this, you may want to call
-        #: :meth:`reapply_transform`.
+        #: :meth:`retransform`.
         self.scale_fn = pg.transform.smoothscale
         #: Function to use for rotating; uses ``pygame.transform.rotozoom`` by
         #: default.  Takes the surface and angle (as passed to :meth:`rotate`)
         # and returns the new rotated surface.  If you change this, you may
-        # want to call :meth:`reapply_transform`.
+        # want to call :meth:`retransform`.
         self.rotate_fn = lambda sfc, angle: \
             pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
         #: Only rotate when the angle changes by this much; defaults to
         #: ``2 * pi / 500``.  If you change this, you may want to call
-        #: :meth:`reapply_transform`.
+        #: :meth:`retransform`.
         self.rotate_threshold = 2 * pi / 500
         self._orig_dirty = [] # where original surface is changed
         # where final surface is changed; gets used (and reset) by manager
@@ -494,14 +494,6 @@ align(pos = 0, pad = 0, offset = 0, rect = self.manager.surface.get_rect())
 
     # transform
 
-    def _transform_rect (self, rect, fn, require_rect = False):
-        """Transform a pygame Rect like a transform function."""
-        # TODO
-        if require_rect:
-            return rect
-        else:
-            return True
-
     def transform (self, transform_fn, *args, **kwargs):
         """Apply a transformation to the graphic.
 
@@ -588,8 +580,8 @@ Takes a transformation function like :meth:`transform`.
             except ValueError:
                 pass
 
-    def reapply_transform (self, transform_fn):
-        """Reapply the given transformation.
+    def retransform (self, transform_fn):
+        """Reapply the given transformation (if already applied).
 
 Takes a transformation function like :meth:`transform`.
 
@@ -601,32 +593,43 @@ Takes a transformation function like :meth:`transform`.
         else:
             self._queued_transforms[transform_fn] = args
 
-    def size_before_transform (self, transform_fn):
-        """Return the value of :attr:`size` before the given transform.
+    def last_transform_args (self, transform_fn):
+        """Return the last (tuple of) arguments passed to the given transform.
 
+This is all arguments passed to the transform when it was last applied/queued.
 Takes a transform function as taken by :meth:`transform`.  If it has not been
-applied/queued yet, the return value is ``None``.  (Builtin transformations are
-always applied.)
+applied/queued yet, the return value is ``None`` (builtin transformations are
+always applied).
 
 """
-        q = self._queued_transforms
+        try:
+            return self._queued_transforms[transform_fn]
+        except KeyError:
+            try:
+                return self._transforms[transform_fn][0]
+            except KeyError:
+                return None
+
+    def sfc_before_transform (self, transform_fn):
+        """Return the value of :attr:`surface` before the given transform.
+
+Takes a transform function as taken by :meth:`transform`.  If it has not been
+applied/queued yet, the return value is ``None`` (builtin transformations are
+always applied).  Calling this causes all queued transformations to be applied.
+
+"""
+        self.render()
+        t_ks = self.transforms
         ts = self._transforms
-        tr = self._transform_rect
-        sfc = self.orig_sfc
-        transforming = False
-        for fn in self.transforms:
-            if not transforming:
-                sz = sfc.get_size()
-            if fn == transform_fn:
-                return sz if transforming else sfc.get_size()
-            if fn in q:
-                # might not have transformed like this before, so transform
-                # sizes from now on
-                transforming = True
-            if transforming:
-                sz = tr(Rect((0, 0), sz), fn, True).size
+        if transform_fn in ts:
+            return ts[transform_fn][1]
+        else:
+            if transform_fn in t_ks:
+                # must be a default-valued builtin
+                i = t_ks.index(transform_fn)
+                return self._orig_sfc if i == 0 else ts[t_ks[i - 1]][1]
             else:
-                sfc = ts[fn][2]
+                return None
 
     def reload (self):
         """Reload from disk if possible.
@@ -684,6 +687,20 @@ No scaling occurs in omitted dimensions.
 """
         return self.transform('resize', w, h, about)
 
+    def rescale (self, w = 1, h = 1, about = (0, 0)):
+        """A convenience wrapper around resize to scale by a ratio.
+
+rescale(w = 1, h = 1, about = (0, 0)) -> self
+
+:arg w: the new width; ratio of the width before scaling.
+:arg h: the new height; ratio of the height before scaling.
+:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
+            scale about.
+
+"""
+        ow, oh = self.sfc_before_transform('resize').get_size()
+        return self.resize(ir(w * ow), ir(h * oh), about)
+
     def resize_both (self, w = None, h = None, about = (0, 0)):
         """Resize with constant aspect ratio.
 
@@ -700,20 +717,6 @@ resize_both([w][, h], about = (0, 0)) -> self
         else:
             h = ir(oh * float(w) / ow)
         return self.resize(w, h, about)
-
-    def rescale (self, w = 1, h = 1, about = (0, 0)):
-        """A convenience wrapper around resize to scale by a ratio.
-
-rescale(w = 1, h = 1, about = (0, 0)) -> self
-
-:arg w: the new width; ratio of the width before scaling.
-:arg h: the new height; ratio of the height before scaling.
-:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
-            scale about.
-
-"""
-        ow, oh = self.sfc_before_transform('resize').get_size()
-        return self.resize(ir(w * ow), ir(h * oh), about)
 
     def rescale_both (self, scale = 1, about = (0, 0)):
         """A convenience wrapper around rescale to scale the same on both axes.
@@ -880,7 +883,6 @@ surface.
         # apply transforms
         before_rot = sfc = self._orig_sfc
         passed_rot = False
-        tr = self._transform_rect
         for j, fn in enumerate(t_ks):
             if fn != last_t_ks[j]:
                 # differ from last transform order at this point
@@ -894,18 +896,6 @@ surface.
                     before_rot = sfc
                     if fn == 'rotate':
                         passed_rot = True
-                # transform dirty rects
-                if isinstance(fn, basestring):
-                    if dirty and dirty is not True:
-                        new_dirty = []
-                        for r in dirty:
-                            r = tr(r, fn)
-                            if r is True:
-                                new_dirty = True
-                                break
-                            elif r:
-                                new_dirty.append(r)
-                        dirty = new_dirty
             if j < i:
                 continue
             if fn in ts:
@@ -1250,14 +1240,14 @@ changed parts of the surface, or ``False`` if nothing changed.
         # draw to it
         drawn = self.draw()
         if drawn:
-            # dirty as Graphic (might not happen in reapply_transforms)
+            # dirty as Graphic (might not happen in retransform)
             dirty = self._dirty
             pos = self._postrot_rect[:2]
             for r in drawn:
                 dirty.append(r.move(pos))
             if ts:
                 # reapply transforms, starting from the first
-                self.reapply_transform(t[0])
+                self.retransform(t[0])
 
 
 class Colour (Graphic):
