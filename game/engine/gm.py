@@ -12,7 +12,6 @@ TODO:
     - rewrite builtin transforms
     - write _gen_mod_*
     - GM as graphic
-    - _alter_transforms behaviour is wrong with insert and none - split into undo, apply
  - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
  - ignore off-screen things
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
@@ -181,7 +180,8 @@ builtin transforms (see :meth:`transform`).
     def orig_sfc (self, sfc):
         if self._orig_sfc.get_size() != sfc.get_size():
             if self.transforms:
-                self._alter_transforms('none', self.transforms[0])
+                self._undo_transforms(0)
+                self._apply_transforms(0, True)
         self._orig_sfc = sfc
         self._orig_dirty = True
 
@@ -575,66 +575,74 @@ apply queued transformations.
             sz = sz.get_size()
         return sz
 
-    def _alter_transforms (self, action, transform_fn):
-        """Undo/apply transform modifiers.
+    def _undo_transforms (self, transform_fn, include = True):
+        """Undo modifiers up to the given transform.
 
-action is 'none', 'remove' or 'insert'.  The actual action is not performed
-(should happen after calling for removal, before for insertion - so that
-transform_fn is in transforms).
+transform_fn may be an index in transforms.
 
-We undo up to and including transform_fn, then regenerate modifiers if action
-is 'none' or the action has caused a size mismatch, then reapply.
+include: whether to undo for the given transform.
 
 """
         t_ks = self.transforms
-        index = t_ks.index(transform_fn)
-        # undo modifiers up to index
-        following = []
-        for fn in t_ks[-1:index - 1:-1]:
-            if not isinstance(fn, basestring):
-                # nothing to undo/reapply, and isn't transform_fn
-                continue
-            if fn in q:
-                args, src_sz, dest_sz, apply_fn, undo_fn = q[fn]
-                pool = q
-            elif fn in ts:
-                args, src, dest, apply_fn, undo_fn = ts[fn]
-                pool = ts
-            else:
-                # non-applied builtin
-                continue
-            if fn == transform_fn:
-                # don't reapply if removing
-                if action != 'remove':
-                    following.append((fn, pool))
-                # don't undo
-                break
-            following.append((fn, pool))
-            undo_fn(self)
-        # last loop was for transform_fn
-        if pool == ts:
-            src_sz = src.get_size()
-            dest_sz = dest.get_size()
-        regen = action == 'none' or src_sz != dest_sz
-        src_sz = dest_sz
-        # reapply, possibly including a new transform
-        for fn, pool in reversed(following):
-            if not regen:
-                continue
-            # else size has changed, so need to regenerate
-            args, src, dest, apply_fn, undo_fn = pool[fn]
-            gen_mods = getattr(self, '_gen_mods_' + fn)
-            mods, dest_sz = gen_mods(src_sz, False, *args)
-            if mods is not None:
-                undo_fn, apply_fn = mods
-            # else didn't change
-            apply_fn(self)
-            # update in transform store
-            if pool == q:
-                src = src_sz
-                dest = dest_sz
-            pool[fn] = (args, src, dest, apply_fn, undo_fn)
-            src_sz = dest_sz
+        q = self._queued_transforms
+        ts = self._transforms
+        if isinstance(transform_fn, int):
+            i = transform_fn
+        else:
+            i = t_ks.index(transform_fn)
+        if include:
+            i -= 1
+        for fn in t_ks[-1:i:-1]:
+            if isinstance(fn, basestring):
+                if fn in q:
+                    q[fn][4](self)
+                elif fn in ts:
+                    ts[fn][4](self)
+                # else non-applied builtin
+            # else non-builtin: nothing to undo
+
+    def _apply_transforms (self, transform_fn, regen, include = True):
+        """Apply modifiers from the given transforms.
+
+transform_fn may be an index in transforms.
+
+regen: whether to force regeneration of transform modifiers.
+include: whether to apply for the given transform.
+
+"""
+        t_ks = self.transforms
+        q = self._queued_transforms
+        ts = self._transforms
+        if isinstance(transform_fn, int):
+            i = transform_fn
+        else:
+            i = t_ks.index(transform_fn)
+        if not include:
+            i += 1
+        src_sz = self.sz_before_transform(i)
+        for fn in t_ks[i:]:
+            if isinstance(fn, basestring):
+                if fn in q:
+                    pool = q
+                elif fn in ts:
+                    pool = ts
+                else:
+                    # non-applied builtin
+                    continue
+                args, src, dest, apply_fn, undo_fn = pool[fn]
+                if regen:
+                    gen_mods = getattr(self, '_gen_mods_' + fn)
+                    mods, dest_sz = gen_mods(src_sz, False, *args)
+                    if mods is not None:
+                        apply_fn, undo_fn = mods
+                apply_fn(self)
+                # update in transform store
+                if pool == q:
+                    src = src_sz
+                    dest = dest_sz
+                pool[fn] = (args, src, dest, apply_fn, undo_fn)
+                src_sz = dest_sz
+            # else non-builtin: nothing to apply
 
     def transform (self, transform_fn, *args, **kwargs):
         """Apply a transformation to the graphic.
@@ -693,63 +701,68 @@ blitting.
 
 """
         # add to/reorder transforms list, and queue for transforming later
-        ts = self.transforms
+        t_ks = self.transforms
         q = self._queued_transforms
+        ts = self._transforms
+        exists = True
+        try:
+            last_index = t_ks.index(transform_fn)
+        except ValueError:
+            exists = False
+        else:
+            t_ks.pop(last_index)
+            if transform_fn not in q and transform_fn not in ts:
+                exists = False
+        # determine index
         i = kwargs.get('position')
         if i is None:
             fn = kwargs.get('before')
             if fn is not None:
                 try:
-                    i = ts.index(fn)
+                    i = t_ks.index(fn)
                 except ValueError:
                     pass
             else:
                 fn = kwargs.get('after')
                 try:
-                    i = ts.index(fn) + 1
+                    i = t_ks.index(fn) + 1
                 except ValueError:
                     pass
         if i is None:
-            try:
-                i = ts.index(transform_fn)
-            except ValueError:
-                pass
-        if i is None or i == len(ts):
-            ts.append(transform_fn)
-        else:
-            ts[i] = transform_fn
-        if isinstance(transform_fn, basestring):
-            # get starting size
-            if i is None:
-                i = len(ts)
-            self.sz_before_transform(i)
-            while True:
-                if i == 0:
-                    # first transform
-                    src_sz = self._orig_sfc.get_size()
-                else:
-                    # use previous transform's final size
-                    i -= 1
-                    fn = ts[i]
-                    if not isinstance(fn, basestring):
-                        # doesn't change size, and doesn't store it if in queue
-                        continue
-                    if fn in q:
-                        src_sz = q[fn][1]
-                    elif fn in ts:
-                        src_sz = ts[fn][1].get_size()
-                    else:
-                        continue
-                break
-            # generate modifiers
+            i = last_index if exists else len(t_ks)
+        # generate modifiers
+        builtin = isinstance(transform_fn, basestring)
+        if builtin:
+            src_sz = self.sz_before_transform(i)
             gen_mods = getattr(self, '_gen_mods_' + transform_fn)
-            (apply_fn, undo_fn), dest_sz = gen_mods(src_sz, True, *args)
-            q[transform_fn] = (args, src_sz, dest_sz, apply_fn, undo_fn)
-            self._alter_transforms('insert', transform_fn)
+            new = not exists or i != last_index
+            mods, dest_sz = gen_mods(src_sz, new, *args)
+            if mods is None:
+                # retrieve from queue/transforms
+                if transform_fn in q:
+                    apply_fn, undo_fn = q[transform_fn][3:5]
+                elif transform_fn in self._transforms:
+                    apply_fn, undo_fn = self._transforms[transform_fn][3:5]
+            else:
+                apply_fn, undo_fn = mods
         else:
-            # no need to handle mods if not builtin, since then _gen_mods args
-            # don't change for any builtins
-            q[transform_fn] = (args, None, None, None, None)
+            src_sz = dest_sz = apply_fn = undo_fn = None
+        # add the transform
+        q[transform_fn] = (args, src_sz, dest_sz, apply_fn, undo_fn)
+        if i == len(t_ks):
+            t_ks.append(transform_fn)
+            if builtin:
+                # apply modifier
+                apply_fn(self)
+        else:
+            if builtin:
+                # undo modifiers up to insertion point
+                self._undo_transforms(i)
+            t_ks.insert(i, transform_fn)
+            if builtin:
+                # apply modifier, then reapply following modifiers
+                apply_fn(self)
+                self._apply_transforms(i, src_sz != dest_sz, False)
 
     def retransform (self, transform_fn):
         """Reapply the given transformation (if already applied).
@@ -781,7 +794,9 @@ Takes a transformation function like :meth:`transform`.
         if isinstance(transform_fn, basestring):
             # no need to handle mods if not builtin, since then _gen_mods args
             # don't change for any builtins
-            self._alter_transforms('remove', transform_fn)
+            self._undo_transforms(transform_fn)
+            src_sz, dest_sz = q[transform_fn][1:3]
+            self._apply_transforms(transform_fn, src_sz != dest_sz, False)
         else:
             # don't remove builtins from transforms list
             self.transforms.remove(transform_fn)
@@ -1472,11 +1487,16 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
 
     def _gen_mods_fill (self, src_sz, first_time, colour):
         if first_time:
-            # fill cannot be undone
-            fn = lambda g: None
-            mods = (fn, fn)
+
+            def apply_fn (g):
+                g._colour = colour
+
+            def undo_fn (g):
+                g._colour = (0, 0, 0)
+
+            mods = (apply_fn, undo_fn)
         else:
-            mods = (None, None)
+            mods = None
         return (mods, src_sz)
 
     def _fill (self, sfc, dest, dirty, last_args, colour):
