@@ -138,12 +138,17 @@ blit_centred(sfc, dest, pos = 0, offset = (0, 0)[, dest_rect], blit_flags = 0)
     dest.blit(sfc, p, rect, blit_flags)
 
 
+def has_alpha (sfc):
+    """Return if the given surface has transparency of any kind."""
+    return sfc.get_alpha() is not None or sfc.get_colorkey() is not None
+
+
 def convert_sfc (sfc):
     """Convert a surface for blitting."""
-    if sfc.get_alpha() is None and sfc.get_colorkey() is None:
-        sfc = sfc.convert()
-    else:
+    if has_alpha(sfc):
         sfc = sfc.convert_alpha()
+    else:
+        sfc = sfc.convert()
     return sfc
 
 

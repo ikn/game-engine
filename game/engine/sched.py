@@ -58,7 +58,10 @@ not have the object in that place passed to ``f`` for each object in the
 However, in arguments with lists, all lists must be the same length.
 
 """
-    is_list = [isinstance(arg, (tuple, list)) for arg in args]
+    # Rect is a sequence but isn't recognised as collections.Sequence, so test
+    # this way
+    is_list = [hasattr(arg, '__len__') and hasattr(arg, '__getitem__')
+               for arg in args]
     if any(is_list):
         n = len(args[is_list.index(True)])
         # listify non-list args (assume all lists are the same length)

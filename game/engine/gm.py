@@ -3,14 +3,14 @@
 ---NODOC---
 
 TODO:
+ - propagate exceptions raised in calls from fastdraw (in _draw, opaque_in, _pre_draw, etc.)
  - is display.update much slower with duplicates?  If so, maybe merge layers' dirty rects.
  - in graphics, store n (5?) last # frames between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
  - partial transforms
-    - rewrite builtin transforms
-    - write _gen_mod_*
+    - rewrite builtin transforms and write _gen_mods_* (resize, flip, rotate)
     - GM as graphic
  - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
  - ignore off-screen things
@@ -48,7 +48,7 @@ import pygame as pg
 from pygame import Rect
 
 from conf import conf
-from util import ir, normalise_colour, combine_drawn
+from util import ir, normalise_colour, has_alpha, blank_sfc, combine_drawn
 try:
     from _gm import fastdraw
 except ImportError:
@@ -116,11 +116,8 @@ builtin transforms (see :meth:`transform`).
         # {function: (args, previous_size, resulting_size, apply_fn, undo_fn)}
         # last 4 None for non-builtins
         self._queued_transforms = {}
-        if img.get_alpha() is None and img.get_colorkey() is None:
-            #: Whether this is opaque in the entire rect; do not change.
-            self.opaque = True
-        else:
-            self.opaque = False
+        #: Whether this is opaque in the entire rect; do not change.
+        self.opaque = not has_alpha(img)
         self._manager = None
         self._layer = layer
         #: As taken by the constructor.
@@ -478,13 +475,16 @@ align(pos = 0, pad = 0, offset = 0, rect = self.manager.surface.get_rect())
 
 Each builtin transform requires a _gen_mods_<transform> method, as follows:
 
-_gen_mods_<transform>(src_sz, first_time, *args)
+_gen_mods_<transform>(src_sz, first_time, last_args, *args)
     -> ((apply_fn, undo_fn), dest_sz)
 
 src_sz: size before the transform.
 first_time: whether this is the first time these modifiers have been generated.
-            If false, and the modifiers are independent of src_sz, the return
-            value may be (None, dest_sz).
+last_args: transform arguments at the time of the last modifier generation, or
+           None.  Guaranteed to be non-None if first_time is False
+
+If first_time is False and the modifiers would not be different from
+previously, the return value may be None.
 
 apply_fn, undo_fn: functions that take the Graphic instance and apply or undo
                    modifiers that the transform requires (such as setting
@@ -590,9 +590,9 @@ include: whether to undo for the given transform.
             i = transform_fn
         else:
             i = t_ks.index(transform_fn)
-        if include:
-            i -= 1
-        for fn in t_ks[-1:i:-1]:
+        if not include:
+            i += 1
+        for fn in reversed(t_ks[i:]):
             if isinstance(fn, basestring):
                 if fn in q:
                     q[fn][4](self)
@@ -632,9 +632,13 @@ include: whether to apply for the given transform.
                 args, src, dest, apply_fn, undo_fn = pool[fn]
                 if regen:
                     gen_mods = getattr(self, '_gen_mods_' + fn)
-                    mods, dest_sz = gen_mods(src_sz, False, *args)
+                    mods, dest_sz = gen_mods(src_sz, False, args, *args)
                     if mods is not None:
                         apply_fn, undo_fn = mods
+                elif pool == q:
+                    dest_sz = dest
+                else:
+                    dest_sz = dest.get_size()
                 apply_fn(self)
                 # update in transform store
                 if pool == q:
@@ -692,9 +696,9 @@ transformation, where:
 transform does nothing.  Possible modes of operation are:
 
 - full transform: return ``(new_sfc, True)``.
-- partial transform: return ``(dest, dirty)`` (``dirty`` might also be
+- partial transform: return ``(dest, new_dirty)`` (``dirty`` might also be
   ``False`` here).
-- do nothing: return ``(src, False)``.
+- do nothing: return ``(src, dirty)``.
 
 If creating and returning a new surface, it should already be converted for
 blitting.
@@ -710,9 +714,17 @@ blitting.
         except ValueError:
             exists = False
         else:
-            t_ks.pop(last_index)
-            if transform_fn not in q and transform_fn not in ts:
+            if transform_fn in q:
+                data = q[transform_fn]
+                self.untransform(transform_fn)
+            elif transform_fn in ts:
+                data = ts[transform_fn]
+                self.untransform(transform_fn)
+            else:
                 exists = False
+            if transform_fn in t_ks:
+                # has to be a builtin: untransform won't remove it
+                t_ks.pop(last_index)
         # determine index
         i = kwargs.get('position')
         if i is None:
@@ -729,20 +741,18 @@ blitting.
                 except ValueError:
                     pass
         if i is None:
-            i = last_index if exists else len(t_ks)
+            i = last_index if last_index is not None else len(t_ks)
         # generate modifiers
         builtin = isinstance(transform_fn, basestring)
         if builtin:
             src_sz = self.sz_before_transform(i)
             gen_mods = getattr(self, '_gen_mods_' + transform_fn)
-            new = not exists or i != last_index
-            mods, dest_sz = gen_mods(src_sz, new, *args)
+            mods, dest_sz = gen_mods(src_sz, not exists,
+                                     data[0] if exists else None, *args)
             if mods is None:
                 # retrieve from queue/transforms
-                if transform_fn in q:
-                    apply_fn, undo_fn = q[transform_fn][3:5]
-                elif transform_fn in self._transforms:
-                    apply_fn, undo_fn = self._transforms[transform_fn][3:5]
+                apply_fn = data[3]
+                undo_fn = data[4]
             else:
                 apply_fn, undo_fn = mods
         else:
@@ -795,7 +805,10 @@ Takes a transformation function like :meth:`transform`.
             # no need to handle mods if not builtin, since then _gen_mods args
             # don't change for any builtins
             self._undo_transforms(transform_fn)
-            src_sz, dest_sz = q[transform_fn][1:3]
+            if transform_fn in q:
+                src_sz, dest_sz = q[transform_fn][1:3]
+            else:
+                src_sz, dest_sz = ts[transform_fn][1:3]
             self._apply_transforms(transform_fn, src_sz != dest_sz, False)
         else:
             # don't remove builtins from transforms list
@@ -817,7 +830,6 @@ If successful, all transformations are reapplied afterwards, if any.
             self.orig_sfc = conf.GAME.img(self.fn, cache = False)
 
     def _resize (self, sfc, last, w, h, about = (0, 0)):
-        """Backend for resize."""
         start_w, start_h = start_sz = sfc.get_size()
         if w is None:
             w = start_w
@@ -906,33 +918,52 @@ rescale_both(scale = 1, about = (0, 0)) -> self
 """
         return self.rescale(scale, scale, about)
 
-    def _crop (self, sfc, last, rect):
-        """Backend for crop."""
-        start = sfc.get_rect()
-        if last is not None and rect == last[0]:
-            return (None, None, None)
-        if rect == start:
-            return (sfc, None, None)
-        new_sfc = pg.Surface(rect.size)
-        inside = start.contains(rect)
-        if sfc.get_alpha() is None and sfc.get_colorkey() is None and \
-           not inside:
-            # was opaque before, not any more
-            new_sfc = new_sfc.convert_alpha()
-            # fill with alpha so area outside borders is transparent
-            new_sfc.fill((0, 0, 0, 0))
-        dx, dy = rect[:2]
-        new_sfc.blit(sfc, rect.move(-dx, -dy), rect)
+    def _gen_mods_crop (self, src_sz, first_time, last_args, rect):
+        rect = Rect(rect)
+        if first_time or Rect(last_args[0]) != rect:
 
-        def apply_fn (g):
-            g._rect = g._rect.move(dx, dy)
-            g._cropped_rect = rect
+            def apply_fn (g):
+                g._rect = g._rect.move(rect.x, rect.y)
+                g._cropped_rect = rect
 
-        def undo_fn (g):
-            g._rect = g._rect.move(-dx, -dy)
-            g._cropped_rect = None
+            def undo_fn (g):
+                g._rect = g._rect.move(-rect.x, -rect.y)
+                g._cropped_rect = None
 
-        return (new_sfc, apply_fn, undo_fn)
+            mods = (apply_fn, undo_fn)
+        else:
+            mods = None
+        return (mods, rect.size)
+
+    def _crop (self, src, dest, dirty, last_args, rect):
+        start = src.get_rect()
+        rect = Rect(rect)
+        if start == rect:
+            # no cropping occurs
+            return (src, dirty)
+        if dirty is not True and last_args is not None:
+            last = Rect(last_args[0])
+            if last == rect:
+                # same size as last time
+                if dirty:
+                    # clip dirty rects inside cropped rect; if there's a
+                    # border, it remains empty as before, so isn't dirtied
+                    new_dirty = []
+                    for r in dirty:
+                        r = r.clip(rect)
+                        if r:
+                            new_dirty.append(r)
+                    return (dest, new_dirty)
+                else:
+                    return (dest, False)
+        # do a full transform
+        if start.contains(rect) and not has_alpha(src):
+            new_sfc = pg.Surface(rect.size).convert()
+        else:
+            # not (no longer) opaque
+            new_sfc = blank_sfc(rect.size)
+        new_sfc.blit(src, ((0, 0), rect.size), rect)
+        return (new_sfc, True)
 
     def crop (self, rect):
         """Crop the surface to the given rect.
@@ -945,7 +976,6 @@ crop(rect) -> self
         return self.transform('crop', Rect(rect))
 
     def _flip (self, sfc, last, x, y):
-        """Backend for flip."""
         if last is not None and last == (x, y):
             return (None, None, None)
         if not x and not y:
@@ -972,7 +1002,6 @@ flip(x = False, y = False) -> self
         return self.transform('flip', bool(x), bool(y))
 
     def _rotate (self, sfc, last, angle, about):
-        """Backend for rotate."""
         w_old, h_old = sfc.get_size()
         cx, cy = w_old / 2., h_old / 2.
         about = (cx, cy) if about is None else (about[0], about[1])
@@ -986,7 +1015,7 @@ flip(x = False, y = False) -> self
         if abs(angle) < self.rotate_threshold:
             return (sfc, None, None)
         # if not already alpha, convert to alpha
-        if sfc.get_alpha() is None and sfc.get_colorkey() is None:
+        if not has_alpha(sfc):
             sfc = sfc.convert_alpha()
         new_sfc = self.rotate_fn(sfc, angle)
         # compute draw offset
@@ -1088,7 +1117,7 @@ surface.
             if not dirty and fn in ts:
                 # nothing is different at this point
                 # grab surface to start next transform at
-                sfc = ts[fn][1]
+                sfc = ts[fn][2]
                 if not passed_rot:
                     before_rot = sfc
                     if fn == 'rotate':
@@ -1126,10 +1155,7 @@ surface.
             self._dirty = combine_drawn(self._dirty, dirty)
             # change current surface and rect
             self._surface = sfc
-            if sfc.get_alpha() is None and sfc.get_colorkey() is None:
-                self.opaque = True
-            else:
-                self.opaque = False
+            self.opaque = not has_alpha(sfc)
             self._rect = r = Rect(self._rect.topleft, before_rot.get_size())
             self._postrot_rect = pr = r.move(self._rot_offset)
             pr.size = sfc.get_size()
@@ -1287,7 +1313,7 @@ Set this directly (can be ``None`` to do nothing).
     def overlay (self):
         """A :class:`Graphic` which is always drawn on top, or ``None``.
 
-There may only every be one overlay; changing this attribute removes any
+There may only ever be one overlay; changing this attribute removes any
 previous overlay from the :class:`GraphicsManager`.
 
 """
@@ -1485,8 +1511,9 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
     def colour (self, colour):
         self.fill(colour)
 
-    def _gen_mods_fill (self, src_sz, first_time, colour):
-        if first_time:
+    def _gen_mods_fill (self, src_sz, first_time, last_args, colour):
+        if first_time or \
+           normalise_colour(last_args[0]) != normalise_colour(colour):
 
             def apply_fn (g):
                 g._colour = colour
@@ -1499,22 +1526,24 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
             mods = None
         return (mods, src_sz)
 
-    def _fill (self, sfc, dest, dirty, last_args, colour):
+    def _fill (self, src, dest, dirty, last_args, colour):
         colour = normalise_colour(colour)
         changed = True
         if last_args is not None:
             # compare colours
             if normalise_colour(last_args[0]) == colour:
                 if not dirty:
-                    return (dest or sfc, False)
+                    return (dest or src, False)
                 else:
                     changed = False
         if changed or dirty is True:
             # full fill
-            sfc = pg.Surface(sfc.get_size())
+            sfc = pg.Surface(src.get_size())
             if colour[3] < 255:
                 # non-opaque: need to convert to alpha
                 sfc = sfc.convert_alpha()
+            else:
+                sfc = sfc.convert()
             sfc.fill(colour)
             return (sfc, True)
         else:
