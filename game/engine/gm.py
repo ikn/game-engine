@@ -12,7 +12,6 @@ TODO:
     - rewrite builtin transforms
     - write _gen_mod_*
     - GM as graphic
-    - sz_before_transform, and use in place of sfc_before_transform (use implementation in .transform())
  - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
  - ignore off-screen things
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
@@ -314,7 +313,7 @@ Can be set to a single number to scale by in both dimensions.
     def cropped_rect (self):
         """The rect currently cropped to."""
         if self._cropped_rect is None:
-            return self.sfc_before_transform('crop').get_rect()
+            return Rect((0, 0), self.sz_before_transform('crop'))
         else:
             return self._cropped_rect
 
@@ -491,26 +490,70 @@ always applied).
             except KeyError:
                 return None
 
+    def _sfc_before_transform (self, transform_fn):
+        """Get queued/applied previous surface (size) for a transform function.
+
+Loops backwards until the transform in question is not an unapplied builtin.
+Transform may be an index in transforms.
+
+Returns (sfc, is_size), or (None, None) if the transform doesn't exist.
+
+"""
+        t_ks = self.transforms
+        if isinstance(transform_fn, int):
+            i = transform_fn
+            if i < 0 or i >= len(self.transforms):
+                return (None, None)
+        else:
+            try:
+                i = self.transforms.index(transform_fn)
+            except ValueError:
+                return (None, None)
+        q = self._queued_transforms
+        ts = self._transforms
+        while True:
+            if i == 0:
+                # first transform
+                return (self._orig_sfc, False)
+            else:
+                # use previous transform's final surface
+                i -= 1
+                fn = t_ks[i]
+                if fn in q:
+                    if isinstance(fn, basestring):
+                        return (q[fn][1], True)
+                    # else doesn't store size: continue
+                elif fn in ts:
+                    return (ts[fn][1], False)
+                # else continue
+
     def sfc_before_transform (self, transform_fn):
         """Return the value of :attr:`surface` before the given transform.
 
-Takes a transform function as taken by :meth:`transform`.  If it has not been
-applied/queued yet, the return value is ``None`` (builtin transformations are
-always applied).  Calling this causes all queued transformations to be applied.
+Takes a transform function as taken by :meth:`transform`, or an index in
+:attr:`transforms`.  If it has not been applied/queued yet, the return value is
+``None`` (builtin transformations are always applied).  Calling this causes all
+queued transformations to be applied.
 
 """
         self.render()
-        t_ks = self.transforms
-        ts = self._transforms
-        if transform_fn in ts:
-            return ts[transform_fn][1]
-        else:
-            if transform_fn in t_ks:
-                # must be a default-valued builtin
-                i = t_ks.index(transform_fn)
-                return self._orig_sfc if i == 0 else ts[t_ks[i - 1]][1]
-            else:
-                return None
+        # now queue is empty, so is_size will be False
+        sfc, is_size = self._sfc_before_transform(transform_fn)
+        return sfc
+
+    def sz_before_transform (self, transform_fn):
+        """Return the value of :attr:`size` before the given transform.
+
+Takes a transform function as taken by :meth:`transform`.  If it has not been
+applied/queued yet, the return value is ``None`` (builtin transformations are
+always applied).  Unlike :meth:`sfc_before_transform`, calling this does not
+apply queued transformations.
+
+"""
+        sz, is_size = self._sfc_before_transform(transform_fn)
+        if sz is not None and not is_size:
+            sz = sz.get_size()
+        return sz
 
     def _alter_transforms (self, action, transform_fn):
         """Undo/apply transform modifiers.
@@ -661,6 +704,7 @@ blitting.
             # get starting size
             if i is None:
                 i = len(ts)
+            self.sz_before_transform(i)
             while True:
                 if i == 0:
                     # first transform
@@ -797,7 +841,7 @@ rescale(w = 1, h = 1, about = (0, 0)) -> self
             scale about.
 
 """
-        ow, oh = self.sfc_before_transform('resize').get_size()
+        ow, oh = self.sz_before_transform('resize')
         return self.resize(ir(w * ow), ir(h * oh), about)
 
     def resize_both (self, w = None, h = None, about = (0, 0)):
@@ -810,7 +854,7 @@ resize_both([w][, h], about = (0, 0)) -> self
             scale about.
 
 """
-        ow, oh = self.sfc_before_transform('resize').get_size()
+        ow, oh = self.sz_before_transform('resize')
         if w is None:
             w = ir(ow * float(h) / oh)
         else:
