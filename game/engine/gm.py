@@ -9,8 +9,8 @@ TODO:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
  - partial transforms
-    - reimplement apply_fn/undo_fn - must happen in .transform(), .untransform(), .orig_sfc.setter
     - rewrite builtin transforms
+    - write _gen_mod_*
     - GM as graphic
     - sz_before_transform, and use in place of sfc_before_transform (use implementation in .transform())
  - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
@@ -179,6 +179,9 @@ builtin transforms (see :meth:`transform`).
 
     @orig_sfc.setter
     def orig_sfc (self, sfc):
+        if self._orig_sfc.get_size() != sfc.get_size():
+            if self.transforms:
+                self._alter_transforms('none', self.transforms[0])
         self._orig_sfc = sfc
         self._orig_dirty = True
 
@@ -512,9 +515,12 @@ always applied).  Calling this causes all queued transformations to be applied.
     def _alter_transforms (self, action, transform_fn):
         """Undo/apply transform modifiers.
 
-action is 'remove' or 'insert'.  The actual removal/insertion is not performed
+action is 'none', 'remove' or 'insert'.  The actual action is not performed
 (should happen after calling for removal, before for insertion - so that
 transform_fn is in transforms).
+
+We undo up to and including transform_fn, then regenerate modifiers if action
+is 'none' or the action has caused a size mismatch, then reapply.
 
 """
         t_ks = self.transforms
@@ -536,7 +542,7 @@ transform_fn is in transforms).
                 continue
             if fn == transform_fn:
                 # don't reapply if removing
-                if action == 'insert':
+                if action != 'remove':
                     following.append((fn, pool))
                 # don't undo
                 break
@@ -546,7 +552,7 @@ transform_fn is in transforms).
         if pool == ts:
             src_sz = src.get_size()
             dest_sz = dest.get_size()
-        regen = src_sz != dest_sz
+        regen = action == 'none' or src_sz != dest_sz
         src_sz = dest_sz
         # reapply, possibly including a new transform
         for fn, pool in reversed(following):
