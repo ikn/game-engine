@@ -975,20 +975,51 @@ crop(rect) -> self
 """
         return self.transform('crop', Rect(rect))
 
-    def _flip (self, sfc, last, x, y):
-        if last is not None and last == (x, y):
-            return (None, None, None)
+    def _gen_mods_flip (self, src_sz, first_time, last_args, x, y):
+        if first_time or last_args != (x, y):
+
+            def apply_fn (g):
+                g._flipped = (x, y)
+
+            def undo_fn (g):
+                g._flipped = (False, False)
+
+            mods = (apply_fn, undo_fn)
+        else:
+            mods = None
+        return (mods, src_sz)
+
+    def _flip (self, src, dest, dirty, last_args, x, y):
         if not x and not y:
-            return (sfc, None, None)
-        new_sfc = pg.transform.flip(sfc, x, y)
-
-        def apply_fn (g):
-            g._flipped = (x, y)
-
-        def undo_fn (g):
-            g._flipped = (False, False)
-
-        return (new_sfc, apply_fn, undo_fn)
+            return (src, dirty)
+        if dirty is not True and last_args is not None and last_args == (x, y):
+            if dirty:
+                # check if a partial transform would be quicker
+                w, h = src.get_rect().size
+                alpha = has_alpha(src)
+                k = 5 if alpha else 3.5
+                if k * sum(r.w * r.h for r in dirty) ** .75 < w * h ** .75:
+                    # it would (this is all empirical and quite rough)
+                    new_dirty = []
+                    flip = pg.transform.flip
+                    for r in dirty:
+                        # copy this rect to a new surface
+                        sfc = pg.Surface(r.size)
+                        if alpha:
+                            sfc = sfc.convert_alpha()
+                        sfc.blit(src, (0, 0), r)
+                        # transform the rect
+                        r = Rect((w - r.x if x else r.x,
+                                  h - r.y if y else r.y), r.size)
+                        new_dirty.append(r)
+                        # flip and blit to destination
+                        dest.blit(flip(sfc, x, y), r)
+                    return (dest, new_dirty)
+            else:
+                return (dest, False)
+        # do a full transform
+        new_sfc = pg.transform.flip(src, x, y)
+        return (new_sfc, True)
 
     def flip (self, x = False, y = False):
         """Flip the graphic over either axis.
