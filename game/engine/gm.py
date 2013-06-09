@@ -12,6 +12,7 @@ TODO:
     - rewrite builtin transforms
     - write _gen_mod_*
     - GM as graphic
+    - _alter_transforms behaviour is wrong with insert and none - split into undo, apply
  - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
  - ignore off-screen things
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
@@ -473,6 +474,25 @@ align(pos = 0, pad = 0, offset = 0, rect = self.manager.surface.get_rect())
 
     # transform
 
+    """Doc for _gen_mods_* methods.
+
+Each builtin transform requires a _gen_mods_<transform> method, as follows:
+
+_gen_mods_<transform>(src_sz, first_time, *args)
+    -> ((apply_fn, undo_fn), dest_sz)
+
+src_sz: size before the transform.
+first_time: whether this is the first time these modifiers have been generated.
+            If false, and the modifiers are independent of src_sz, the return
+            value may be (None, dest_sz).
+
+apply_fn, undo_fn: functions that take the Graphic instance and apply or undo
+                   modifiers that the transform requires (such as setting
+                   transform attributes like angle).
+dest_sz: the size after the transform.
+
+"""
+
     def last_transform_args (self, transform_fn):
         """Return the last (tuple of) arguments passed to the given transform.
 
@@ -590,7 +610,7 @@ is 'none' or the action has caused a size mismatch, then reapply.
                 # don't undo
                 break
             following.append((fn, pool))
-            undo_fn()
+            undo_fn(self)
         # last loop was for transform_fn
         if pool == ts:
             src_sz = src.get_size()
@@ -604,13 +624,11 @@ is 'none' or the action has caused a size mismatch, then reapply.
             # else size has changed, so need to regenerate
             args, src, dest, apply_fn, undo_fn = pool[fn]
             gen_mods = getattr(self, '_gen_mods_' + fn)
-            # second arg is first_time, and determines whether size-independent
-            # transforms can skip regenerating the results
             mods, dest_sz = gen_mods(src_sz, False, *args)
             if mods is not None:
                 undo_fn, apply_fn = mods
             # else didn't change
-            apply_fn()
+            apply_fn(self)
             # update in transform store
             if pool == q:
                 src = src_sz
@@ -641,7 +659,7 @@ transform(transform_fn, *args[, position][, before][, after]) -> self
 Builtin transforms should not be moved after rotation (``'rotate'``); behaviour
 in this case is undefined.
 
-Calls ``transform_fn(src, dest, last_args, args, dirty)`` to apply the
+Calls ``transform_fn(src, dest, dirty, last_args, *args)`` to apply the
 transformation, where:
 
 - ``src`` is the surface before this transformation was last applied (or the
@@ -1451,6 +1469,15 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
     @colour.setter
     def colour (self, colour):
         self.fill(colour)
+
+    def _gen_mods_fill (self, src_sz, first_time, colour):
+        if first_time:
+            # fill cannot be undone
+            fn = lambda g: None
+            mods = (fn, fn)
+        else:
+            mods = (None, None)
+        return (mods, src_sz)
 
     def _fill (self, sfc, dest, dirty, last_args, colour):
         colour = normalise_colour(colour)
