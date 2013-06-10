@@ -10,7 +10,7 @@ TODO:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
  - partial transforms
-    - rewrite builtin transforms and write _gen_mods_* (resize, rotate)
+    - rewrite builtin transforms and write _gen_mods_* (rotate)
     - GM as graphic
  - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
  - ignore off-screen things
@@ -1574,28 +1574,35 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
 
     def _fill (self, src, dest, dirty, last_args, colour):
         colour = normalise_colour(colour)
-        changed = True
-        if last_args is not None:
-            # compare colours
-            if normalise_colour(last_args[0]) == colour:
-                if not dirty:
-                    return (dest or src, False)
-                else:
-                    changed = False
-        if changed or dirty is True:
-            # full fill
-            sfc = pg.Surface(src.get_size())
-            if colour[3] < 255:
-                # non-opaque: need to convert to alpha
-                sfc = sfc.convert_alpha()
+        if colour == (0, 0, 0, 255):
+            return (src, dirty)
+        if dest is not None and src.get_size() == dest.get_size():
+            # we can reuse dest
+            last_colour = normalise_colour(last_args[0])
+            if last_colour[3] == 255 and colour[3] < 255:
+                # newly transparent
+                dest = dest.convert_alpha()
+            if dirty is True or last_colour != colour:
+                # need to refill everything
+                dest.fill(colour)
+                return (dest, True)
+            elif dirty:
+                # same colour, some areas changed
+                for r in dirty:
+                    dest.fill(colour, r)
+                return (dest, dirty)
             else:
-                sfc = sfc.convert()
-            sfc.fill(colour)
-            return (sfc, True)
+                # same as last time
+                return (dest, False)
+        # create new surface and fill
+        new_sfc = pg.Surface(src.get_size())
+        if colour[3] < 255:
+            # non-opaque: need to convert to alpha
+            new_sfc = new_sfc.convert_alpha()
         else:
-            # partial fill
-            for r in dirty:
-                dest.fill(colour, r)
+            new_sfc = new_sfc.convert()
+        new_sfc.fill(colour)
+        return (new_sfc, True)
 
     def fill (self, colour):
         """Fill with the given colour (like :attr:`colour`)."""
