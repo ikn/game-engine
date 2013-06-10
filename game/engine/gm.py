@@ -79,7 +79,8 @@ corresponding method.  The former is more natural, and is useful for
 can be chained together.
 
 Position and size can also be retrieved and altered using list indexing, like
-with Pygame rects.
+with Pygame rects.  Altering size in any way applies the :meth:`resize`
+transformation.
 
 :meth:`resize`, :meth:`crop`, :meth:`flip` and :meth:`rotate` correspond to
 builtin transforms (see :meth:`transform`).
@@ -1207,6 +1208,10 @@ surface.
         dirty = self._dirty
         if self._rect != self.last_rect:
             dirty = True
+            self._postrot_rect = Rect(
+                self._rect.move(self._rot_offset).topleft, 
+                self._postrot_rect.size
+            )
         if self.blit_flags != self._last_blit_flags:
             dirty = True
             self._last_blit_flags = self.blit_flags
