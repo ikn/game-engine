@@ -10,7 +10,7 @@ TODO:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
  - partial transforms
-    - rewrite builtin transforms and write _gen_mods_* (resize, flip, rotate)
+    - rewrite builtin transforms and write _gen_mods_* (resize, rotate)
     - GM as graphic
  - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
  - ignore off-screen things
@@ -773,11 +773,12 @@ blitting.
                 # apply modifier, then reapply following modifiers
                 apply_fn(self)
                 self._apply_transforms(i, src_sz != dest_sz, False)
+        return self
 
     def retransform (self, transform_fn):
         """Reapply the given transformation (if already applied).
 
-Takes a transformation function like :meth:`transform`.
+Takes a transformation function like :meth:`transform` and returns self.
 
 """
         try:
@@ -789,11 +790,12 @@ Takes a transformation function like :meth:`transform`.
             # no need to regenerate modifiers - nothing changed
             self._queued_transforms[transform_fn] = \
                 (args, src.get_size(), dest.get_size(), apply_fn, undo_fn)
+        return self
 
     def untransform (self, transform_fn):
         """Remove an applied transformation.
 
-Takes a transformation function like :meth:`transform`.
+Takes a transformation function like :meth:`transform` and returns self.
 
 """
         t_ks = self.transforms
@@ -818,6 +820,7 @@ Takes a transformation function like :meth:`transform`.
             del ts[transform_fn]
         if transform_fn in q:
             del q[transform_fn]
+        return self
 
     def reload (self):
         """Reload from disk if possible.
@@ -829,36 +832,43 @@ If successful, all transformations are reapplied afterwards, if any.
             # this calls a setter
             self.orig_sfc = conf.GAME.img(self.fn, cache = False)
 
-    def _resize (self, sfc, last, w, h, about = (0, 0)):
-        start_w, start_h = start_sz = sfc.get_size()
-        if w is None:
-            w = start_w
-        if h is None:
-            h = start_h
-        sz = (w, h)
-        about = (about[0], about[1])
-        if last is not None:
-            last_w, last_h, (last_ax, last_ay) = last
-            if sz == (last_w, last_h) and about == (last_ax, last_ay):
-                # no change to arguments
-                return (None, None, None)
-        if sz == start_sz and about == (0, 0):
-            return (sfc, None, None)
-        scale = (float(w) / start_w, float(h) / start_h)
-        offset = (ir((1 - scale[0]) * about[0]),
-                  ir((1 - scale[1]) * about[1]))
+    def _gen_mods_resize (self, src_sz, first_time, last_args, w, h,
+                          about = (0, 0)):
+        # mods are size-dependent, so they always change
+        ax, ay = about
+        scale = (float(w) / src_sz[0], float(h) / src_sz[1])
+        ox = ir((1 - scale[0]) * ax)
+        oy = ir((1 - scale[1]) * ay)
 
         def apply_fn (g):
             g._scale = scale
             x, y, gw, gh = g._rect
-            g._rect = Rect(x + offset[0], y + offset[1], gw, gh)
+            g._rect = Rect(x + ox, y + oy, gw, gh)
 
         def undo_fn (g):
             g._scale = (1, 1)
             x, y, gw, gh = g._rect
-            g._rect = Rect(x - offset[0], y - offset[1], gw, gh)
+            g._rect = Rect(x - ox, y - oy, gw, gh)
 
-        return (self.scale_fn(sfc, sz), apply_fn, undo_fn)
+        return ((apply_fn, undo_fn), (w, h))
+
+    def _resize (self, src, dest, dirty, last_args, w, h, about = (0, 0)):
+        start_w, start_h = src.get_size()
+        if w is None:
+            w = start_w
+        if h is None:
+            h = start_h
+        ax, ay = about
+        if w == start_w and h == start_h and ax == ay == 0:
+            # transform does nothing
+            return (src, dirty)
+        if not dirty and last_args is not None:
+            last_w, last_h, (last_ax, last_ay) = last
+            if w == last_w and h == last_h and ax == last_ax and ay == last_ay:
+                # same as last time
+                return (dest, False)
+        # full transform
+        return (self.scale_fn(src, (w, h)), True)
 
     def resize (self, w = None, h = None, about = (0, 0)):
         """Resize the graphic.
