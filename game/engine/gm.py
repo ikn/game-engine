@@ -10,7 +10,6 @@ TODO:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
  - partial transforms
-    - rewrite builtin transforms and write _gen_mods_* (rotate)
     - GM as graphic
  - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
  - ignore off-screen things
@@ -104,6 +103,7 @@ builtin transforms (see :meth:`transform`).
         #: :attr:`rect` at the time of the last draw.
         self.last_rect = Rect(self._rect)
         self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
+        self._must_apply_rot = False
         #: A list of transformations applied to the graphic.  Always contains
         #: the builtin transforms as strings (though they do nothing
         #: by default); other transforms are added through :meth:`transform`,
@@ -789,8 +789,12 @@ Takes a transformation function like :meth:`transform` and returns self.
             pass
         else:
             # no need to regenerate modifiers - nothing changed
-            self._queued_transforms[transform_fn] = \
-                (args, src.get_size(), dest.get_size(), apply_fn, undo_fn)
+            if isinstance(transform, basestring):
+                self._queued_transforms[transform_fn] = \
+                    (args, src.get_size(), dest.get_size(), apply_fn, undo_fn)
+            else:
+                self._queued_transforms[transform_fn] = \
+                    (args, None, None, None, None)
         return self
 
     def untransform (self, transform_fn):
@@ -853,14 +857,14 @@ If successful, all transformations are reapplied afterwards, if any.
 
         return ((apply_fn, undo_fn), (w, h))
 
-    def _resize (self, src, dest, dirty, last_args, w, h, about = (0, 0)):
+    def _resize (self, src, dest, dirty, last_args, w, h, about):
         start_w, start_h = src.get_size()
         if w is None:
             w = start_w
         if h is None:
             h = start_h
         ax, ay = about
-        if w == start_w and h == start_h and ax == ay == 0:
+        if w == start_w and h == start_h:
             # transform does nothing
             return (src, dirty)
         if not dirty and last_args is not None:
@@ -1043,45 +1047,47 @@ flip(x = False, y = False) -> self
 """
         return self.transform('flip', bool(x), bool(y))
 
-    def _rotate (self, sfc, last, angle, about):
-        w_old, h_old = sfc.get_size()
-        cx, cy = w_old / 2., h_old / 2.
-        about = (cx, cy) if about is None else (about[0], about[1])
-        if last is not None:
-            last_angle, last_about = last
-            last_about = (cx, cy) if last_about is None \
-                         else (last_about[0], last_about[1])
-            if abs(angle - last_angle) < self.rotate_threshold and about == last_about:
-                # no change to arguments
-                return (None, None, None)
-        if abs(angle) < self.rotate_threshold:
-            return (sfc, None, None)
-        # if not already alpha, convert to alpha
-        if not has_alpha(sfc):
-            sfc = sfc.convert_alpha()
-        new_sfc = self.rotate_fn(sfc, angle)
-        # compute draw offset
-        w_new, h_new = new_sfc.get_size()
-        # v = c_new - about
-        vx = cx - about[0]
-        vy = cy - about[1]
-        # c - about_new = v.rotate(angle)
-        s = sin(angle)
-        c = cos(angle)
-        ax_new = w_new / 2. - (c * vx + s * vy)
-        ay_new = h_new / 2. - (-s * vx + c * vy)
-        # about = offset + about_new
-        offset = (ir(about[0] - ax_new), ir(about[1] - ay_new))
+    def _gen_mods_rotate (self, src_sz, first_time, last_args, angle, about):
+        # - dest_sz will never get used: all following transforms are
+        #   guaranteed to be non-builtins, if the user does nothing silly
+        # - mods are size-dependent, so they always change
+        # - computation of rot_offset happens at draw time, since it's only
+        #   needed then, and only internally
 
         def apply_fn (g):
             g._angle = angle
-            g._rot_offset = offset
+            g._must_apply_rot = True
 
         def undo_fn (g):
             g._angle = 0
             g._rot_offset = (0, 0)
+            g._must_apply_rot = False
 
-        return (new_sfc, apply_fn, undo_fn)
+        return ((apply_fn, undo_fn), src_sz)
+
+    def _rotate (self, src, dest, dirty, last_args, angle, about):
+        if abs(angle) < self.rotate_threshold:
+            # transform does nothing
+            return (src, dirty)
+        w, h = src.get_size()
+        cx, cy = w / 2., h / 2.
+        ax, ay = (cx, cy) if about is None else about
+        if not dirty and last_args is not None:
+            last_angle, last_about = last_args
+            # if last_angle == angle, then surface size didn't change, so
+            # neither did the centre point
+            last_ax, last_ay = (cx, cy) if last_about is None else last_about
+            if abs(angle - last_angle) < self.rotate_threshold and \
+            (ax, ay) == (last_ax, last_ay):
+                # no change to result
+                return (dest, False)
+        # do a full transform
+        # if not already alpha and we might end up with borders, convert to
+        # alpha
+        if angle % (pi / 2) != 0 and not has_alpha(src):
+            src = src.convert_alpha()
+        new_sfc = self.rotate_fn(src, angle)
+        return (new_sfc, True)
 
     def rotate (self, angle, about = None):
         """Rotate the graphic.
@@ -1193,6 +1199,24 @@ surface.
             dirty = True
 
         self._last_transforms = list(t_ks)
+        if self._must_apply_rot:
+            self._must_apply_rot = False
+            # compute draw offset due to rotation
+            angle, about = ts['rotate'][0]
+            w_orig, h_orig = before_rot.get_size()
+            cx, cy = w_orig / 2., h_orig / 2.
+            w, h = sfc.get_size()
+            ax, ay = (cx, cy) if about is None else about
+            # v = c - about
+            vx = cx - ax
+            vy = cy - ay
+            # c_new - about_new = v.rotate(angle)
+            s = sin(angle)
+            c = cos(angle)
+            ax_new = w / 2. - (c * vx + s * vy)
+            ay_new = h / 2. - (-s * vx + c * vy)
+            # about = offset + about_new
+            self._rot_offset = (ir(ax - ax_new), ir(ay - ay_new))
         if dirty:
             self._dirty = combine_drawn(self._dirty, dirty)
             # change current surface and rect
