@@ -115,7 +115,8 @@ This method should not change the state of the world, because it is not
 guaranteed to be called every frame.
 
 """
-        return self.graphics.draw()
+        dirty = self.graphics.draw(False)
+        return dirty
 
 
 class Game (object):

@@ -3,11 +3,10 @@
 ---NODOC---
 
 TODO:
- - make it possible for GM to have transparent BG (only if orig_sfc has alpha)
- - careful of GM._orig_dirty getting very large
- - make GG force same layer/manager/etc., and allow for transforms and movement of the graphics in the same way
  - propagate exceptions raised in calls from fastdraw (in _draw, opaque_in, _pre_draw, etc.)
- - is display.update much slower with duplicates?  If so, maybe merge layers' dirty rects.
+ - make it possible for GM to have transparent BG (only if orig_sfc has alpha)
+ - make GG force same layer/manager/etc., and allow for transforms and movement of the graphics in the same way
+ - fastdraw: merge layers' dirty rects since display.update is slow with duplicates
  - in graphics, store n (5?) last # frames between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
@@ -1516,8 +1515,12 @@ the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
             rects = True
         self._gm_dirty = combine_drawn(self._gm_dirty, rects)
 
-    def draw (self):
+    def draw (self, handle_dirty = True):
         """Update the display (:attr:`orig_sfc`).
+
+:arg handle_dirty: whether to propagate changed areas to the transformation
+                   pipeline implemented by :class:`Graphic`.  Pass ``False`` if
+                   you don't intend to use this manager as a graphic.
 
 Returns ``True`` if the entire surface changed, or a list of rects that cover
 changed parts of the surface, or ``False`` if nothing changed.
@@ -1535,7 +1538,7 @@ changed parts of the surface, or ``False`` if nothing changed.
         elif dirty is False:
             dirty = []
         dirty = fastdraw(layers, sfc, graphics, dirty)
-        if dirty:
+        if dirty and handle_dirty:
             Graphic.dirty(self, *dirty)
         return dirty
 
