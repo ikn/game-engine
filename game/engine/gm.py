@@ -3,14 +3,15 @@
 ---NODOC---
 
 TODO:
+ - make it possible for GM to have transparent BG (only if orig_sfc has alpha)
+ - careful of GM._orig_dirty getting very large
+ - make GG force same layer/manager/etc., and allow for transforms and movement of the graphics in the same way
  - propagate exceptions raised in calls from fastdraw (in _draw, opaque_in, _pre_draw, etc.)
  - is display.update much slower with duplicates?  If so, maybe merge layers' dirty rects.
  - in graphics, store n (5?) last # frames between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
- - partial transforms
-    - GM as graphic
  - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
  - ignore off-screen things
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
@@ -147,7 +148,7 @@ builtin transforms (see :meth:`transform`).
         #: ``2 * pi / 500``.  If you change this, you may want to call
         #: :meth:`retransform`.
         self.rotate_threshold = 2 * pi / 500
-        self._orig_dirty = [] # where original surface is changed
+        self._orig_dirty = False # where original surface is changed
         # where final surface is changed; gets used (and reset) by manager
         self._dirty = []
 
@@ -1131,6 +1132,8 @@ not alter any other (transformed) surfaces.  Takes any number of rects to flag
 as dirty.  If none are given, the whole of the graphic is flagged.
 
 """
+        if not rects:
+            rects = True
         self._orig_dirty = combine_drawn(self._orig_dirty, rects)
 
     def render (self):
@@ -1147,6 +1150,7 @@ surface.
         self._queued_transforms = {}
         # work out where to start (re)applying transforms from
         dirty = self._orig_dirty
+        self._orig_dirty = False
         if dirty:
             i = 0
         elif q:
@@ -1239,16 +1243,18 @@ surface.
         if self.blit_flags != self._last_blit_flags:
             dirty = True
             self._last_blit_flags = self.blit_flags
+        # fastdraw needs dirty to be a list
         if dirty:
             pr = self._postrot_rect
             if dirty is True:
                 dirty = [self._last_postrot_rect, pr]
             else:
                 # translate dirty rects
+                pr = pr.topleft
                 dirty = [d_r.move(pr) for d_r in dirty]
-            self._dirty = dirty
         else:
-            dirty = [] # fastdraw needs list
+            dirty = []
+        self._dirty = dirty
 
     def _draw (self, dest, rects):
         """Draw the graphic.
@@ -1330,11 +1336,14 @@ GraphicsManager(scheduler[, sfc], pos = (0, 0), layer = 0, blit_flags = 0)
                 timing.
 :arg sfc: the surface to draw to; can be a ``(width, height)`` tuple to create
           a new transparent surface of this size.  If not given or ``None``,
-          nothing is drawn.
+          nothing is drawn.  This becomes :attr:`orig_sfc` and can be changed
+          using this attribute.
 
-Other arguments are as taken by :class:`Graphic`.  Since this is a Graphic
-subclass, it can be added to other GraphicsManager and supports
-transformations.
+Other arguments are as taken by :class:`Graphic`.  Since this is a
+:class:`Graphic` subclass, it can be added to other :class:`GraphicsManager`
+instances and supports transformations.  None of this can be done until the
+manager has a surface, however, and transformations are only applied in
+:attr:`Graphic.surface`, not in :attr:`orig_sfc`.
 
 """
 
@@ -1344,8 +1353,9 @@ transformations.
         self.scheduler = scheduler
         self._init_as_graphic = False
         self._init_as_graphic_args = (pos, layer, blit_flags)
-        self._surface = None
-        self.surface = sfc
+        self._orig_sfc = None
+        self.orig_sfc = sfc # calls setter
+        self._gm_dirty = False
         self._overlay = None
         self._fade_id = None
         #: ``{layer: graphics}`` dict, where ``graphics`` is a set of the
@@ -1353,31 +1363,36 @@ transformations.
         self.graphics = {}
         #: A list of layers that contain graphics, lowest first.
         self.layers = []
-        self._gm_dirty = []
 
     @property
-    def surface (self):
-        """As taken by the constructor.
+    def orig_sfc (self):
+        """Like :attr:`Graphic.orig_sfc`.
 
-Set this directly (can be ``None`` to do nothing).
+This is the ``sfc`` argument passed to the constructor.  Retrieving this causes
+all graphics to be drawn/updated first.
 
 """
-        return self._surface
+        self.draw()
+        return Graphic.orig_sfc.fget()
 
-    @surface.setter
-    def surface (self, sfc):
+    @orig_sfc.setter
+    def orig_sfc (self, sfc):
         if sfc is not None and not isinstance(sfc, pg.Surface):
-            sfc = pg.Surface(sfc).convert_alpha()
-            sfc.fill((0, 0, 0, 0))
-        if sfc is not self._surface:
-            self._surface = sfc
+            sfc = blank_sfc(sfc)
+        if sfc is not self._orig_sfc:
+            self._orig_sfc = sfc
             if sfc is not None:
-                self._rect = sfc.get_rect()
-                self.dirty()
-                if not self._init_as_graphic:
+                if self._init_as_graphic:
+                    Graphic.orig_sfc.fset(sfc)
+                else:
                     Graphic.__init__(self, sfc, *self._init_as_graphic_args)
                     self._init_as_graphic = True
                     del self._init_as_graphic_args
+
+    @property
+    def orig_sz (self):
+        """The size of the surface before any transforms."""
+        return self._orig_sfc.get_size()
 
     @property
     def overlay (self):
@@ -1427,7 +1442,7 @@ Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
                 g._manager = self
                 # don't draw over any possible previous location
                 g.was_visible = False
-            else: # GraphicsGroup
+            else: # GraphicsGroup: add to queue
                 graphics.extend(g.contents)
         self.layers = sorted(ls)
 
@@ -1492,56 +1507,42 @@ the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
             self._fade_id = None
             self.overlay = None
 
-    def dirty (self, *rects, **kw):
-        """Force redrawing some or all of the screen.
-
-dirty(*rects)
-
-Takes any number of rects to flag as dirty.  If none are given, the whole of
-the current surface is flagged.
-
-"""
+    def dirty (self, *rects):
+        """:meth:`Graphic.dirty`"""
         if self._surface is None:
-            # nothing to mark as dirty (happens in assigning a surface)
+            # nothing to mark as dirty
             return
-        if rects:
-            self._gm_dirty += [Rect(r) for r in rects]
-        else:
-            self._gm_dirty = [self._rect]
+        if not rects:
+            rects = True
+        self._gm_dirty = combine_drawn(self._gm_dirty, rects)
 
     def draw (self):
-        """Update the display.
+        """Update the display (:attr:`orig_sfc`).
 
 Returns ``True`` if the entire surface changed, or a list of rects that cover
 changed parts of the surface, or ``False`` if nothing changed.
 
 """
         layers = self.layers
-        sfc = self._surface
+        sfc = self._orig_sfc
         if not layers or sfc is None:
             return False
         graphics = self.graphics
         dirty = self._gm_dirty
         self._gm_dirty = []
-        return fastdraw(layers, sfc, graphics, dirty)
+        if dirty is True:
+            dirty = [sfc.get_rect()]
+        elif dirty is False:
+            dirty = []
+        dirty = fastdraw(layers, sfc, graphics, dirty)
+        if dirty:
+            Graphic.dirty(self, *dirty)
+        return dirty
 
-    def _pre_draw (self):
-        # set surface to original surface
-        ts = self._transforms
-        if ts:
-            t = ts.items()[0]
-            self._surface = t[1][1]
-        # draw to it
-        drawn = self.draw()
-        if drawn:
-            # dirty as Graphic (might not happen in retransform)
-            dirty = self._dirty
-            pos = self._postrot_rect[:2]
-            for r in drawn:
-                dirty.append(r.move(pos))
-            if ts:
-                # reapply transforms, starting from the first
-                self.retransform(t[0])
+    def render (self):
+        """:meth:`Graphic.render`"""
+        self.draw()
+        Graphic.render(self)
 
 
 class Colour (Graphic):

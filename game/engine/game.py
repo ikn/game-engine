@@ -195,7 +195,7 @@ should be passed to that base class).
             self._update_again = True
             self.world.scheduler.stop()
         self.world = world
-        world.graphics.surface = self.screen
+        world.graphics.orig_sfc = self.screen
         world.graphics.dirty()
         i = get_world_id(world)
         # set some per-world things

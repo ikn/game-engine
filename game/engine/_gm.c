@@ -359,7 +359,8 @@ end:
 }
 
 PyMethodDef methods[] = {
-    {"fastdraw", fastdraw, METH_VARARGS, "Draw everything."},
+    {"fastdraw", fastdraw, METH_VARARGS,
+     "Draw everything; returns dirty list or False."},
     {NULL, NULL, 0, NULL}
 };
 
