@@ -3,7 +3,6 @@
 ---NODOC---
 
 TODO:
- - propagate exceptions raised in calls from fastdraw (in _draw, opaque_in, _pre_draw, etc.)
  - make it possible for GM to have transparent BG (only if orig_sfc has alpha)
  - make GG force same layer/manager/etc., and allow for transforms and movement of the graphics in the same way
  - fastdraw: merge layers' dirty rects since display.update is slow with duplicates

@@ -202,6 +202,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
         for (j = 0; j < n_graphics[i]; j++) { // gs
             g = gs[j];
             PyObject_CallMethodObjArgs(g, pre_draw, NULL);
+            if (PyErr_Occurred() != NULL) return NULL;
             // NOTE: ref[+4] (list)
             g_dirty = PyObject_GetAttrString(g, "_dirty");
             for (k = 0; k < 2; k++) // last/current
@@ -277,6 +278,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                 // NOTE: ref[+7]
                 tmp = PyObject_CallMethodObjArgs(g, opaque_in, (PyObject*) r,
                                                  NULL);
+                if (PyErr_Occurred() != NULL) return NULL;
                 r_good = r->r.w > 0 && r->r.h > 0 && \
                          PyObject_RichCompareBool(tmp, Py_True, Py_EQ);
                 Py_DECREF(tmp); // NOTE: ref[-7]
@@ -319,6 +321,7 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                 }
                 if (PyList_GET_SIZE(draw_in) > 0) {
                     PyObject_CallMethodObjArgs(g, draw, sfc, draw_in, NULL);
+                    if (PyErr_Occurred() != NULL) return NULL;
                 }
                 Py_DECREF(draw_in); // NOTE: ref[-10]
                 Py_DECREF(g_rect); // NOTE: ref[-9]
