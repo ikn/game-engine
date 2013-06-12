@@ -5,7 +5,6 @@
 TODO:
  - make it possible for GM to have transparent BG (only if orig_sfc has alpha)
  - make GG force same layer/manager/etc., and allow for transforms and movement of the graphics in the same way
- - fastdraw: merge layers' dirty rects since display.update is slow with duplicates
  - in graphics, store n (5?) last # frames between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)

@@ -3,7 +3,7 @@
 
 #define MAX_QSORT_LEVELS 300
 
-void quicksort(int *arr, int elements) {
+void quicksort (int *arr, int elements) {
     // http://alienryderflex.com/quicksort/
     int piv, beg[MAX_QSORT_LEVELS], end[MAX_QSORT_LEVELS], i = 0, L, R, swap;
     beg[0] = 0;
@@ -166,9 +166,9 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
     // and layers is sorted
     PyObject* layers_in, * sfc, * graphics_in, * dirty;
     PyObject** layers, *** graphics, ** gs, * g, * g_dirty, * g_rect, * r_o,
-            ** graphics_obj, * tmp, * pre_draw, * clip, * dbl_tmp[2], * rtn,
-            * opaque_in, * dirty_opaque, * l_dirty_opaque, ** dirty_by_layer,
-            * rs, * draw_in, * draw;
+            ** graphics_obj, * tmp, * tmp2, * pre_draw, * clip, * dbl_tmp[2],
+            * rtn, * opaque_in, * dirty_opaque, * l_dirty_opaque,
+            ** dirty_by_layer, * rs, * draw_in, * draw;
     char* dbl[4] = {"was_visible", "visible", "_last_postrot_rect",
                     "_postrot_rect"};
     int n_layers, * n_graphics, i, j, k, l, n, n_dirty, r_new, r_good;
@@ -342,6 +342,12 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
         rtn = PySequence_InPlaceConcat(rtn, dirty_by_layer[i]);
         Py_DECREF(tmp); // NOTE: ref[-8]
     }
+    // make all rects disjoint for faster display updating
+    tmp = PyList_New(0); // NOTE: ref[+8]
+    tmp2 = rtn;
+    rtn = mk_disjoint(tmp2, tmp); // NOTE: ref[+9]
+    Py_DECREF(tmp2); // NOTE: ref[-9]
+    Py_DECREF(tmp); // NOTE: ref[-8]
 
     // cleanup (in reverse order)
     Py_DECREF(draw); // NOTE: ref[-7]
