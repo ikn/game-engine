@@ -9,7 +9,6 @@ TODO:
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
- - automatically call retransform on setting scale_fn, rotate_fn, rotate_threshold (and clean up doc)
  - ignore off-screen things
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
@@ -130,21 +129,10 @@ builtin transforms (see :meth:`transform`).
         self._cropped_rect = None
         self._flipped = (False, False)
         self._angle = 0
-        #: Function to use for scaling; defaults to
-        #: ``pygame.transform.smoothscale`` (and should have the same signature
-        #: as this default).  If you change this, you may want to call
-        #: :meth:`retransform`.
-        self.scale_fn = pg.transform.smoothscale
-        #: Function to use for rotating; uses ``pygame.transform.rotozoom`` by
-        #: default.  Takes the surface and angle (as passed to :meth:`rotate`)
-        # and returns the new rotated surface.  If you change this, you may
-        # want to call :meth:`retransform`.
-        self.rotate_fn = lambda sfc, angle: \
+        self._scale_fn = pg.transform.smoothscale
+        self._rotate_fn = lambda sfc, angle: \
             pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
-        #: Only rotate when the angle changes by this much; defaults to
-        #: ``2 * pi / 500``.  If you change this, you may want to call
-        #: :meth:`retransform`.
-        self.rotate_threshold = 2 * pi / 500
+        self._rotate_threshold = 2 * pi / 500
         self._orig_dirty = False # where original surface is changed
         # where final surface is changed; gets used (and reset) by manager
         self._dirty = []
@@ -364,6 +352,48 @@ Setting this rotates about the graphic's centre.
     @angle.setter
     def angle (self, angle):
         self.rotate(angle)
+
+    @property
+    def scale_fn (self):
+        """Function to use for scaling.
+
+Defaults to ``pygame.transform.smoothscale`` (and should have the same
+signature as this default).
+
+"""
+        return self._scale_fn
+
+    @scale_fn.setter
+    def scale_fn (self, scale_fn):
+        self._scale_fn = scale_fn
+        self.retransform('resize')
+
+    @property
+    def rotate_fn (self):
+        """Function to use for rotating.
+
+Uses ``pygame.transform.rotozoom`` by default.  Takes the surface and angle (as
+passed to :meth:`rotate`) and returns the new rotated surface.
+
+"""
+        return self._rotate_fn
+
+    @rotate_fn.setter
+    def rotate_fn (self, rotate_fn):
+        self._rotate_fn = rotate_fn
+        self.retransform('rotate')
+
+    @property
+    def rotate_threshold (self):
+        """Only rotate when the angle changes by this much.
+
+Defaults to ``2 * pi / 500``."""
+        return self._rotate_threshold
+
+    @rotate_threshold.setter
+    def rotate_threshold (self, rotate_threshold):
+        self._rotate_threshold = rotate_threshold
+        self.retransform('rotate')
 
     # other properties
 
