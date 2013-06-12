@@ -83,7 +83,7 @@ builtin transforms (see :meth:`transform`).
 
 """
 
-    _builtin_transforms = ('crop', 'flip', 'resize', 'rotate')
+    _builtin_transforms = ('crop', 'flip', 'fade', 'resize', 'rotate')
 
     def __init__ (self, img, pos = (0, 0), layer = 0, blit_flags = 0):
         if isinstance(img, basestring):
@@ -128,6 +128,7 @@ builtin transforms (see :meth:`transform`).
         self._scale = (1, 1)
         self._cropped_rect = None
         self._flipped = (False, False)
+        self._opacity = 1
         self._angle = 0
         self._scale_fn = pg.transform.smoothscale
         self._rotate_fn = lambda sfc, angle: \
@@ -339,6 +340,15 @@ Can be set to a single value to apply to both dimensions.
             self.flip(flipped, flipped)
         else:
             self.flip(*flipped)
+
+    @property
+    def opacity (self):
+        """Opacity of the graphic, from 0 (transparent) to 255."""
+        return self._opacity
+
+    @opacity.setter
+    def opacity (self, opacity):
+        self.fade(opacity)
 
     @property
     def angle (self):
@@ -725,7 +735,7 @@ transformation, where:
 transform does nothing.  Possible modes of operation are:
 
 - full transform: return ``(new_sfc, True)``.
-- partial transform: return ``(dest, new_dirty)`` (``dirty`` might also be
+- partial transform: return ``(dest, new_dirty)`` (``new_dirty`` might also be
   ``False`` here).
 - do nothing: return ``(src, dirty)``.
 
@@ -1074,6 +1084,37 @@ flip(x = False, y = False) -> self
 
 """
         return self.transform('flip', bool(x), bool(y))
+
+    def _gen_mods_fade (self, src_sz, first_time, last_args, opacity):
+        if first_time or last_args[0] != opacity:
+
+            def apply_fn (g):
+                g._opacity = opacity
+
+            def undo_fn (g):
+                g._opacity = 255
+
+            mods = (apply_fn, undo_fn)
+        else:
+            mods = None
+        return (mods, src_sz)
+
+    def _fade (self, src, dest, dirty, last_args, opacity):
+        if opacity == 255:
+            return (src, dirty)
+        if dirty is False and last_args is not None and \
+           last_args[0] == opacity:
+            return (dest, False)
+        if not has_alpha(src):
+            src = src.convert_alpha()
+        new_sfc = pg.Surface(src.get_size()).convert_alpha()
+        new_sfc.fill((255, 255, 255, opacity))
+        new_sfc.blit(src, (0, 0), special_flags = pg.BLEND_RGBA_MULT)
+        return (new_sfc, True)
+
+    def fade (self, opacity):
+        """Set opacity, from 0 (transparent) to 255."""
+        return self.transform('fade', opacity)
 
     def _gen_mods_rotate (self, src_sz, first_time, last_args, angle, about):
         # - dest_sz will never get used: all following transforms are
