@@ -13,12 +13,12 @@ from random import choice, randrange
 import pygame as pg
 from pygame.display import update as update_display
 
-from conf import conf
-import gm
-from sched import Scheduler
-import eh
-from mltr import Fonts
-from util import ir, convert_sfc
+from .conf import conf
+from . import gfx
+from .sched import Scheduler
+from . import evt
+from .txt import Fonts
+from .util import ir, convert_sfc
 
 
 def get_world_id (world):
@@ -57,7 +57,7 @@ World(scheduler, evthandler)
 
 :arg scheduler: the :class:`sched.Scheduler` instance this world should use for
                 timing.
-:arg evthandler: the :class:`eh.EventHandler` instance this world should use
+:arg evthandler: the :class:`evt.EventHandler` instance this world should use
                  for input.
 
 """
@@ -69,10 +69,10 @@ World(scheduler, evthandler)
     def __init__ (self, scheduler, evthandler, *args):
         #: :class:`sched.Scheduler` instance taken by the constructor.
         self.scheduler = scheduler
-        #: :class:`eh.EventHandler` instance taken by the constructor.
+        #: :class:`evt.EventHandler` instance taken by the constructor.
         self.evthandler = evthandler
-        #: :class:`gm.GraphicsManager` instance used for drawing by default.
-        self.graphics = gm.GraphicsManager(scheduler)
+        #: :class:`gfx.GraphicsManager` instance used for drawing by default.
+        self.graphics = gfx.GraphicsManager(scheduler)
         self._extra_args = args
         self._initialised = False
 
@@ -141,7 +141,7 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         # load display settings
         self.screen = None #: The main Pygame surface.
         self.refresh_display()
-        #: A :class:`mltr.Fonts` instance.
+        #: A :class:`txt.Fonts` instance.
         self.fonts = Fonts(conf.FONT_DIR)
         # start first world
         self.start_world(*args, **kwargs)
@@ -176,14 +176,14 @@ should be passed to that base class).
 """
         scheduler = Scheduler()
         scheduler.add_timeout(self._update, frames = 1, repeat_frames = 1)
-        evthandler = eh.EventHandler({
+        evthandler = evt.EventHandler({
             pg.ACTIVEEVENT: self._active_cb,
             pg.VIDEORESIZE: self._resize_cb,
             conf.EVENT_ENDMUSIC: self.play_music
         }, [
-            (conf.KEYS_QUIT, self.quit, eh.MODE_ONDOWN),
-            (conf.KEYS_FULLSCREEN, self.toggle_fullscreen, eh.MODE_ONDOWN),
-            (conf.KEYS_MINIMISE, self.minimise, eh.MODE_ONDOWN)
+            (conf.KEYS_QUIT, self.quit, evt.MODE_ONDOWN),
+            (conf.KEYS_FULLSCREEN, self.toggle_fullscreen, evt.MODE_ONDOWN),
+            (conf.KEYS_MINIMISE, self.minimise, evt.MODE_ONDOWN)
         ], False, self.quit)
         # instantiate class
         world = cls(scheduler, evthandler, *args)
@@ -336,12 +336,12 @@ img(filename[, size], cache = True) -> surface
     def render_text (self, *args, **kwargs):
         """Render text and cache the result.
 
-Takes the same arguments as :meth:`mltr.Fonts.render`, plus a keyword-only
+Takes the same arguments as :meth:`txt.Fonts.render`, plus a keyword-only
 ``cache`` argument.  If passed (with any value), the text is cached under this
 hashable value, and can be retrieved from cache by calling this function with
 the same value for this argument.
 
-Returns the same as :meth:`mltr.Fonts.render`
+Returns the same as :meth:`txt.Fonts.render`
 
 """
         cache = 'cache' in kwargs

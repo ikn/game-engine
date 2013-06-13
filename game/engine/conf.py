@@ -7,8 +7,8 @@ from collections import defaultdict
 
 import pygame as pg
 
-import settings
-from util import dd
+from . import settings
+from .util import dd
 
 
 class Conf (object):

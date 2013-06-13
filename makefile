@@ -12,11 +12,12 @@ else
 	./3to2
 endif
 	@ # Python 3 generates weirdly-named lib files
-	cp -a build/lib*-$(PYTHON_VERSION).[0-9]*/*.so game/engine/_gm.so
+	cp -a build/lib*-$(PYTHON_VERSION).[0-9]*/*.so game/engine/gfx/_gm.so
 
 clean:
 	./3to2
-	$(RM) -r build/ game/engine/*.so py_ver bak/
+	$(RM) -r build/ py_ver bak/
+	find -regex 'game/engine/.*\.so' -delete
 
 distclean: clean
 	find -regex '.*\.py[co]' -delete
