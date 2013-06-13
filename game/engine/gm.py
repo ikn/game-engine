@@ -22,16 +22,15 @@ TODO:
 Text
 Animation(surface | filename[image])
 Tilemap
-  (surface | filename[image])
-      uses colours to construct tiles
-  (tiles, data = None)
-      tiles: (size, surface) | (size, filename[image]) | list
-          list: (surface | filename[image] | colour)
-          size: tile (width, height) or width = height
-          surface/filename[image]: a spritemap
-      data: filename[text] | string | list | None (all first tile)
-          filename[text]/string: whitespace-delimited tiles indices; either also take width, or use \n\r for row delimiters, others for column delimiters
-          list: tiles indices; either also take width, or is list of rows
+    a way to grab tiles as needed via dict-like/function
+    (tiles, data = None)
+        tiles: (size, surface) | (size, filename[image]) | list
+            list: (surface | filename[image] | colour)
+            size: tile (width, height) or width = height
+            surface/filename[image]: a spritemap
+        data: filename[text] | string | list | None (all first tile)
+            filename[text]/string: whitespace-delimited tiles indices; either also take width, or use \n\r for row delimiters, others for column delimiters
+            list: tiles indices; either also take width, or is list of rows
 
 ---NODOC---
 
@@ -228,7 +227,7 @@ May be set directly, but not altered in-place.
 
     @pos.setter
     def pos (self, pos):
-        self.rect = (pos, self._rect[2:])
+        self.rect = (pos, self._rect.size)
 
     @property
     def w (self):
@@ -495,7 +494,7 @@ align(pos = 0, pad = 0, offset = 0, rect = self.manager.surface.get_rect())
         else:
             rect = Rect(rect)
         rect = rect.inflate(-2 * pad[0], -2 * pad[1])
-        sz = self._rect[2:]
+        sz = self._rect.size
         for axis in (0, 1):
             align = pos[axis]
             if align < 0:
@@ -1186,7 +1185,7 @@ state*.
 
 """
         self.render()
-        g = Graphic(self._surface, self._postrot_rect[:2], self._layer,
+        g = Graphic(self._surface, self._postrot_rect.topleft, self._layer,
                     self.blit_flags)
         for attr in ('visible', 'scale_fn', 'rotate_fn', 'rotate_threshold'):
             setattr(g, attr, getattr(self, attr))
@@ -1640,7 +1639,7 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
     def __init__ (self, colour, rect, layer = 0, blit_flags = 0):
         rect = Rect(rect)
         # converts surface and sets opaque to True
-        Graphic.__init__(self, pg.Surface(rect[2:]), rect[:2], layer,
+        Graphic.__init__(self, pg.Surface(rect.size), rect.topleft, layer,
                          blit_flags)
         self._colour = (0, 0, 0)
         self.fill(colour)

@@ -18,6 +18,9 @@ On Windows, this requires the command-line compiler ('cl') to be on your path,
 and assumes that SDL.h is in the directory 'sdl_include' above this directory
 (horrible, I know).
 
+The makefile supports a 'PYTHON_VERSION' argument which can be 2 (default) or
+3, which determines which version to build for.
+
 Now, on systems with a sh-compatible shell, do
 
     ./run

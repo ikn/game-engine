@@ -1,11 +1,22 @@
+PYTHON_VERSION := 2
+
 .PHONY: all clean distclean
 
 all:
-	CFLAGS="$(CFLAGS) `pkg-config --cflags sdl`" ./setup
-	cp -a build/lib*/*.so game/engine/
+	echo $(PYTHON_VERSION) > py_ver
+	CFLAGS="$(CFLAGS) `pkg-config --cflags sdl`" ./setup $(PYTHON_VERSION)
+	@ # convert code if want Python 3
+ifeq ($(PYTHON_VERSION), 3)
+	./2to3
+else
+	./3to2
+endif
+	@ # Python 3 generates weirdly-named lib files
+	cp -a build/lib*-$(PYTHON_VERSION).[0-9]*/*.so game/engine/_gm.so
 
 clean:
-	$(RM) -r build/ game/engine/*.so
+	./3to2
+	$(RM) -r build/ game/engine/*.so py_ver bak/
 
 distclean: clean
 	find -regex '.*\.py[co]' -delete

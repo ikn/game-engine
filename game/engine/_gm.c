@@ -1,6 +1,11 @@
 #include <Python.h>
 #include <pygame/pygame.h>
 
+// Python 3 support
+#ifndef PyString_FromString
+#define PyString_FromString PyUnicode_FromString
+#endif
+
 #define MAX_QSORT_LEVELS 300
 
 void quicksort (int *arr, int elements) {
@@ -111,6 +116,8 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
     // generate subrects
     rs = PyList_New(0);
     in_rect = 0;
+    // suppress compiler warnings (we know these will be assigned before use)
+    r_i = r_left = 0;
     for (i = 0; i < n_edges[1] - 1; i++) { // rows
         for (j = 0; j < n_edges[0] - 1; j++) { // cols
             if (in_rect && i != r_i) {
@@ -373,7 +380,27 @@ PyMethodDef methods[] = {
     {NULL, NULL, 0, NULL}
 };
 
+#if PY_MAJOR_VERSION == 3
+
+// Python 3
+
+static struct PyModuleDef mod = {
+    PyModuleDef_HEAD_INIT,
+    "_gm", NULL, -1, methods
+};
+
+PyMODINIT_FUNC PyInit__gm (void) {
+    import_pygame_rect();
+    return PyModule_Create(&mod);
+}
+
+# else
+
+// Python 2
+
 PyMODINIT_FUNC init_gm (void) {
     import_pygame_rect();
     Py_InitModule("_gm", methods);
 }
+
+#endif

@@ -1,3 +1,5 @@
 build/*
+bak/*
 game/engine/_gm.so
+py_ver
 *.py[co]
