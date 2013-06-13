@@ -1176,16 +1176,24 @@ rotate(angle[, about]) -> self
         """Whether this draws opaque pixels in the whole of the given rect."""
         return self.opaque and self._postrot_rect.contains(rect)
 
-    def snapshot (self):
+    def snapshot (self, copy = True):
         """Return a copy of this graphic.
 
 The copy is shallow, which means the new graphic will not appear to be
 transformed, even if this one is, but will be an exact copy of the *current
 state*.
 
+:arg copy: whether to copy the final surface of this graphic/initial surface of
+           the returned graphic.  Since under some circumstances, this graphic
+           can modify its final surface, this is often necessary.  However, if
+           you do not plan to modify this graphic further and will not alter
+           the inital surface (:attr:`orig_sfc`) of the returned graphic, you
+           maybe safely pass ``False`` for reduced CPU and memory usage.
+
 """
         self.render()
-        g = Graphic(self._surface, self._postrot_rect.topleft, self._layer,
+        sfc = self._surface.copy() if copy else self._surface
+        g = Graphic(sfc, self._postrot_rect.topleft, self._layer,
                     self.blit_flags)
         for attr in ('visible', 'scale_fn', 'rotate_fn', 'rotate_threshold'):
             setattr(g, attr, getattr(self, attr))
