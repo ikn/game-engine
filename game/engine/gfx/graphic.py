@@ -1,4 +1,18 @@
-"""Basic graphic representing an image."""
+"""Basic graphic representing an image.
+
+---NODOC---
+
+TODO:
+ - in graphics, store n (5?) last # frames between changes to the surface (by transform or altering the original)
+    - if the average > x or current length < n, do some things:
+        - turn opacity into a list of rects the graphic is opaque in (x = 4?)
+        - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
+ - tint transform (as fade, which uses tint with (255, 255, 255, opacity))
+ - [BUG] rect doesn't update before render on rescale
+
+---NODOC---
+
+"""
 
 from math import sin, cos, pi
 
@@ -6,7 +20,7 @@ import pygame as pg
 from pygame import Rect
 
 from ..conf import conf
-from ..util import ir, has_alpha, blank_sfc, combine_drawn
+from ..util import ir, align_rect, has_alpha, blank_sfc, combine_drawn
 
 
 class Graphic (object):
@@ -144,6 +158,9 @@ Accessing this will cause all queued transformations to be applied.
         """``pygame.Rect`` giving the on-screen area covered.
 
 May be set directly, but not altered in-place.
+
+This is actually the rect before rotation, which is probably what you want,
+really.  To get the real rect, use :attr:`postrot_rect`.
 
 """
         return self._rect
@@ -321,6 +338,12 @@ Setting this rotates about the graphic's centre.
         self.rotate(angle)
 
     @property
+    def postrot_rect (self):
+        """``pygame.Rect`` giving the on-screen area covered after rotation."""
+        self.render()
+        return self._postrot_rect
+
+    @property
     def scale_fn (self):
         """Function to use for scaling.
 
@@ -425,44 +448,18 @@ move_by(dx = 0, dy = 0) -> self
         self.rect = self._rect.move(dx, dy)
         return self
 
-    def align (self, pos = 0, pad = 0, offset = 0, rect = None):
+    def align (self, alignment = 0, pad = 0, offset = 0, within = None):
         """Position this graphic within a rect.
 
-align(pos = 0, pad = 0, offset = 0, rect = self.manager.surface.get_rect())
-    -> self
+align(alignment = 0, pad = 0, offset = 0,
+      within = self.manager.orig_sfc.get_rect()) -> self
 
-:arg pos: ``(x, y)`` alignment; each is ``< 0`` for left-aligned, ``0`` for
-          centred, ``> 0`` for right-aligned.  Can be just one number to use on
-          both axes.
-:arg pad: ``(x, y)`` padding to leave around the inner edge of ``rect``.  Can
-          be negative to allow positioning outside of ``rect``, and can be just
-          one number to use on both axes.
-:arg offset: ``(x, y)`` amounts to offset by after all other positioning; can
-             be just one number to use on both axes.
-:arg rect: Pygame-style rect to align in.
+All arguments are as taken by :func:`engine.util.align_rect`.
 
 """
-        pos = [pos, pos] if isinstance(pos, (int, float)) else list(pos)
-        if isinstance(pad, (int, float)):
-            pad = (pad, pad)
-        if isinstance(offset, (int, float)):
-            offset = (offset, offset)
-        if rect is None:
-            rect = self._manager.surface.get_rect()
-        else:
-            rect = Rect(rect)
-        rect = rect.inflate(-2 * pad[0], -2 * pad[1])
-        sz = self._rect.size
-        for axis in (0, 1):
-            align = pos[axis]
-            if align < 0:
-                x = 0
-            elif align == 0:
-                x = (rect[2 + axis] - sz[axis]) / 2.
-            else: # align > 0
-                x = rect[2 + axis] - sz[axis]
-            pos[axis] = ir(rect[axis] + x + offset[axis])
-        self.rect = (pos, sz)
+        if within is None:
+            within = self._manager.orig_sfc.get_rect()
+        self.pos = align_rect(self._rect, within, alignment, pad, offset)
         return self
 
     # transform

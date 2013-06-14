@@ -1,10 +1,29 @@
-"""Graphics containers: :class:`GraphicsGroup` and :class:`GraphicsManager`."""
+"""Graphics containers: :class:`GraphicsGroup` and :class:`GraphicsManager`.
+
+---NODOC---
+
+TODO:
+ - make it possible for GM to have transparent BG (only if orig_sfc has alpha)
+ - make GG force same layer/manager/etc., and allow for transforms and movement of the graphics in the same way
+ - ignore off-screen things
+ - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
+ - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
+    - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
+    - implementation:
+        - in first loop, for each graphic, offset _rect by -offset
+        - when using, offset old graphic dirty rects by -last_offset, current by -offset
+        - after drawing, for each graphic, offset _rect by offset
+ - [BUG] doesn't update on align before draw
+
+---NODOC---
+
+"""
 
 import sys
 
 import pygame as pg
 
-from ..util import blank_sfc, combine_drawn
+from ..util import normalise_colour, blank_sfc, combine_drawn
 try:
     from _gm import fastdraw
 except ImportError:
@@ -109,7 +128,7 @@ all graphics to be drawn/updated first.
 
 """
         self.draw()
-        return Graphic.orig_sfc.fget()
+        return Graphic.orig_sfc.fget(self)
 
     @orig_sfc.setter
     def orig_sfc (self, sfc):
@@ -119,7 +138,7 @@ all graphics to be drawn/updated first.
             self._orig_sfc = sfc
             if sfc is not None:
                 if self._init_as_graphic:
-                    Graphic.orig_sfc.fset(sfc)
+                    Graphic.orig_sfc.fset(self, sfc)
                 else:
                     Graphic.__init__(self, sfc, *self._init_as_graphic_args)
                     self._init_as_graphic = True
@@ -224,12 +243,10 @@ the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
 ``None`` to remove it.
 
 """
-        colour = list(colour)
-        if len(colour) < 4:
-            colour.append(255)
+        colour = normalise_colour(colour)
         if self._fade_id is None:
             # doesn't already exist
-            self.overlay = Colour(colour[:3] + [0], ((0, 0), self._rect.size))
+            self.overlay = Colour(colour[:3] + (0,), ((0, 0), self._rect.size))
         else:
             self.cancel_fade()
         self._fade_id = self.scheduler.interp_simple(self._overlay, 'colour',

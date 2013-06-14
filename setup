@@ -6,8 +6,6 @@ else
     py_ver=2
 fi
 
-echo AOEU $py_ver
-
 p=`command -v python$py_ver`
 if [ $? -ne 0 ]; then
     p=`command -v python`

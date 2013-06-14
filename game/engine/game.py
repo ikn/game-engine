@@ -299,8 +299,8 @@ img(filename[, size], cache = True) -> surface
                 size = float(size)
             else:
                 if len(size) == 4:
-                    # rect
-                    size = size[2:]
+                    # rect (support Python 3 with no Rect slicing)
+                    size = size.size if isinstance(size, pg.Rect) else size[2:]
                 size = tuple(size)
         key = (filename, size)
         if key in self.img_cache:

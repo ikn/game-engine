@@ -7,8 +7,8 @@ from bisect import bisect
 import pygame as pg
 
 __all__ = ('dd', 'ir', 'sum_pos', 'normalise_colour', 'randsgn', 'rand0',
-           'weighted_rand', 'position_sfc', 'convert_sfc', 'combine_drawn',
-           'blank_sfc')
+           'weighted_rand', 'align_rect', 'position_sfc', 'convert_sfc',
+           'combine_drawn', 'blank_sfc')
 
 
 # abstract
@@ -47,6 +47,11 @@ def sum_pos (*pos):
 
 
 def normalise_colour (c):
+    """Turn a colour into (R, G, B, A) format with each number from 0 to 255.
+
+Accepts 3- or 4-item sequences; if 3, alpha is assumed to be 255.
+
+"""
     r, g, b = c[:3]
     a = 255 if len(c) < 4 else c[3]
     return (r, g, b, a)
@@ -92,50 +97,70 @@ weighted_rand(ws) -> index
 # graphics
 
 
-def position_sfc (sfc, dest, pos = 0, offset = (0, 0), rect = None,
-                  dest_rect = None, blit_flags = 0):
-    """Blit a surface onto another in a relative manner.
+def align_rect (rect, within, alignment = 0, pad = 0, offset = 0):
+    """Align a rect within another rect.
 
-blit_centred(sfc, dest, pos = 0, offset = (0, 0)[, dest_rect], blit_flags = 0)
+align_rect(rect, within, alignment = 0, pad = 0, offset = 0) -> pos
+
+:arg rect: the Pygame-style rect to align.
+:arg within: the rect to align ``rect`` within.
+:arg alignment: ``(x, y)`` alignment; each is ``< 0`` for left-aligned, ``0``
+                for centred, ``> 0`` for right-aligned.  Can be just one number
+                to use on both axes.
+:arg pad: ``(x, y)`` padding to leave around the inner edge of ``within``.  Can
+          be negative to allow positioning outside of ``within``, and can be
+          just one number to use on both axes.
+:arg offset: ``(x, y)`` amounts to offset by after all other positioning; can
+             be just one number to use on both axes.
+
+:return: the position the top-left corner of the rect should be moved to for
+         the wanted alignment.
+
+"""
+    pos = alignment
+    pos = [pos, pos] if isinstance(pos, (int, float)) else list(pos)
+    if isinstance(pad, (int, float)):
+        pad = (pad, pad)
+    if isinstance(offset, (int, float)):
+        offset = (offset, offset)
+    rect = pg.Rect(rect)
+    sz = rect.size
+    within = pg.Rect(within)
+    within = list(within.inflate(-2 * pad[0], -2 * pad[1]))
+    for axis in (0, 1):
+        align = pos[axis]
+        if align < 0:
+            x = 0
+        elif align == 0:
+            x = (within[2 + axis] - sz[axis]) / 2.
+        else: # align > 0
+            x = within[2 + axis] - sz[axis]
+        pos[axis] = ir(within[axis] + x + offset[axis])
+    return pos
+
+
+def position_sfc (sfc, dest, alignment = 0, pad = 0, offset = 0, rect = None,
+                  within = None, blit_flags = 0):
+    """Blit a surface onto another with alignment.
+
+position_sfc(sfc, dest, alignment = 0, pad = 0, offset = 0,
+             rect = sfc.get_rect(), within = dest.get_rect(), blit_flags = 0)
+
+``alignment``, ``pad``, ``offset``, ``rect`` and ``within`` are as taken by
+:func:`align_rect`.  Only the portion of ``sfc`` within ``rect`` is copied.
 
 :arg sfc: source surface to copy.
 :arg dest: destination surface to blit to.
-:arg pos: where to position ``sfc`` relative to ``dest``.  This is ``(x, y)``
-          for each axis, where for each, a number ``< 0`` is top-/left-aligned,
-          ``0`` is centred, and ``> 0`` is bottom-/right-aligned.  If not
-          centred, the given edges of the surfaces are made to align.  This
-          argument can also be just a number, to position in the same manner on
-          both axes.
-:arg offset: an ``(x, y)`` amount to offset the blit position by.
-:arg rect: the rect within ``sfc`` to copy, defaulting to the whole surface.
-           If given, the edges of this rect are used for alignment, as opposed
-           to the edges of the whole surface.  This can be larger than ``sfc``.
-:arg dest_rect: the rect within ``dest`` to align to, instead of the whole
-                surface.  This only affects alignment, not whether anything is
-                blitted outside this rect.  This can be larger than ``dest``.
-:arg blit_flags: the ``special_flags`` argument taken by ``pygame.Surface.blit``.
+:arg blit_flags: the ``special_flags`` argument taken by
+                 ``pygame.Surface.blit``.
 
 """
     if rect is None:
         rect = sfc.get_rect()
-    if isinstance(pos, (int, float)):
-        pos = (pos, pos)
-    if dest_rect is None:
-        dest_rect = dest.get_rect()
-    # get blit position
-    p = []
-    for sfc_w, dest_w, x, o in zip(rect[2:4], dest_rect[2:4], pos, offset):
-        if x < 0:
-            # top/left
-            p.append(o)
-        elif x == 0:
-            # centre
-            p.append((dest_w - sfc_w) / 2 + o)
-        else:
-            # bottom/right
-            p.append(dest_w - sfc_w + o)
-    # blit
-    dest.blit(sfc, p, rect, blit_flags)
+    if within is None:
+        within = dest.get_rect()
+    dest.blit(sfc, align_rect(rect, within, alignment, pad, offset), rect,
+              blit_flags)
 
 
 def has_alpha (sfc):

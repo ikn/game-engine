@@ -22,8 +22,8 @@ callbacks to events and keypresses.
     - mods are zero or more Buttons or Button argument tuples
     - mods taken by key, mouse, joy may be key/mouse/joy argument tuples
  - ButtonEvent(*btns, evt = down), Event subclass
-    - buttons are Buttons or Button argument tuples
-    - evt is bitwise or of one or more of down, up, held
+    - btns are Buttons or Button argument tuples
+    - evt is bitwise-or of one or more of down, up, held
     - has .held_delay = 1 (>= 0), .held_repeat_delay = 1 (> 0)
     - key_event, mouse_event, joy_event return ButtonEvent and use key, mouse,
       joy instead of Button (but can take Buttons too)
@@ -44,7 +44,7 @@ callbacks to events and keypresses.
         - defaults to {kb: True, None: False}, None the default
     - .generate(n_players) chooses schemes to use for n_players if possible
         - according to priorities
-        - returns [(scheme_id: [(type, device)])] for devices it uses for each
+        - returns {scheme_id: [(type, device)]} for devices it uses for each
           player
     - .register(EventHandler, schemes) adds buttons to handler
         - schemes are as returned by .generate
