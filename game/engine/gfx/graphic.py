@@ -457,7 +457,7 @@ All arguments are as taken by :func:`engine.util.align_rect`.
 
 """
         if within is None:
-            within = self._manager.orig_sfc.get_rect()
+            within = Rect((0, 0), self._manager.orig_sz)
         self.pos = align_rect(self._rect, within, alignment, pad, offset)
         return self
 

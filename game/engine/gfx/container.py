@@ -13,7 +13,6 @@ TODO:
         - in first loop, for each graphic, offset _rect by -offset
         - when using, offset old graphic dirty rects by -last_offset, current by -offset
         - after drawing, for each graphic, offset _rect by offset
- - [BUG] doesn't update on align before draw
 
 ---NODOC---
 
@@ -294,6 +293,10 @@ changed parts of the surface, or ``False`` if nothing changed.
         dirty = fastdraw(layers, sfc, graphics, dirty)
         if dirty and handle_dirty:
             Graphic.dirty(self, *dirty)
+        if self._orig_dirty:
+            dirty = combine_drawn(dirty, self._orig_dirty)
+            if not handle_dirty:
+                self._orig_dirty = False
         return dirty
 
     def render (self):
