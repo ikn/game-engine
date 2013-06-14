@@ -8,7 +8,6 @@ TODO:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
  - tint transform (as fade, which uses tint with (255, 255, 255, opacity))
- - [BUG] rect doesn't update before render on rescale
 
 ---NODOC---
 
@@ -840,7 +839,7 @@ If successful, all transformations are reapplied afterwards, if any.
         def apply_fn (g):
             g._scale = scale
             x, y, gw, gh = g._rect
-            g._rect = Rect(x + ox, y + oy, gw, gh)
+            g._rect = Rect(x + ox, y + oy, w, h)
 
         def undo_fn (g):
             g._scale = (1, 1)
