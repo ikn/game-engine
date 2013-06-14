@@ -3,8 +3,8 @@
 ---NODOC---
 
 TODO:
- - static:Grid.fit(rect; 2 of ntiles, tile_size, gap) tile_size, gap can be True for homogeneous sizes, in which case shrink to fit
- - Grid.w, .h, .size for total size (precomputed)
+ - static:Grid.fit(rect; 2 of ntiles, tile_size, gap); tile_size, gap can be True for homogeneous sizes, in which case shrink to fit
+ - allow negative column/row indices
  - Spritemap: takes Surface/image file, sprite_width, sprite_height = image_height
     - Spritemap[index] -> (Surface, rect)
 
@@ -80,9 +80,26 @@ Grid(ntiles, tile_size, gap = 0)
         """The number of tiles in a column."""
         return self.ntiles[1]
 
+    def _size (self, axis):
+        return sum(ts + gap for ts, gap in zip(self._tile_size[axis],
+                                               self._gap[axis]))
+
+    @property
+    def w (self):
+        """The total width of the grid."""
+        return self._size(0)
+
+    @property
+    def h (self):
+        """The total height of the grid."""
+        return self._size(1)
+
+    @property
+    def size (self):
+        """The total ``(width, height)`` size of the grid."""
+        return (self.w, self.h)
+
     def _tile_pos (self, axis, index):
-        ts = self._tile_size[axis]
-        gap = self._gap[axis]
         return sum(ts + gap for ts, gap in zip(self._tile_size[axis][:index],
                                                self._gap[axis][:index]))
 
