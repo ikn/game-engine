@@ -49,11 +49,43 @@ def sum_pos (*pos):
 def normalise_colour (c):
     """Turn a colour into (R, G, B, A) format with each number from 0 to 255.
 
-Accepts 3- or 4-item sequences; if 3, alpha is assumed to be 255.
+Accepts 3- or 4-item sequences (if 3, alpha is assumed to be 255), or an
+integer whose hexadecimal representation is 0xrrggbbaa, or a CSS-style colour
+in a string ('#rgb', '#rrggbb', '#rgba', '#rrggbbaa' - or without the leading
+'#').
 
 """
-    r, g, b = c[:3]
-    a = 255 if len(c) < 4 else c[3]
+    if isinstance(c, int):
+        a = c % 256
+        c >>= 8
+        b = c % 256
+        c >>= 8
+        g = c % 256
+        c >>= 8
+        r = c % 256
+    elif isinstance(c, basestring):
+        if c[0] == '#':
+            c = c[1:]
+        if len(c) < 6:
+            c = list(c)
+            if len(c) == 3:
+                c.append('f')
+            c = [x + x for x in c]
+        else:
+            if len(c) == 6:
+                c = [c[:2], c[2:4], c[4:], 'ff']
+            else: # len(c) == 8
+                c = [c[:2], c[2:4], c[4:6], c[6:]]
+        for i in xrange(4):
+            x = 0
+            for k, n in zip((16, 1), c[i]):
+                n = ord(n)
+                x += k * (n - (48 if n < 97 else 87))
+            c[i] = x
+        r, g, b, a = c
+    else:
+        r, g, b = c[:3]
+        a = 255 if len(c) < 4 else c[3]
     return (r, g, b, a)
 
 
