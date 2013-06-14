@@ -27,10 +27,10 @@ class Graphic (object):
 
 Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
 
-:arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.
+:arg img: surface or filename (under :data:`conf.IMG_DIR <IMG_DIR>`) to load.
 :arg pos: initial ``(x, y)`` position.  The existence of a default is because
           you might use :meth:`align` immediately on adding to a
-          :class:`GraphicsManager`.
+          :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`.
 :arg layer: the layer to draw in, lower being closer to the 'front'. This can
             actually be any hashable object except ``None``, as long as all
             layers used in the same :class:`GraphicsManager` can be ordered
@@ -41,8 +41,8 @@ Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
 Many properties of a graphic, such as :attr:`pos` and :attr:`size`, can be
 changed in two main ways: by setting the attribute directly, or by calling the
 corresponding method.  The former is more natural, and is useful for
-:meth:`sched.Scheduler.interp`, while the latter all return the graphic, and so
-can be chained together.
+:meth:`sched.Scheduler.interp <engine.sched.Scheduler.interp>`, while the
+latter all return the graphic, and so can be chained together.
 
 Position and size can also be retrieved and altered using list indexing, like
 with Pygame rects.  Altering size in any way applies the :meth:`resize`
@@ -388,7 +388,8 @@ Defaults to ``2 * pi / 500``."""
 
     @property
     def manager (self):
-        """The :class:`GraphicsManager` this graphic is associated with.
+        """The :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`
+this graphic is associated with.
 
 May be ``None``.  This may be changed directly.  (A graphic should only be used with one manager at a time.)
 
@@ -674,7 +675,7 @@ transformation, where:
   was last applied, as a tuple (or ``None`` if it never has been).
 - ``args`` is as passed to this method.
 - ``dirty`` defines what has changed in ``src`` since the last time this
-  transform was applied - ``True`` if the whole surface has changed, or a list
+  transform was applied---``True`` if the whole surface has changed, or a list
   of rects, or ``False`` if nothing has changed.  This allows for partial
   transformations by altering ``dest``, if given.
 
@@ -1156,7 +1157,7 @@ state*.
     def dirty (self, *rects):
         """Mark some or all of the graphic as changed.
 
-This is to be used when you alter the original surface (:attr:`orig_sfc`) - do
+This is to be used when you alter the original surface (:attr:`orig_sfc`)---do
 not alter any other (transformed) surfaces.  Takes any number of rects to flag
 as dirty.  If none are given, the whole of the graphic is flagged.
 

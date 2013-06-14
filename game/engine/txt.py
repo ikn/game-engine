@@ -13,7 +13,7 @@ import pygame
 class Fonts (dict):
     """Collection of ``pygame.font.Font`` instances.
 
-:arg font_dirs: directories in which to find fonts - so you can just pass the
+:arg font_dirs: directories in which to find fonts---so you can just pass the
                 font's filename when adding a font.
 
 Use the ``dict`` interface to register fonts::
@@ -84,8 +84,8 @@ render(font, text, colour[, shadow][, width], just = 0, minimise = False,
              ``(x, y)``.
 :arg int width: maximum width of returned surface (wrap text).  ``ValueError``
                 is raised if any words are too long to fit in this width.
-:arg just: if the text has multiple lines, justify: :const:`0` = left,
-           :const:`1` = centre, :const:`2` = right.
+:arg just: if the text has multiple lines, justify: ``0`` = left,
+           `1`` = centre, ``2`` = right.
 :arg minimise: if width is set, treat it as a minimum instead of absolute width
                (that is, shrink the surface after, if possible).
 :arg int line_spacing: space between lines, in pixels.

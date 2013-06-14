@@ -1,9 +1,9 @@
 """Main loop and world handling.
 
 Only one :class:`Game` instance should ever exist, and it stores itself in
-:data:`conf.GAME`.  Start the game with :func:`run` and use the :class:`Game`
-instance for changing worlds, clearing media caches, handling the display and
-playing audio.
+:data:`conf.GAME <GAME>`.  Start the game with :func:`run` and use the
+:class:`Game` instance for changing worlds, clearing media caches, handling the
+display and playing audio.
 
 """
 
@@ -55,23 +55,26 @@ class World (object):
 
 World(scheduler, evthandler)
 
-:arg scheduler: the :class:`sched.Scheduler` instance this world should use for
-                timing.
-:arg evthandler: the :class:`evt.EventHandler` instance this world should use
-                 for input.
+:arg scheduler: the :class:`sched.Scheduler <engine.sched.Scheduler>` instance
+                this world should use for timing.
+:arg evthandler: the :class:`evt.EventHandler <engine.evt.EventHandler>`
+                 instance this world should use for input.
 
 """
 
-    #: A unique identifier used for some settings in :obj:`conf`; if ``None``,
+    #: A unique identifier used for some settings in :doc:`conf`; if ``None``,
     #: ``type(world).__name__.lower()`` will be used.
     id = None
 
     def __init__ (self, scheduler, evthandler, *args):
-        #: :class:`sched.Scheduler` instance taken by the constructor.
+        #: :class:`sched.Scheduler <engine.sched.Scheduler>` instance taken by
+        #: the constructor.
         self.scheduler = scheduler
-        #: :class:`evt.EventHandler` instance taken by the constructor.
+        #: :class:`evt.EventHandler <engine.evt.EventHandler>` instance taken
+        #: by the constructor.
         self.evthandler = evthandler
-        #: :class:`gfx.GraphicsManager` instance used for drawing by default.
+        #: :class:`gfx.GraphicsManager <engine.gfx.container.GraphicsManager>`
+        #: instance used for drawing by default.
         self.graphics = gfx.GraphicsManager(scheduler)
         self._extra_args = args
         self._initialised = False
@@ -141,7 +144,7 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         # load display settings
         self.screen = None #: The main Pygame surface.
         self.refresh_display()
-        #: A :class:`txt.Fonts` instance.
+        #: A :class:`txt.Fonts <engine.txt.Fonts>` instance.
         self.fonts = Fonts(conf.FONT_DIR)
         # start first world
         self.start_world(*args, **kwargs)
@@ -336,12 +339,12 @@ img(filename[, size], cache = True) -> surface
     def render_text (self, *args, **kwargs):
         """Render text and cache the result.
 
-Takes the same arguments as :meth:`txt.Fonts.render`, plus a keyword-only
-``cache`` argument.  If passed (with any value), the text is cached under this
-hashable value, and can be retrieved from cache by calling this function with
-the same value for this argument.
+Takes the same arguments as :meth:`txt.Fonts.render <engine.txt.Fonts.render>`,
+plus a keyword-only ``cache`` argument.  If passed (with any value), the text
+is cached under this hashable value, and can be retrieved from cache by calling
+this function with the same value for this argument.
 
-Returns the same as :meth:`txt.Fonts.render`
+Returns the same as :meth:`txt.Fonts.render <engine.txt.Fonts.render>`.
 
 """
         cache = 'cache' in kwargs
@@ -383,7 +386,7 @@ play_snd(base_id, volume = 1)
 
 :arg base_id: the identifier of the sound to play (we look for ``base_id + i``
               for a number ``i``---there are as many sounds as set in
-              :data:`conf.SOUNDS`).
+              :data:`conf.SOUNDS <SOUNDS>`).
 :arg float volume: amount scale the playback volume by.
 
 """
@@ -422,7 +425,7 @@ play_snd(base_id, volume = 1)
     # display
 
     def refresh_display (self, *args):
-        """Update the display mode from :obj:`conf`, and notify the world.
+        """Update the display mode from :doc:`conf`.
 
 refresh_display()
 

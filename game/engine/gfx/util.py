@@ -142,9 +142,10 @@ align(self, graphic, col, row, alignment = 0, pad = 0, offset = 0)
 ``alignment``, ``pad`` and ``offset`` are as taken by
 :func:`engine.util.align_rect`.
 
-:arg graphic: a :class:`graphic.Graphic` instance or a Pygame surface.  In the
-              former case, the :meth:`graphic.Graphic.align` method is called
-              (but the graphic is not cropped to fit in the tile).
+:arg graphic: a :class:`Graphic <engine.gfx.graphic.Graphic>` instance or a
+              Pygame surface.  In the former case, the
+              :meth:`Graphic.align <engine.gfx.graphic.Graphic.align>` method
+              is called (but the graphic is not cropped to fit in the tile).
 :arg col, row: column and row of the tile.
 
 :return: a Pygame rect clipped within the tile giving the area the graphic

@@ -88,28 +88,28 @@ EventHandler(event_handlers = {}, key_handlers = [], suppress_quit = False
 :arg event_handlers: ``{event.type: callbacks}`` dict.
 :arg key_handlers: list of ``(keys, callbacks, mode)`` tuples, where:
 
-    - ``keys`` is a list of ``(key_ID, mods, exact)`` tuples or ``key_ID``
-      ints, where:
+        - ``keys`` is a list of ``(key_ID, mods, exact)`` tuples or ``key_ID`` 
+          ints, where:
 
-        - ``key_ID`` is as used in Pygame.
-        - ``mods`` is a modifier bitmask or list of modifier bitmasks to match
-          as well.  'Matching' a bitmask is having any key it 'contains'
-          pressed; passing a list does an AND-type comparison, where we check
-          for a match against every bitmask in the list.
-        - ``exact`` is a bool, determining whether to match the modifiers
-          exactly (otherwise, it's a match if other modifiers are held as
-          well).
+            - ``key_ID`` is as used in Pygame.
+            - ``mods`` is a modifier bitmask or list of modifier bitmasks to
+              match as well.  'Matching' a bitmask is having any key it
+              'contains' pressed; passing a list does an AND-type comparison,
+              where we check for a match against every bitmask in the list.
+            - ``exact`` is a bool, determining whether to match the modifiers
+              exactly (otherwise, it's a match if other modifiers are held as
+              well).
 
-      Passing a ``key_ID`` is like passing ``(key_ID, 0, False)``.
-    - ``mode`` is one of the ``MODE_*`` constants defined in this module.
-      ``*_REPEAT`` modes require two more arguments in each tuple, both
-      integers greater than ``0``:
+          Passing a ``key_ID`` is like passing ``(key_ID, 0, False)``.
+        - ``mode`` is one of the ``MODE_*`` constants defined in this module.
+          ``*_REPEAT`` modes require two more arguments in each tuple, both
+          integers greater than ``0``:
 
-        - ``initial_delay``, the number of frames the key must be held down for
-          until it starts repeating.
-        - ``repeat_delay``, the number of frames between repeats.
+            - ``initial_delay``, the number of frames the key must be held down
+              for until it starts repeating.
+            - ``repeat_delay``, the number of frames between repeats.
 
-      Frames, here, are the number of calls to ``EventHandler.update``.
+    Frames, here, are the number of calls to ``EventHandler.update``.
 
 :arg suppress_quit: don't exit (call ``quit_handler``) on a ``pygame.QUIT``
                     event.
@@ -132,10 +132,10 @@ Event callbacks (includes those in ``default_cbs``) take the
 Key callbacks take three arguments:
 
 * ``key_ID`` or the ``(key_ID, mods, exact)`` tuple as passed.
-* the type of key event: :const:`-1` if the key is being held down, :const:`0`
-  if it was pressed, :const:`1` if released, :const:`2` if this is a repeat
-  call (simulated keypress).  (This means that for some modes, this argument is
-  always the same.)
+* the type of key event: ``-1`` if the key is being held down, ``0`` if it was
+  pressed, ``1`` if released, ``2`` if this is a repeat call (simulated
+  keypress).  (This means that for some modes, this argument is always the
+  same.)
 * the key modifiers being held at the time of the keypress/release/currently.
   (This is a bitmask that can be compared to the ``pygame.KMOD_*`` constants.)
 

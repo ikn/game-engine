@@ -34,14 +34,15 @@ from .graphic import Graphic
 class GraphicsGroup (list):
     """Convenience wrapper for grouping a number of graphics in a simple way.
 
-Takes any number of :class:`Graphic` instances or lists of arguments to pass to
-:class:`Graphic` to create one.  This is a ``list`` subclass, containing
-graphics, so add and remove graphics using list methods.
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` instances or
+lists of arguments to pass to :class:`Graphic <engine.gfx.graphic.Graphic>` to
+create one.  This is a ``list`` subclass, containing graphics, so add and
+remove graphics using list methods.
 
 Has ``scale_fn``, ``manager``, ``layer``, ``blit_flags`` and ``visible``
-properties as for :class:`Graphic`.  These give a list of values for each
-contained graphic; set them to a single value to apply to all contained
-graphics.
+properties as for :class:`Graphic <engine.gfx.graphic.Graphic>`.  These give a
+list of values for each contained graphic; set them to a single value to apply
+to all contained graphics.
 
 """
 
@@ -82,22 +83,25 @@ move_by(dx = 0, dy = 0)
 
 
 class GraphicsManager (Graphic):
-    """Draws things to a surface intelligently.  :class:`Graphic` subclass.
+    """Draws things to a surface intelligently.
+:class:`Graphic <engine.gfx.graphic.Graphic>` subclass.
 
 GraphicsManager(scheduler[, sfc], pos = (0, 0), layer = 0, blit_flags = 0)
 
-:arg scheduler: a :class:`sched.Scheduler` instance this manager should use for
-                timing.
+:arg scheduler: a :class:`sched.Scheduler <engine.sched.Scheduler>` instance
+                this manager should use for timing.
 :arg sfc: the surface to draw to; can be a ``(width, height)`` tuple to create
           a new transparent surface of this size.  If not given or ``None``,
           nothing is drawn.  This becomes :attr:`orig_sfc` and can be changed
           using this attribute.
 
-Other arguments are as taken by :class:`Graphic`.  Since this is a
-:class:`Graphic` subclass, it can be added to other :class:`GraphicsManager`
-instances and supports transformations.  None of this can be done until the
-manager has a surface, however, and transformations are only applied in
-:attr:`Graphic.surface`, not in :attr:`orig_sfc`.
+Other arguments are as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`. 
+Since this is a :class:`Graphic <engine.gfx.graphic.Graphic>` subclass, it can
+be added to other :class:`GraphicsManager` instances and supports
+transformations.  None of this can be done until the manager has a surface,
+however, and transformations are only applied in
+:attr:`Graphic.surface <engine.gfx.graphic.Graphic.surface>`, not in
+:attr:`orig_sfc`.
 
 """
 
@@ -120,7 +124,7 @@ manager has a surface, however, and transformations are only applied in
 
     @property
     def orig_sfc (self):
-        """Like :attr:`Graphic.orig_sfc`.
+        """Like :attr:`Graphic.orig_sfc <engine.gfx.graphic.Graphic.orig_sfc>`.
 
 This is the ``sfc`` argument passed to the constructor.  Retrieving this causes
 all graphics to be drawn/updated first.
@@ -150,7 +154,8 @@ all graphics to be drawn/updated first.
 
     @property
     def overlay (self):
-        """A :class:`Graphic` which is always drawn on top, or ``None``.
+        """A :class:`Graphic <engine.gfx.graphic.Graphic>` which is always
+drawn on top, or ``None``.
 
 There may only ever be one overlay; changing this attribute removes any
 previous overlay from the :class:`GraphicsManager`.
@@ -176,7 +181,8 @@ previous overlay from the :class:`GraphicsManager`.
     def add (self, *graphics):
         """Add graphics.
 
-Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
+:class:`GraphicsGroup` instances.
 
 """
         all_gs = self.graphics
@@ -203,7 +209,8 @@ Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
     def rm (self, *graphics):
         """Remove graphics.
 
-Takes any number of :class:`Graphic` or :class:`GraphicsGroup` instances.
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
+:class:`GraphicsGroup` instances.
 
 """
         all_graphics = self.graphics
@@ -260,7 +267,7 @@ the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
             self.overlay = None
 
     def dirty (self, *rects):
-        """:meth:`Graphic.dirty`"""
+        """:meth:`Graphic.dirty <engine.gfx.graphic.Graphic.dirty>`"""
         if self._surface is None:
             # nothing to mark as dirty
             return
@@ -272,8 +279,10 @@ the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
         """Update the display (:attr:`orig_sfc`).
 
 :arg handle_dirty: whether to propagate changed areas to the transformation
-                   pipeline implemented by :class:`Graphic`.  Pass ``False`` if
-                   you don't intend to use this manager as a graphic.
+                   pipeline implemented by
+                   :class:`Graphic <engine.gfx.graphic.Graphic>`.  Pass
+                   ``False`` if you don't intend to use this manager as a
+                   graphic.
 
 Returns ``True`` if the entire surface changed, or a list of rects that cover
 changed parts of the surface, or ``False`` if nothing changed.
@@ -300,6 +309,6 @@ changed parts of the surface, or ``False`` if nothing changed.
         return dirty
 
     def render (self):
-        """:meth:`Graphic.render`"""
+        """:meth:`Graphic.render <engine.gfx.graphic.Graphic.render>`"""
         self.draw()
         Graphic.render(self)

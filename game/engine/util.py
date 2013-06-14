@@ -93,7 +93,7 @@ in a string ('#rgb', '#rrggbb', '#rgba', '#rrggbbaa' - or without the leading
 
 
 def randsgn ():
-    """Randomly return :const:`1` or :const:`-1`."""
+    """Randomly return ``1`` or `-1``."""
     return 2 * randrange(2) - 1
 
 
@@ -210,7 +210,11 @@ def convert_sfc (sfc):
 
 
 def combine_drawn (*drawn):
-    """Combine the given drawn flags as returned by :meth:`game.World.draw`."""
+    """Combine the given drawn flags.
+
+These are as returned by :meth:`engine.game.World.draw`.
+
+"""
     if True in drawn:
         return True
     rects = sum((list(d) for d in drawn if d), [])

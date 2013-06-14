@@ -10,11 +10,10 @@ TODO:
     - need:
         - x, y -> tile_type_id (determines w, h)
             - list: of ids (with width, or list of lists)
-            - string/text file: delimited string ids (with width, or different row delimeters)
+            - string/text file: delimited string ids (with width, or different row delimiters)
             - Graphic/Surface/image file: pixels are (r, g, b, a) ids
             - w, h, fn(x, y) -> type
         - tile_type_id -> tile_data
-            - type: all this type
             - anything with __getitem__ (like Spritemap)
             - fn(type) -> data
         - Grid (or tile size for standard grid)
@@ -37,7 +36,8 @@ from .graphic import Graphic
 
 
 class Colour (Graphic):
-    """A solid rect of colour (:class:`Graphic` subclass).
+    """A solid rect of colour
+(:class:`Graphic <engine.gfx.graphic.Graphic>` subclass).
 
 Colour(colour, rect, layer = 0, blit_flags = 0)
 
@@ -46,8 +46,8 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
 :arg rect: ``(left, top, width, height)`` rect (of ints) to draw in (or
            anything taken by ``pygame.Rect``, like a ``Rect``, or
            ``((left, top), (width, height))``).
-:arg layer: as taken by :class:`Graphic`.
-:arg blit_flags: as taken by :class:`Graphic`.
+:arg layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg blit_flags: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
 :meth:`fill` corresponds to a builtin transform.
 
@@ -126,3 +126,69 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
         self.transform('fill', colour)
         self._colour = colour
         return self
+
+
+class Tilemap (Graphic):
+    """A :class:`Graphic <engine.gfx.graphic.Graphic>` subclass representing a
+finite, flat grid of tiles.
+
+Tilemap(grid, tile_data, tile_types[, translate_type], cache_tile_data = False)
+
+:arg grid: a :class:`util.Grid <engine.gfx.util.Grid>` defining the size and
+           shape of the tiles in the tilemap, or the ``tile_size`` argument to
+           :class:`util.Grid <engine.gfx.util.Grid>` to create a new one with
+           standard parameters.
+:arg tile_data: a way of determining the tile type ID for each ``(x, y)`` tile
+    in the grid, which is any object.  This can be:
+
+        - a list of rows, where each row is a list of IDs;
+        - a string with rows delimited by line breaks and each row a space- or
+          tab-delimited set of string IDs;
+        - ``(s, col_delim, row_delim)`` to specify custom delimiters for a
+          string ``s``;
+        - a filename from which to load a string with delimited IDs (the name
+          must contain no whitespace);
+        - ``(filename, col_delim, row_delim)`` for a custom-delimited string in
+          a file;
+        - a :class:`Graphic <engine.gfx.graphic.Graphic>`, Pygame surface or
+          filename to load an image from, and use the ``(r, g, b, a)`` colour
+          tuples of the pixels in the surface as IDs; or
+        - a function that takes ``col`` and ``row`` arguments as column and row
+          indices in the grid, and returns the corresponding tile type ID.
+
+:arg tile_types: a ``tile_type_id -> tile_graphic`` mapping---either a function
+    or an object that supports indexing.  ``tile_type_id`` is the tile type ID
+    obtained from the ``tile_data`` argument.  ``tile_graphic`` determines how
+    the tile should be drawn; it may be:
+
+        - ``None`` for an an empty (transparent) tile;
+        - a colour (as taken by :func:`engine.util.normalise_colour`) to fill
+          with;
+        - a :class:`Graphic <engine.gfx.graphic.Graphic>` or Pygame surface to
+          copy aligned to the top-left of the tile, clipped to the source's
+          top-left to fit; or
+        - ``(graphic[, alignment][, rect])`` with ``alignment`` or ``rect`` in
+          any order or omitted, and ``graphic`` as in the above form.
+          ``alignment`` is as taken by :func:`engine.util.align_rect`, and
+          ``rect`` is the Pygame-style rect within the source surface of
+          ``graphic`` to copy from.
+
+    Note that indexing a :class:`util.Spritemap <engine.gfx.util.Spritemap>`
+    instance gives a valid ``tile_graphic`` form, making them valid forms for
+    this argument.
+
+:arg translate_type: a function that takes tile type IDs obtained from the
+                     ``tile_data`` argument and returns the ID to use with the
+                     ``tile_types`` argument in obtaining ``tile_graphic``.
+:arg cache_graphic: whether to cache and reuse ``tile_graphic`` for each tile
+                    type.  You might want to pass ``True`` if requesting
+                    ``tile_graphic`` from ``tile_types`` generates a surface.
+
+This is meant to be used for static tilemaps---that is, where the appearance of
+each tile type never changes.
+
+"""
+
+    def __init__ (self, grid, tile_data, tile_types, translate_type = None,
+                  cache_graphic = False):
+        pass
