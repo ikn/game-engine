@@ -956,10 +956,13 @@ rescale_both(scale = 1, about = (0, 0)) -> self
                     # clip dirty rects inside cropped rect; if there's a
                     # border, it remains empty as before, so isn't dirtied
                     new_dirty = []
+                    offset = (-rect.x, -rect.y)
                     for r in dirty:
                         r = r.clip(rect)
                         if r:
-                            new_dirty.append(r)
+                            s = r.move(offset)
+                            new_dirty.append(s)
+                            dest.blit(src, s, r)
                     return (dest, new_dirty)
                 else:
                     return (dest, False)
@@ -1005,7 +1008,7 @@ crop(rect) -> self
                 w, h = src.get_rect().size
                 alpha = has_alpha(src)
                 k = 5 if alpha else 3.5
-                if k * sum(r.w * r.h for r in dirty) ** .75 < w * h ** .75:
+                if k * sum(r[2] * r[3] for r in dirty) ** .75 < w * h ** .75:
                     # it would (this is all empirical and quite rough)
                     new_dirty = []
                     flip = pg.transform.flip
@@ -1016,8 +1019,8 @@ crop(rect) -> self
                             sfc = sfc.convert_alpha()
                         sfc.blit(src, (0, 0), r)
                         # transform the rect
-                        r = Rect((w - r.x if x else r.x,
-                                  h - r.y if y else r.y), r.size)
+                        r = Rect((w - r.x - r.w if x else r.x,
+                                  h - r.y - r.h if y else r.y), r.size)
                         new_dirty.append(r)
                         # flip and blit to destination
                         dest.blit(flip(sfc, x, y), r)
@@ -1164,7 +1167,8 @@ as dirty.  If none are given, the whole of the graphic is flagged.
 """
         if not rects:
             rects = True
-        self._orig_dirty = combine_drawn(self._orig_dirty, rects)
+        self._orig_dirty = combine_drawn(self._orig_dirty,
+                                         [Rect(r) for r in rects])
 
     def render (self):
         """Update the final surface.
