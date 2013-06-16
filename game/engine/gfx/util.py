@@ -28,8 +28,8 @@ Grid(ntiles, tile_size, gap = 0)
           which take the index of the preceding column/row and return the gap
           size.
 
-``col`` and ``row`` to all methods may be negative to wrap from the end of the
-row/column, like list indices.
+``col`` and ``row`` arguments to all methods may be negative to wrap from the
+end of the row/column, like list indices.
 
 """
 
@@ -50,12 +50,12 @@ row/column, like list indices.
             else:
                 return tuple(obj[:length])
 
-        if isinstance(tile_size, int):
+        if isinstance(tile_size, int) or callable(tile_size):
             tx = ty = tile_size
         else:
             tx, ty = tile_size
         self._tile_size = (expand(tx, ntiles[0]), expand(ty, ntiles[1]))
-        if isinstance(gap, int):
+        if isinstance(gap, int) or callable(tile_size):
             gx = gy = gap
         else:
             gx, gy = gap
@@ -72,8 +72,7 @@ row/column, like list indices.
         return self.ntiles[1]
 
     def _size (self, axis):
-        return sum(ts + gap for ts, gap in zip(self._tile_size[axis],
-                                               self._gap[axis]))
+        return sum(self._tile_size[axis]) + sum(self._gap[axis])
 
     @property
     def w (self):
