@@ -31,8 +31,11 @@ dd(default[, items], **kwargs) -> default_dict
 
 
 def ir (x):
-    """Returns the argument rounded to the nearest integer."""
-    # this is about twice as fast as int(round(x))
+    """Returns the argument rounded to the nearest integer.
+
+This is about twice as fast as int(round(x)).
+
+"""
     y = int(x)
     return (y + (x - y >= .5)) if x > 0 else (y - (y - x >= .5))
 

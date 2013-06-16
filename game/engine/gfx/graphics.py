@@ -3,12 +3,8 @@
 ---NODOC---
 
 TODO:
- - rename module to 'graphics'?
- - accept colours from hex (add to normalise_colour and use this)
  - Text
  - Animation(surface | filename[image])
- - Tilemap.update_from(tile_data)
- - use cache_graphic in Tilemap
 
 ---NODOC---
 
@@ -181,6 +177,8 @@ Tilemap(grid, tile_data, tile_types, pos = (0, 0), layer = 0[, translate_type], 
 :arg cache_graphic: whether to cache and reuse ``tile_graphic`` for each tile
                     type.  You might want to pass ``True`` if requesting
                     ``tile_graphic`` from ``tile_types`` generates a surface.
+                    If ``True``, tile type IDs must be hashable (after
+                    translation),
 :arg blit_flags: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
 This is meant to be used for static tilemaps---that is, where the appearance of
@@ -191,19 +189,41 @@ each tile type never changes.
     def __init__ (self, grid, tile_data, tile_types, pos = (0, 0), layer = 0,
                   translate_type = None, cache_graphic = False,
                   blit_flags = 0):
+        if not callable(tile_types):
+            tile_types = lambda tile_type_id: tile_types[tile_type_id]
+        self._type_to_graphic = tile_types
+        if translate_type is None:
+            translate_type = lambda tile_type_id: tile_type_id
+        self._translate_type = translate_type
+        self._cache_graphic = cache_graphic
+        self._cache = {}
+        self._tile_data, ncols, nrows = self._parse_data(tile_data, grid, True)
+        if not isinstance(grid, Grid):
+            grid = Grid(ncols * nrows, grid)
+        #: The :class:`util.Grid <engine.gfx.util.Grid>` covered.
+        self.grid = grid
+        # apply initial data
+        Graphic.__init__(self, blank_sfc(grid.size), pos, layer, blit_flags)
+        update = self._update
+        for i, col in enumerate(self._tile_data):
+            for j, tile_type_id in enumerate(col):
+                update(i, j, tile_type_id)
+
+    def _parse_data (self, tile_data, grid, cache):
         # parse tile data
         if isinstance(tile_data, basestring):
             if len(tile_data.split()) == 1 and \
                splitext(tile_data)[1][1:] in ('png', 'jpg', 'jpeg', 'gif'):
                 # image file
-                tile_data = conf.GAME.img(tile_data)
+                tile_data = conf.GAME.img(tile_data, cache = cache)
             else:
                 # string/text file
                 tile_data = (tile_data, None, None)
         if isinstance(tile_data, Graphic):
             tile_data = tile_data.surface
         if isinstance(tile_data, pg.Surface):
-            tile_data = pg.surfarray.array3d(tile_data)
+            tile_data = [[tuple(c) for c in col]
+                         for col in pg.surfarray.array3d(tile_data)]
         if isinstance(tile_data[0], basestring):
             s, col, row = tile_data
             if len(s.split()) == 1:
@@ -235,28 +255,23 @@ each tile type never changes.
         # now tile_data is a list of columns
         ncols = len(tile_data)
         nrows = len(tile_data[0])
-        # store other args
-        if not isinstance(grid, Grid):
-            grid = Grid(ncols * nrows, grid)
-        #: The :class:`util.Grid <engine.gfx.util.Grid>` covered.
-        self.grid = grid
-        if not callable(tile_types):
-            tile_types = lambda tile_type_id: tile_types[tile_type_id]
-        self._type_to_graphic = tile_types
-        if translate_type is None:
-            translate_type = lambda tile_type_id: tile_type_id
-        self._tile_data = tile_data = [[translate_type(tile_type_id)
-                                        for tile_type_id in col]
-                                       for col in tile_data]
-        self._translate_type = translate_type
-        self._cache_graphic = cache_graphic
-        # apply initial data
-        Graphic.__init__(self, blank_sfc(grid.size), pos, layer, blit_flags)
-        for i, col in enumerate(tile_data):
-            for j, tile_type_id in enumerate(col):
-                self._update(i, j, tile_types(tile_type_id))
+        if isinstance(grid, Grid) and grid.ntiles != (ncols, nrows):
+            msg = 'tile_data has invalid dimensions: got {0}, expected {1}'
+            raise ValueError(msg.format((ncols, nrows), grid.ntiles))
+        translate_type = self._translate_type
+        tile_data = [[translate_type(tile_type_id) for tile_type_id in col]
+                     for col in tile_data]
+        return (tile_data, ncols, nrows)
 
-    def _update (self, col, row, g):
+    def _update (self, col, row, tile_type_id):
+        if self._cache_graphic:
+            if tile_type_id in self._cache:
+                g = self._cache[tile_type_id]
+            else:
+                g = self._type_to_graphic(tile_type_id)
+                self._cache[tile_type_id] = g
+        else:
+            g = self._type_to_graphic(tile_type_id)
         dest = self._orig_sfc
         tile_rect = self.grid.tile_rect(col, row)
         if isinstance(g, (Graphic, pg.Surface)):
@@ -307,7 +322,20 @@ each tile type never changes.
     def __setitem__ (self, i, tile_type_id):
         col, row = i
         tile_type_id = self._translate_type(tile_type_id)
-        tile_graphic = self._type_to_graphic(tile_type_id)
-        rect = self._update(col, row, tile_graphic)
-        self._tile_data[col][row] = tile_type_id
-        self.dirty(rect)
+        if tile_type_id != self._tile_data[col][row]:
+            rect = self._update(col, row, tile_type_id)
+            self._tile_data[col][row] = tile_type_id
+            self.dirty(rect)
+
+    def update_from (self, tile_data, from_disk = False):
+        """Update tiles from a new set of data.
+
+:arg tile_data: as taken by the constructor.
+:arg from_disk: whether to force reloading from disk, if passing an image
+                filename.
+
+"""
+        tile_data = self._parse_data(tile_data, self.grid, not from_disk)[0]
+        for i, col in enumerate(tile_data):
+            for j, tile_type_id in enumerate(col):
+                self[(i, j)] = tile_type_id
