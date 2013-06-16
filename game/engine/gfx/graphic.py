@@ -3,6 +3,7 @@
 ---NODOC---
 
 TODO:
+ - update .opaque on transform
  - in graphics, store n (5?) last # frames between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
@@ -28,6 +29,7 @@ class Graphic (object):
 Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
 
 :arg img: surface or filename (under :data:`conf.IMG_DIR <IMG_DIR>`) to load.
+          If a surface, it should be already converted for blitting.
 :arg pos: initial ``(x, y)`` position.  The existence of a default is because
           you might use :meth:`align` immediately on adding to a
           :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`.
@@ -84,7 +86,7 @@ correspond to builtin transforms (see :meth:`transform`).
         # {function: (args, previous_size, resulting_size, apply_fn, undo_fn)}
         # last 4 None for non-builtins
         self._queued_transforms = {}
-        #: Whether this is opaque in the entire rect; do not change.
+        #: Whether the graphic is completely opaque; do not change.
         self.opaque = not has_alpha(img)
         self._manager = None
         self._layer = layer
@@ -111,7 +113,8 @@ correspond to builtin transforms (see :meth:`transform`).
     def __getitem__ (self, i):
         if isinstance(i, slice):
             # Rect is weird and only accepts slices through slice syntax
-            # this is the easiest way around it
+            # this is the easiest way around it (and slicing doesn't work with
+            # Python 3 anyway)
             r = self._rect
             return [r[i] for i in range(4)[i]]
         else:
@@ -128,7 +131,11 @@ correspond to builtin transforms (see :meth:`transform`).
 
     @property
     def orig_sfc (self):
-        """The surface before any transforms."""
+        """The surface before any transforms.
+
+When setting this, the surface should be already converted for blitting.
+
+"""
         return self._orig_sfc
 
     @orig_sfc.setter

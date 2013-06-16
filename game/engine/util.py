@@ -202,11 +202,7 @@ def has_alpha (sfc):
 
 def convert_sfc (sfc):
     """Convert a surface for blitting."""
-    if has_alpha(sfc):
-        sfc = sfc.convert_alpha()
-    else:
-        sfc = sfc.convert()
-    return sfc
+    return sfc.convert_alpha() if has_alpha(sfc) else sfc.convert()
 
 
 def combine_drawn (*drawn):
