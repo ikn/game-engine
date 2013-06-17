@@ -7,6 +7,7 @@ import pygame as pg
 # - can use part of an input, eg. for a button event, 'pad axis 0:0'; for an axis event, 'pos pad axis 2:1'
 #    - might not be >2-component inputs, but can do, eg. for an axis event, 'neg pos pad axis 0:0,1'
 # - error on names of events, schemes, domains clashing
+# - some eh method to detect and set current held state of all attached ButtonInputs
 
 evt_component_names = {
     1: ('button',),
@@ -16,37 +17,58 @@ evt_component_names = {
 
 
 class Input (object):
-    # .device_id: number, or string for variable
+    # .device_id: as taken by eh.assign_devices, or string for variable
+
+    def __init__ (self):
+        if hasattr(self, '_pgevts'):
+            self.filters = {'type': set(self._pgevts)}
+        else:
+            self.filters = {}
+
     def handle (self, pgevt):
-        pass
+        self.pgevts.append(pgevt)
+
+    def filter (self, attr, *vals):
+        self.filters.setdefault(attr, set()).update(vals)
+        return self
 
 
 class ButtonInput (Input):
     components = 1
 
+    def __init__ (self):
+        self.held = False
+
     def down (self):
-        pass
+        self.held = True
 
     def up (self):
-        pass
+        self.held = False
 
 
 class KbdKey (ButtonInput):
     device = 'kbd'
     name = 'key'
-    pgevts = (pg.KEYDOWN, pg.KEYUP)
+    _pgevts = (pg.KEYDOWN, pg.KEYUP)
+    # use filtering somehow - to require pgevent.key == self.key
+
+    def handle (self, pgevt):
+        if pgevt.type == pg.KEYDOWN:
+            self.down()
+        else:
+            self.up()
 
 
 class MouseButton (ButtonInput):
     device = 'mouse'
     name = 'button'
-    pgevts = (pg.MOUSEBUTTONDOWN, pg.MOUSEBUTTONUP)
+    _pgevts = (pg.MOUSEBUTTONDOWN, pg.MOUSEBUTTONUP)
 
 
 class PadButton (ButtonInput):
     device = 'pad'
     name = 'button'
-    pgevts = (pg.JOYBUTTONDOWN, pg.JOYBUTTONUP)
+    _pgevts = (pg.JOYBUTTONDOWN, pg.JOYBUTTONUP)
 
 
 class AxisInput (Input):
@@ -56,26 +78,95 @@ class AxisInput (Input):
 class MouseAxis (AxisInput):
     device = 'mouse'
     name = 'axis'
-    pgevts = (pg.MOUSEMOTION,)
+    _pgevts = (pg.MOUSEMOTION,)
 
 
 class PadAxis (AxisInput):
     device = 'pad'
     name = 'axis'
-    pgevts = (pg.JOYAXISMOTION,)
+    _pgevts = (pg.JOYAXISMOTION,)
 
 
 class Event (object):
+    input_types = object
+    # event filtering by attributes - equal to, contained in
+    # sort filters by the amount they exclude
+    # note cannot filter for None
+    def __init__ (self):
+        self.inputs = set()
+        self.filtered_inputs = ('type', {None: set()})
+        self._changed = False
+
+    def _prefilter (self, filtered, filters, i):
+        attr, filtered = filtered
+        if attr in filters:
+            vals = filters[attr]
+            del filters[attr]
+        else:
+            vals = (None,)
+        for val in vals:
+            if val in filtered:
+                child = filtered[val]
+            else:
+                # create new branch
+                filtered[val] = child = set((i,))
+            if isinstance(child, tuple):
+                self._prefilter(child, filters, i)
+            else:
+                # reached the end of a branch: child is a set of inputs
+                child.add(i)
+                if filters:
+                    # create new levels for each remaining filter
+                    new_filtered = set()
+                    for attr, vals in reversed(filters.iteritems()):
+                        new_filtered = (attr, {None: new_filtered})
+                    filtered[val] = new_filtered
+                    for i in child:
+                        self._prefilter(new_filtered, i.filters, i)
+
+    def add (self, *inputs):
+        # calls eh._add_inputs and put all this code and all filtering there;
+        # have no Event.handle - that goes in eh too
+        types = self.input_types
+        filtered = self.filtered_inputs
+        for i in inputs:
+            if not isinstance(i, types):
+                raise TypeError('{0} objects only accept inputs of type {1}' \
+                                .format(type(self).__name__,
+                                        tuple(t.__name__ for t in types))
+            existing.add(i)
+            self._prefilter(filtered, dict(i.filters), i)
+
+    def rm (self, *inputs):
+        pass
+
     def cb (self, *cbs):
         pass
 
     def handle (self, pgevt):
-        # store data from event if relevant; this class just calls callbacks with pgevt
-        pass
+        # store data from event if relevant
+        inputs = self.filtered_inputs
+        while isinstance(inputs, tuple):
+            inputs, attr = inputs
+            val = getattr(pgevent, attr)
+            if val in inputs:
+                val = inputs[val]
+            else:
+                val = inputs[None]
+        if inputs:
+            self._changed = True
+            for i in inputs:
+                i.handle(pgevt)
 
     def respond (self):
-        # parse stored data, call callbacks; this class does nothing
-        pass
+        # parse stored data, call callbacks; this class calls callbacks with pgevt
+        if self._changed:
+            self._changed = False
+            cbs = self.cbs
+            for i in self.inputs:
+                for pgevt in i.pgevts:
+                    for cb in cbs:
+                        cb(i)
 
 
 class MultiEvent (Event):
@@ -186,13 +277,13 @@ class EventHandler (object):
         pass
 
 
-#: A ``{cls.name: cls}`` dict of usable named :class:`Event` subclasses.
-evts_by_name = dict((evt.name, name) for evt in vars()
-                    if isinstance(evt, Event) and hasattr(evt, 'name'))
-#: A ``{cls.device: {cls.name: cls}}`` dict of usable :class:`Input`
+#: A ``{cls.device: {cls.name: cls}}`` dict of usable named :class:`Input`
 #: subclasses.
 inputs_by_name = {}
 for i in dict(vars()): # copy or it'll change size during iteration
     if isinstance(i, Input) and hasattr(i, name):
         inputs_by_name.setdefault(i.device, {})[i.name] = i
 del i
+#: A ``{cls.name: cls}`` dict of usable named :class:`Event` subclasses.
+evts_by_name = dict((evt.name, name) for evt in vars()
+                    if isinstance(evt, Event) and hasattr(evt, 'name'))
