@@ -30,13 +30,18 @@ class Input (object):
         else:
             self.filters = {}
         self.evt = None
+        self._device_assigned = self.device_var is None
+        self.pgevts = []
 
     def handle (self, pgevt):
-        if self.device_var is not None:
+        if not self._device_assigned:
             raise RuntimeError('an Input cannot be used if its device ID ' \
                                'corresponds to an unassigned variable')
         self.pgevts.append(pgevt)
         return True
+
+    def reset (self):
+        self.pgevts = []
 
     def filter (self, attr, *vals, **kw):
         refilter = kw.get('refilter', False)
@@ -147,7 +152,7 @@ class PadAxis (AxisInput):
 
 
 class Event (object):
-    input_types = object
+    input_types = Input
     # event filtering by attributes - equal to, contained in
     # sort filters by the amount they exclude
     # note cannot filter for None
@@ -155,7 +160,6 @@ class Event (object):
         self.eh = None
         self.inputs = set()
         self.cbs = set()
-        self._changed = False
 
     def _set_eh (self, eh):
         if self.eh is not None:
@@ -170,7 +174,6 @@ class Event (object):
 
     def add (self, *inputs):
         types = self.input_types
-        filtered = self.filtered_inputs
         self_add = self.inputs.add
         eh_add = None if self.eh is None else self.eh._add_inputs
         for i in inputs:
@@ -179,6 +182,7 @@ class Event (object):
                                 .format(type(self).__name__,
                                         tuple(t.__name__ for t in types)))
             self_add(i)
+            i.evt = self
             if eh_add is not None:
                 eh_add(i)
 
@@ -189,14 +193,13 @@ class Event (object):
         self.cbs.update(cbs)
 
     def respond (self):
-        # parse stored data, call callbacks; this class calls callbacks with pgevt
-        if self._changed:
-            self._changed = False
-            cbs = self.cbs
-            for i in self.inputs:
-                for pgevt in i.pgevts:
-                    for cb in cbs:
-                        cb(i)
+        # maybe wrap with something else that handles the reset()
+        cbs = self.cbs
+        for i in self.inputs:
+            for pgevt in i.pgevts:
+                for cb in cbs:
+                    cb(pgevt)
+            i.reset()
 
 
 class MultiEvent (Event):
@@ -246,7 +249,7 @@ class Relaxis2 (MultiEvent):
 class EventHandler (object):
     def __init__ (self):
         self.inputs = set()
-        self.filtered_inputs = ('type', {None: set()})
+        self._filtered_inputs = ('type', {None: set()})
 
     def __contains__ (self, item):
         # can be event, scheme or name thereof
@@ -305,7 +308,7 @@ class EventHandler (object):
     def _add_inputs (self, *inputs):
         add = self.inputs.add
         prefilter = self._prefilter
-        filtered = self.filtered_inputs
+        filtered = self._filtered_inputs
         for i in inputs:
             add(i)
             prefilter(filtered, i.filters, i)
@@ -315,18 +318,21 @@ class EventHandler (object):
 
     def update (self):
         all_inputs = self._filtered_inputs
+        changed = set()
         for pgevt in pg.event.get():
             inputs = all_inputs
             while isinstance(inputs, tuple):
-                inputs, attr = inputs
+                attr, inputs = inputs
                 val = getattr(pgevt, attr)
                 if val in inputs:
-                    val = inputs[val]
+                    inputs = inputs[val]
                 else:
-                    val = inputs[None]
+                    inputs = inputs[None]
             for i in inputs:
                 if i.handle(pgevt):
-                    i.evt._changed = True
+                    changed.add(i.evt)
+        for evt in changed:
+            evt.respond()
 
     def load (self, filename, domain = None):
         pass
