@@ -12,6 +12,7 @@ import pygame as pg
 # - some eh method to detect and set current held state of all attached ButtonInputs
 # - joy hat/ball
 # - modifiers - buttons, both for buttons and axes
+# - auto joy(/other?) initialisation?
 
 evt_component_names = {
     1: ('button',),
@@ -19,10 +20,10 @@ evt_component_names = {
     4: ('left', 'right', 'up', 'down')
 }
 
-DOWN = 0
-UP = 1
-HELD = 2
-REPEAT = 3
+DOWN = 1
+UP = 2
+HELD = 4
+REPEAT = 8
 
 
 class Input (object):
@@ -99,8 +100,8 @@ class Input (object):
 
 
 class BasicInput (Input):
-    def __init__ (self, *pgevts):
-        Input.__init__(self, *pgevts)
+    def __init__ (self, pgevt):
+        Input.__init__(self, pgevt)
         self.pgevts = []
 
     def handle (self, pgevt):
@@ -115,46 +116,53 @@ class BasicInput (Input):
 class ButtonInput (Input):
     components = 1
 
-    def __init__ (self):
-        self.btnevts = []
+    def __init__ (self, button = None):
+        Input.__init__(self)
         self.held = False
+        if hasattr(self, 'button_attr'):
+            self.filter(self.button_attr, button)
 
     def down (self):
-        self.btnevts.append(DOWN)
+        assert self.evt is not None
         self.held = True
+        return self.evt.down()
 
     def up (self):
-        self.btnevts.append(UP)
+        assert self.evt is not None
         self.held = False
+        return self.evt.up()
 
-    def reset (self):
-        self.btnevts = []
+    def handle (self, pgevt):
+        if hasattr(self, 'down_pgevts'):
+            if pgevt.type in self.down_pgevts:
+                return self.down()
+            else:
+                return self.up()
 
 
 class KbdKey (ButtonInput):
     device = 'kbd'
     name = 'key'
     pgevts = (pg.KEYDOWN, pg.KEYUP)
-    # use filtering somehow - to require pgevent.key == self.key
-
-    def handle (self, pgevt):
-        if pgevt.type == pg.KEYDOWN:
-            self.down()
-        else:
-            self.up()
+    button_attr = 'key'
+    down_pgevts = (pg.KEYDOWN,)
 
 
 class MouseButton (ButtonInput):
     device = 'mouse'
     name = 'button'
     pgevts = (pg.MOUSEBUTTONDOWN, pg.MOUSEBUTTONUP)
+    button_attr = 'button'
+    down_pgevts = (pg.MOUSEBUTTONDOWN,)
 
 
 class PadButton (ButtonInput):
     device = 'pad'
     name = 'button'
-    device_id_attr = 'joy'
     pgevts = (pg.JOYBUTTONDOWN, pg.JOYBUTTONUP)
+    device_id_attr = 'joy'
+    button_attr = 'button'
+    down_pgevts = (pg.JOYBUTTONDOWN,)
 
 
 class AxisInput (Input):
@@ -191,26 +199,41 @@ class Event (object):
                 raise TypeError('{0} events only accept inputs of type {1}' \
                                 .format(type(self).__name__,
                                         tuple(t.__name__ for t in types)))
-            self_add(i)
-            i.evt = self
-            if eh_add is not None:
-                eh_add(i)
+            if i.evt is not self:
+                if i.evt is not None:
+                    i.evt.rm(i)
+                self_add(i)
+                i.evt = self
+                if eh_add is not None:
+                    eh_add(i)
 
     def rm (self, *inputs):
-        pass
+        self_rm = self.inputs.rm
+        eh_rm = None if self.eh is None else self.eh._rm_inputs
+        for i in inputs:
+            if i.evt is self:
+                # not necessary, but a good sanity check
+                assert i in self.inputs
+                self_rm(i)
+                i.evt = None
+                if eh_rm is not None:
+                    eh_rm(i)
+            else:
+                raise KeyError(i)
 
     def cb (self, *cbs):
         self.cbs.update(cbs)
         return self
 
-    def respond (self):
-        # maybe wrap with something else that handles the reset()
-        cbs = self.cbs
-        for i in self.inputs:
-            for pgevt in i.pgevts:
-                for cb in cbs:
-                    cb(pgevt)
-            i.reset()
+    def respond (self, changed):
+        # TODO: maybe wrap with something else that handles the reset()
+        if changed:
+            cbs = self.cbs
+            for i in self.inputs:
+                for pgevt in i.pgevts:
+                    for cb in cbs:
+                        cb(pgevt)
+                i.reset()
 
 
 class MultiEvent (Event):
@@ -219,9 +242,80 @@ class MultiEvent (Event):
 
 
 class Button (Event):
+    # TODO: work for AxisInput too - also calls some function of this class
     name = 'button'
     components = 1
     input_types = (ButtonInput, AxisInput)
+
+    def __init__ (self, *items, **kw):
+        modes = 0
+        inputs = []
+        for item in items:
+            if isinstance(item, int):
+                modes |= item
+            else:
+                inputs.append(item)
+        Event.__init__(self, *inputs)
+        self.modes = modes
+        self._downevts = self._upevts = 0
+        self.initial_delay = kw.get('initial_delay')
+        self.repeat_delay = kw.get('repeat_delay')
+        if modes & REPEAT and (self.initial_delay is None or
+                               self.repeat_delay is None):
+            raise TypeError('initial_delay and repeat_delay arguments are ' \
+                            'required if given the REPEAT mode')
+        self._repeating = False
+
+    def down (self):
+        self._downevts += 1
+        return True
+
+    def up (self):
+        self._upevts += 1
+        if self.modes & REPEAT and not any(i.held for i in self.inputs):
+            # stop repeating if let go of all buttons at any point in any frame
+            self._repeating = False
+        return True
+
+    def respond (self, changed):
+        modes = self.modes
+        if modes & (HELD | REPEAT):
+            held = any(i.held for i in self.inputs)
+        if not changed and not held:
+            return
+        evts = {}
+        if modes & DOWN:
+            evts[DOWN] = self._downevts
+        if modes & UP:
+            evts[UP] = self._upevts
+        self._downevts = self._upevts = 0
+        if modes & HELD:
+            evts[HELD] = held
+        if modes & REPEAT:
+            n_repeats = 0
+            if self._repeating:
+                if held:
+                    # continue repeating
+                    if self.eh is None:
+                        raise RuntimeError('cannot respond properly if not ' \
+                                           'attached to an EventHandler')
+                    t = self._repeat_remain
+                    t -= self.eh.scheduler.frame
+                    while t < 0:
+                        n_repeats += 1
+                        t += self.repeat_delay
+                    self._repeat_remain = t
+                else:
+                    # stop reapeating
+                    self._repeating = False
+            elif held:
+                # start repeating
+                self._repeating = True
+                self._repeat_remain = self.initial_delay
+            evts[REPEAT] = n_repeats
+        if any(evts.itervalues()):
+            for cb in self.cbs:
+                cb(evts)
 
 
 class Button2 (MultiEvent):
@@ -259,14 +353,17 @@ class Relaxis2 (MultiEvent):
 
 class EventHandler (dict):
     # is {name: Event|Scheme}
-    def __init__ (self):
+    def __init__ (self, scheduler):
+        self.scheduler = scheduler
+        self._named = set()
         self._unnamed = set()
         self._inputs = set()
         self._filtered_inputs = ('type', {None: set()})
 
     def __contains__ (self, item):
         # can be event, scheme or name thereof
-        return dict.__contains__(self, item) or item in self._unnamed
+        return dict.__contains__(self, item) or item in self._named or \
+               item in self._unnamed
 
     def __setitem__ (self, item, val):
         self.add(**{item: val})
@@ -278,6 +375,7 @@ class EventHandler (dict):
         """add(*evts, **named_evts, domain = None)"""
         # TODO: use domain (can call with existing event to change domain)
         created = []
+        named = self._named
         unnamed = self._unnamed
         if 'domain' in named_evts:
             domain = named_evts['domain']
@@ -295,7 +393,8 @@ class EventHandler (dict):
                     cbs = []
                     for item in evt:
                         (cbs if callable(item) else pgevts).append(item)
-                    evt = Event(BasicInput(*pgevts)).cb(*cbs)
+                    inputs = [BasicInput(pgevt) for pgevt in pgevts]
+                    evt = Event(*inputs).cb(*cbs)
                 if evt.eh is not None:
                     if evt.eh is self:
                         # already own this event
@@ -306,11 +405,13 @@ class EventHandler (dict):
                             if prev_name is None:
                                 unnamed.remove(evt)
                             else:
+                                named.remove(evt)
                                 dict.__delitem__(self, prev_name)
                             evt._regname = name
                             if name is None:
                                 unnamed.add(evt)
                             else:
+                                named.add(evt)
                                 dict.__setitem__(self, name, evt)
                     else:
                         # owned by another handler
@@ -319,17 +420,19 @@ class EventHandler (dict):
                 else:
                     # new event
                     evt.eh = self
+                    evt._changed = False
                     evt._regname = name
                     if name is None:
                         unnamed.add(evt)
                         created.append(evt)
                     else:
+                        named.add(evt)
                         dict.__setitem__(self, name, evt)
                     self._add_inputs(*evt.inputs)
         return created
 
     def rm (self, *evts):
-        # can be instances or names; if evt, call ._unset_eh
+        named = self._named
         unnamed = self._unnamed
         # TODO: use domain
         for evt in evts:
@@ -340,6 +443,7 @@ class EventHandler (dict):
                 if evt._regname is None:
                     unnamed.remove(evt)
                 else:
+                    named.remove(evt)
                     dict.__delitem__(self, evt._regname)
                 evt._regname = None
                 self._rm_inputs(*evt.inputs)
@@ -348,6 +452,7 @@ class EventHandler (dict):
 
     def _prefilter (self, filtered, filters, i):
         attr, filtered = filtered
+        filters = dict(filters)
         # Input guarantees that this is non-empty
         vals = filters.pop(attr, (None,))
         for val in vals:
@@ -401,7 +506,7 @@ class EventHandler (dict):
         filtered = self._filtered_inputs
         for i in inputs:
             add(i)
-            prefilter(filtered, dict(i.filters), i)
+            prefilter(filtered, i.filters, i)
 
     def _rm_inputs (self, *inputs):
         filtered = self._filtered_inputs
@@ -409,11 +514,12 @@ class EventHandler (dict):
         for i in inputs:
             assert i in self._inputs
             rm(i) # raises KeyError
-            self._unprefilter(filtered, dict(i.filters), i)
+            self._unprefilter(filtered, i.filters, i)
 
     def update (self):
         all_inputs = self._filtered_inputs
         changed = set()
+        unchanged = set()
         for pgevt in pg.event.get():
             inputs = all_inputs
             while isinstance(inputs, tuple):
@@ -422,9 +528,12 @@ class EventHandler (dict):
                 inputs = inputs[val if val is None or val in inputs else None]
             for i in inputs:
                 if i.handle(pgevt):
-                    changed.add(i.evt)
-        for evt in changed:
-            evt.respond()
+                    i.evt._changed = True
+        for evts in (self._named, self._unnamed):
+            for evt in evts:
+                changed = evt._changed
+                evt._changed = False
+                evt.respond(changed)
 
     def load (self, filename, domain = None):
         pass
@@ -473,4 +582,6 @@ for i in dict(vars()): # copy or it'll change size during iteration
 del i
 #: A ``{cls.name: cls}`` dict of usable named :class:`Event` subclasses.
 evts_by_name = dict((evt.name, name) for evt in vars()
-                    if isinstance(evt, Event) and hasattr(evt, 'name'))
+                    if (isinstance(evt, Event) and hasattr(evt, 'name')) or
+                       (isinstance(evt, MultiEvent) and
+                        hasattr(evt.child, 'name')))
