@@ -276,9 +276,8 @@ class EventHandler (dict):
 
     def add (self, *evts, **named_evts):
         """add(*evts, **named_evts, domain = None)"""
-        # can call with existing event to change domain; error if name exists
-        # events may be (*(pgevts|cbs)) to create an Event that just passes the pgevt to the cbs
-        # returns list of created events for positional args
+        # TODO: use domain (can call with existing event to change domain)
+        created = []
         unnamed = self._unnamed
         if 'domain' in named_evts:
             domain = named_evts['domain']
@@ -288,7 +287,6 @@ class EventHandler (dict):
                 domain = None
         else:
             domain = None
-        # TODO: use domain
         for evts in (((None, evt) for evt in evts), named_evts.iteritems()):
             for name, evt in evts:
                 if not isinstance(evt, Event): # TODO: also Scheme
@@ -324,9 +322,11 @@ class EventHandler (dict):
                     evt._regname = name
                     if name is None:
                         unnamed.add(evt)
+                        created.append(evt)
                     else:
                         dict.__setitem__(self, name, evt)
                     self._add_inputs(*evt.inputs)
+        return created
 
     def rm (self, *evts):
         # can be instances or names; if evt, call ._unset_eh
@@ -348,31 +348,52 @@ class EventHandler (dict):
 
     def _prefilter (self, filtered, filters, i):
         attr, filtered = filtered
-        if attr in filters:
-            vals = filters[attr] # Input guarantees that this is non-empty
-            del filters[attr]
-        else:
-            vals = (None,)
+        # Input guarantees that this is non-empty
+        vals = filters.pop(attr, (None,))
         for val in vals:
             if val in filtered:
                 child = filtered[val]
             else:
                 # create new branch
-                filtered[val] = child = set((i,))
+                filtered[val] = child = set()
+            # add input to child
             if isinstance(child, tuple):
                 self._prefilter(child, filters, i)
             else:
                 # reached the end of a branch: child is a set of inputs
-                child.add(i)
                 if filters:
                     # create new levels for each remaining filter
-                    new_filtered = set()
                     for attr, vals in filters.iteritems():
-                        new_filtered = (attr, {None: new_filtered})
-                    filtered[val] = new_filtered
-                    prefilter = self._prefilter
-                    for i in child:
-                        prefilter(new_filtered, i.filters, i)
+                        child = (attr, {None: child})
+                    filtered[val] = child
+                    self._prefilter(child, filters, i)
+                else:
+                    child.add(i)
+
+    def _unprefilter (self, filtered, filters, i):
+        attr, filtered = filtered
+        # Input guarantees that this is non-empty
+        vals = filters.pop(attr, (None,))
+        for val in vals:
+            assert val in filtered
+            child = filtered[val]
+            if isinstance(child, tuple):
+                self._unprefilter(child, filters, i)
+                child = child[1]
+            else:
+                # reached the end of a branch: child is a set of inputs
+                assert i in child
+                child.remove(i)
+            if not child:
+                # child is now empty
+                if val is None:
+                    # retain the None branch
+                    filtered[val] = set()
+                else:
+                    del filtered[val]
+        if attr != 'type' and not any(filtered.itervalues()):
+            # all branches are empty (but always retain the 'type' branch)
+            filtered.clear()
 
     def _add_inputs (self, *inputs):
         add = self._inputs.add
@@ -380,10 +401,15 @@ class EventHandler (dict):
         filtered = self._filtered_inputs
         for i in inputs:
             add(i)
-            prefilter(filtered, i.filters, i)
+            prefilter(filtered, dict(i.filters), i)
 
     def _rm_inputs (self, *inputs):
-        pass
+        filtered = self._filtered_inputs
+        rm = self._inputs.remove
+        for i in inputs:
+            assert i in self._inputs
+            rm(i) # raises KeyError
+            self._unprefilter(filtered, dict(i.filters), i)
 
     def update (self):
         all_inputs = self._filtered_inputs
@@ -392,11 +418,8 @@ class EventHandler (dict):
             inputs = all_inputs
             while isinstance(inputs, tuple):
                 attr, inputs = inputs
-                val = getattr(pgevt, attr)
-                if val in inputs:
-                    inputs = inputs[val]
-                else:
-                    inputs = inputs[None]
+                val = getattr(pgevt, attr) if hasattr(pgevt, attr) else None
+                inputs = inputs[val if val is None or val in inputs else None]
             for i in inputs:
                 if i.handle(pgevt):
                     changed.add(i.evt)
