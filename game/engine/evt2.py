@@ -2,17 +2,23 @@ from collections import Sequence
 
 import pygame as pg
 
+# - tools for editing/typing text
 # - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
 # - input recording and playback (allow whitelisting/excluding by registered event name)
-# - a way to alter loaded events/schemes, and all associated parameters
 # - a way to register new input/event types (add to inputs_by_name/evts_by_name)
 # - can use part of an input, eg. for a button event, 'pad axis 0:0'; for an axis event, 'pos pad axis 2:1'
 #    - might not be >2-component inputs, but can do, eg. for an axis event, 'neg pos pad axis 0:0,1'
 # - error on names of events, schemes, domains clashing
-# - some eh method to detect and set current held state of all attached ButtonInputs
+# - some eh method to detect and set current held state of all attached ButtonInputs - keys use pg.key.get_pressed() (works for mods/locks) (careful of _SneakyMultiKbdKey)
 # - joy hat/ball
-# - modifiers - buttons, both for buttons and axes
 # - auto joy(/other?) initialisation?
+# - printable input names (including mods)
+# - mods in config file (like '[CTRL] [ALT] kbd a' - device omitted in modifier because not allowed to be cross-device - varnames too)
+# - in config file, can omit axis-as-button thresholds and deadzones (global definitions in config file?)
+
+# - domains
+# - axis inputs
+# - axis events
 
 evt_component_names = {
     1: ('button',),
@@ -24,6 +30,10 @@ DOWN = 1
 UP = 2
 HELD = 4
 REPEAT = 8
+
+
+class DevicelessInput (RuntimeError):
+    pass
 
 
 class Input (object):
@@ -38,12 +48,11 @@ class Input (object):
         self.filters = {}
         if pgevts:
             self.filters['type'] = pgevts
-        self._device_assigned = self.device_var is None
+        self._device_id = None
 
     def handle (self, pgevt):
-        if not self._device_assigned:
-            raise RuntimeError('an Input cannot be used if its device ID ' \
-                               'corresponds to an unassigned variable')
+        if self.device_var is not None and self.device_id is None:
+            raise DevicelessInput(self)
         return False
 
     def filter (self, attr, *vals, **kw):
@@ -84,17 +93,19 @@ class Input (object):
             eh._add_inputs(self)
         return self
 
-    def set_device_ids (self, ids):
+    @property
+    def device_id (self):
+        return self._device_id
+
+    @device_id.setter
+    def device_id (self, device_id):
         if hasattr(self, 'device_id_attr'):
-            attr = self.device_id_attr
-            if ids is True:
-                self.filters.pop(attr, None)
+            if device_id is None:
+                ids = ()
             else:
-                if ids is False:
-                    ids = (self.invalid_device_id,)
-                elif not isinstance(ids, Sequence):
-                    ids = (ids,)
-                self.filter(attr, *ids, refilter = True)
+                ids = (device_id,)
+            self.filter(self.device_id_attr, *ids, refilter = True)
+            self.device_id = device_id
         else:
             raise TypeError('this Input type doesn\'t support device IDs')
 
@@ -116,21 +127,49 @@ class BasicInput (Input):
 class ButtonInput (Input):
     components = 1
 
-    def __init__ (self, button = None):
+    def __init__ (self, button = None, mods = (), device_id = None):
         Input.__init__(self)
         self.held = False
+        self.is_mod = False
         if hasattr(self, 'button_attr'):
+            if button is None:
+                raise TypeError('expected button argument')
             self.filter(self.button_attr, button)
+            self.button = button
+        if isinstance(mods, Input):
+            mods = (mods,)
+        mod_args = mods
+        mods = []
+        for m in mod_args:
+            if isinstance(m, ButtonInput):
+                mods.append(m)
+            else:
+                mods.extend(m)
+        if any(m.mods for m in mods):
+            raise ValueError('modifiers may not have modifiers')
+        ds = self.mod_devices
+        if any(m.device not in ds for m in mods):
+            raise TypeError('a modifier is for an incompatible device')
+        for m in mods:
+            m.is_mod = self
+        self.mods = mods
+        if device_id is not None and hasattr(self, 'device_id_attr'):
+            self.device_id = device_id
 
     def down (self):
-        assert self.evt is not None
         self.held = True
-        return self.evt.down()
+        if not self.is_mod:
+            assert self.evt is not None
+            return self.evt.down()
+        return False
 
     def up (self):
-        assert self.evt is not None
-        self.held = False
-        return self.evt.up()
+        if self.held:
+            self.held = False
+            if not self.is_mod:
+                assert self.evt is not None
+                return self.evt.up()
+        return False
 
     def handle (self, pgevt):
         if hasattr(self, 'down_pgevts'):
@@ -138,6 +177,8 @@ class ButtonInput (Input):
                 return self.down()
             else:
                 return self.up()
+        else:
+            return False
 
 
 class KbdKey (ButtonInput):
@@ -146,6 +187,20 @@ class KbdKey (ButtonInput):
     pgevts = (pg.KEYDOWN, pg.KEYUP)
     button_attr = 'key'
     down_pgevts = (pg.KEYDOWN,)
+    mod_devices = ('kbd',)
+
+
+class _SneakyMultiKbdKey (KbdKey):
+    def __init__ (self, button, *buttons):
+        KbdKey.__init__(self, buttons[0])
+        self.filter(self.button_attr, *buttons[1:])
+        self.button = button
+        self._held = dict.fromkeys(buttons, False)
+
+    def handle (self, pgevt):
+        self._held[pgevt.key] = pgevt.type in self.down_pgevts
+        self.held = any(self._held.itervalues())
+        return False
 
 
 class MouseButton (ButtonInput):
@@ -154,6 +209,7 @@ class MouseButton (ButtonInput):
     pgevts = (pg.MOUSEBUTTONDOWN, pg.MOUSEBUTTONUP)
     button_attr = 'button'
     down_pgevts = (pg.MOUSEBUTTONDOWN,)
+    mod_devices = ('kbd', 'mouse')
 
 
 class PadButton (ButtonInput):
@@ -163,6 +219,7 @@ class PadButton (ButtonInput):
     device_id_attr = 'joy'
     button_attr = 'button'
     down_pgevts = (pg.JOYBUTTONDOWN,)
+    mod_devices = ('pad',)
 
 
 class AxisInput (Input):
@@ -226,7 +283,6 @@ class Event (object):
         return self
 
     def respond (self, changed):
-        # TODO: maybe wrap with something else that handles the reset()
         if changed:
             cbs = self.cbs
             for i in self.inputs:
@@ -359,6 +415,7 @@ class EventHandler (dict):
         self._unnamed = set()
         self._inputs = set()
         self._filtered_inputs = ('type', {None: set()})
+        self._mods = {}
 
     def __contains__ (self, item):
         # can be event, scheme or name thereof
@@ -504,22 +561,53 @@ class EventHandler (dict):
         add = self._inputs.add
         prefilter = self._prefilter
         filtered = self._filtered_inputs
+        mods = self._mods
         for i in inputs:
             add(i)
+            if isinstance(i, ButtonInput):
+                for m in i.mods:
+                    added = False
+                    for device in i.mod_devices:
+                        this_mods = mods.setdefault(device, {}) \
+                                        .setdefault(i.device_id, {})
+                        if m in this_mods:
+                            this_mods[m].add(i)
+                        else:
+                            this_mods[m] = set((i,))
+                            if not added:
+                                added = True
+                                self._add_inputs(m)
             prefilter(filtered, i.filters, i)
 
     def _rm_inputs (self, *inputs):
         filtered = self._filtered_inputs
         rm = self._inputs.remove
+        mods = self._mods
         for i in inputs:
             assert i in self._inputs
             rm(i) # raises KeyError
+            if isinstance(i, ButtonInput):
+                for m in i.mods:
+                    for device in i.mod_devices:
+                        d1 = mods[device]
+                        d2 = d1[i.device]
+                        d3 = d2[m]
+                        assert i in d3
+                        d3.remove(i)
+                        if not d3:
+                            del d3[m]
+                            self._rm_inputs(m)
+                            if not d2:
+                                del d1[i.device]
+                                if not d1:
+                                    del mods[device]
             self._unprefilter(filtered, i.filters, i)
 
     def update (self):
         all_inputs = self._filtered_inputs
         changed = set()
         unchanged = set()
+        mods = self._mods
         for pgevt in pg.event.get():
             inputs = all_inputs
             while isinstance(inputs, tuple):
@@ -527,8 +615,23 @@ class EventHandler (dict):
                 val = getattr(pgevt, attr) if hasattr(pgevt, attr) else None
                 inputs = inputs[val if val is None or val in inputs else None]
             for i in inputs:
-                if i.handle(pgevt):
-                    i.evt._changed = True
+                if isinstance(i, ButtonInput) and not i.is_mod:
+                    assert ids
+                    this_mods = i.mods
+
+                    def check_mods ():
+                        for device in i.mod_devices:
+                            for m in mods.get(device, {}).get(i.device_id, ()):
+                                yield m.held == (m in this_mods)
+
+                    if not all(check_mods()):
+                        # mods don't match: don't call
+                        continue
+                try:
+                    if i.handle(pgevt):
+                        i.evt._changed = True
+                except DevicelessInput:
+                    pass
         for evts in (self._named, self._unnamed):
             for evt in evts:
                 changed = evt._changed
@@ -536,6 +639,7 @@ class EventHandler (dict):
                 evt.respond(changed)
 
     def load (self, filename, domain = None):
+        # doesn't add events used in schemes - they _only_ go in the scheme
         pass
 
     def save (self, filename, domain):
@@ -552,7 +656,7 @@ class EventHandler (dict):
         pass
 
     def assign_devices (**devices):
-        # takes {varname: devices}, devices False for none, True for all, device or list of devices
+        # takes {varname: device_ids}, device_ids False for none, True for all, id or list of ids
         pass
 
     def grab (self, cb, *types):
@@ -560,7 +664,8 @@ class EventHandler (dict):
         # types are device name or (device, type_name)
         pass
 
-    def monitor_deadzones (self):
+    def monitor_deadzones (self, *deadzones):
+        # takes list of  (device, id, *args); do for all if none given
         pass
 
     def stop_monitor_deadzones (self):
@@ -571,6 +676,13 @@ class EventHandler (dict):
     def set_deadzones (self, deadzones):
         # takes stop_monitor_deadzones result
         pass
+
+
+class mod:
+    CTRL = (_SneakyMultiKbdKey(pg.KMOD_CTRL, pg.K_LCTRL, pg.K_RCTRL))
+    SHIFT = (_SneakyMultiKbdKey(pg.KMOD_SHIFT, pg.K_LSHIFT, pg.K_RSHIFT))
+    ALT = (_SneakyMultiKbdKey(pg.KMOD_ALT, pg.K_LALT, pg.K_RALT))
+    META = (_SneakyMultiKbdKey(pg.KMOD_META, pg.K_LMETA, pg.K_RMETA))
 
 
 #: A ``{cls.device: {cls.name: cls}}`` dict of usable named :class:`Input`
