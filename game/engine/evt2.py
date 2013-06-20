@@ -21,6 +21,7 @@ import pygame as pg
 # - axis events
 
 evt_component_names = {
+    0: (),
     1: ('button',),
     2: ('neg', 'pos'),
     4: ('left', 'right', 'up', 'down')
@@ -33,6 +34,7 @@ REPEAT = 8
 
 
 class Input (object):
+    components = 0
     device = None
     invalid_device_id = -1
 
@@ -159,7 +161,8 @@ class ButtonInput (Input):
         self.held = True
         if not self.is_mod:
             assert self.evt is not None
-            return self.evt.down()
+            self.evt.down()
+            return True
         return False
 
     def up (self):
@@ -167,7 +170,8 @@ class ButtonInput (Input):
             self.held = False
             if not self.is_mod:
                 assert self.evt is not None
-                return self.evt.up()
+                self.evt.up()
+                return True
         return False
 
     def handle (self, pgevt):
@@ -227,24 +231,30 @@ class AxisInput (Input):
 
     def __init__ (self, axis = None, deadzone = 0, device_id = None):
         Input.__init__(self)
-        self.pos = 0
+        self.pos = [0, 0]
         if hasattr(self, 'axis_attr'):
             if axis is None:
                 raise TypeError('expected axis argument')
             self.filter(self.axis_attr, axis)
             self.axis = axis
+        if deadzone < 0 or deadzone >= 1:
+            raise ValueError('require 0 <= deadzone < 1')
         self.deadzone = deadzone
         if hasattr(self, 'device_id_attr'):
             self.device_id = device_id
-        print self.filters
 
     def handle (self, pgevt):
         rtn = Input.handle(self, pgevt)
         if hasattr(self, 'axis_val_attr'):
-            pos = getattr(pgevt, self.axis_val_attr)
-            sgn = 1 if pos > 0 else -1
+            apos = getattr(pgevt, self.axis_val_attr)
+            pos = [0, 0]
+            if apos > 0:
+                pos[1] = apos
+            else:
+                pos[0] = -apos
             dz = self.deadzone
-            pos = sgn * (1 - dz) * max(sgn * pos - dz, 0)
+            for i in (0, 1):
+                pos[i] = max(0, pos[i] - dz) / (1 - dz) # know dz != 1
             if pos != self.pos:
                 self.pos = pos
                 return True
@@ -276,32 +286,56 @@ class MouseAxis (Relaxis2Input):
 
 
 class Event (object):
+    components = 0
     input_types = BasicInput
+
     def __init__ (self, *inputs):
         self.eh = None
-        self.inputs = set()
+        self.inputs = {}
         self.add(*inputs)
         self.cbs = set()
 
     def add (self, *inputs):
         types = self.input_types
-        self_add = self.inputs.add
+        components = self.components
+        self_add = self.inputs.__setitem__
         eh_add = None if self.eh is None else self.eh._add_inputs
         for i in inputs:
+            # work out components and perform checks
+            if isinstance(i, Input):
+                if i.components != components:
+                    raise ValueError(
+                        '{0} got a non-{1}-component input but no component' \
+                        'data'.format(type(self).__name__, components)
+                    )
+                i = (i,)
+            if len(i) == 1:
+                i = (i[0], range(components))
+            if len(i) == 2:
+                i = (i[0], i[1], range(i[0].components))
+            i, evt_components, input_components = i
             if not isinstance(i, types):
                 raise TypeError('{0} events only accept inputs of type {1}' \
                                 .format(type(self).__name__,
                                         tuple(t.__name__ for t in types)))
+            if isinstance(evt_components, int):
+                evt_components = (evt_components,)
+            if isinstance(input_components, int):
+                input_components = (input_components,)
+            if len(evt_components) != len(input_components):
+                raise ValueError('component mismatch: {0}'
+                                 .format(i, evt_components, input_components))
+            # add if not already added
             if i.evt is not self:
                 if i.evt is not None:
                     i.evt.rm(i)
-                self_add(i)
+                self_add(i, (evt_components, input_components))
                 i.evt = self
                 if eh_add is not None:
                     eh_add(i)
 
     def rm (self, *inputs):
-        self_rm = self.inputs.rm
+        self_rm = self.inputs.__delitem__
         eh_rm = None if self.eh is None else self.eh._rm_inputs
         for i in inputs:
             if i.evt is self:
@@ -327,6 +361,14 @@ class Event (object):
                         cb(pgevt)
                 i.reset()
 
+    # dummy methods that inputs use
+
+    def down (self):
+        pass
+
+    def up (self):
+        pass
+
 
 class MultiEvent (Event):
     # to get cb args, calls static method _merge_args with cb args for each Event
@@ -334,10 +376,10 @@ class MultiEvent (Event):
 
 
 class Button (Event):
-    # TODO: work for AxisInput too - also calls some function of this class
+    # TODO: work for AxisInput too
     name = 'button'
     components = 1
-    input_types = (ButtonInput, AxisInput)
+    input_types = (ButtonInput,)# AxisInput, Relaxis2Input)
 
     def __init__ (self, *items, **kw):
         modes = 0
@@ -360,14 +402,12 @@ class Button (Event):
 
     def down (self):
         self._downevts += 1
-        return True
 
     def up (self):
         self._upevts += 1
         if self.modes & REPEAT and not any(i.held for i in self.inputs):
             # stop repeating if let go of all buttons at any point in any frame
             self._repeating = False
-        return True
 
     def respond (self, changed):
         modes = self.modes
@@ -423,15 +463,25 @@ class Button4 (MultiEvent):
 class Axis (Event):
     name = 'axis'
     components = 2
-    input_types = (ButtonInput, AxisInput, Relaxis2Input)
+    input_types = (ButtonInput, AxisInput)#, Relaxis2Input)
 
-    def __init__ (self, *args):
-        Event.__init__(self, *args)
+    def __init__ (self, *inputs):
+        Event.__init__(self, *inputs)
         self._pos = 0
 
     def respond (self, changed):
         if changed:
-            self._pos = pos = min(1, max(-1, sum(i.pos for i in self.inputs)))
+            pos = 0
+            for i, (evt_components, input_components) \
+                in self.inputs.iteritems():
+                if isinstance(i, ButtonInput):
+                    assert len(evt_components) == 1
+                    if i.held:
+                        pos += 2 * evt_components[0] - 1
+                else: # i is AxisInput
+                    for ec, ic in zip(evt_components, input_components):
+                        pos += (2 * ec - 1) * i.pos[ic]
+            self._pos = pos = min(1, max(-1, pos))
         else:
             pos = self._pos
         for cb in self.cbs:
