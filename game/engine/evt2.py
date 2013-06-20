@@ -13,7 +13,7 @@ import pygame as pg
 # - joy hat/ball
 # - auto joy(/other?) initialisation?
 # - printable input names (including mods)
-# - mods in config file (like '[CTRL] [ALT] kbd a' - device omitted in modifier because not allowed to be cross-device - varnames too)
+# - mods in config file (like '[CTRL] [ALT] kbd a' - device omitted in modifier when same as main button - varnames omitted since must be the same)
 # - in config file, can omit axis-as-button thresholds and deadzones (global definitions in config file?)
 
 # - domains
@@ -32,15 +32,12 @@ HELD = 4
 REPEAT = 8
 
 
-class DevicelessInput (RuntimeError):
-    pass
-
-
 class Input (object):
+    device = None
     invalid_device_id = -1
-    device_var = None
 
     def __init__ (self, *pgevts):
+        self.device_var = None
         self.evt = None
         pgevts = set(pgevts)
         if hasattr(self, 'pgevts'):
@@ -51,8 +48,6 @@ class Input (object):
         self._device_id = None
 
     def handle (self, pgevt):
-        if self.device_var is not None and self.device_id is None:
-            raise DevicelessInput(self)
         return False
 
     def filter (self, attr, *vals, **kw):
@@ -101,11 +96,11 @@ class Input (object):
     def device_id (self, device_id):
         if hasattr(self, 'device_id_attr'):
             if device_id is None:
-                ids = ()
+                ids = (self.invalid_device_id,)
             else:
                 ids = (device_id,)
             self.filter(self.device_id_attr, *ids, refilter = True)
-            self.device_id = device_id
+            self._device_id = device_id
         else:
             raise TypeError('this Input type doesn\'t support device IDs')
 
@@ -149,11 +144,15 @@ class ButtonInput (Input):
             raise ValueError('modifiers may not have modifiers')
         ds = self.mod_devices
         if any(m.device not in ds for m in mods):
-            raise TypeError('a modifier is for an incompatible device')
+            raise TypeError(
+                'the modifier {0} is for device {1}, which is not ' \
+                'compatible with {2} instances'.format(m, m.device,
+                                                       type(self).__name__)
+            )
         for m in mods:
             m.is_mod = self
         self.mods = mods
-        if device_id is not None and hasattr(self, 'device_id_attr'):
+        if hasattr(self, 'device_id_attr'):
             self.device_id = device_id
 
     def down (self):
@@ -172,13 +171,14 @@ class ButtonInput (Input):
         return False
 
     def handle (self, pgevt):
+        rtn = Input.handle(self, pgevt)
         if hasattr(self, 'down_pgevts'):
             if pgevt.type in self.down_pgevts:
-                return self.down()
+                return self.down() or rtn
             else:
-                return self.up()
+                return self.up() or rtn
         else:
-            return False
+            return rtn
 
 
 class KbdKey (ButtonInput):
@@ -225,11 +225,31 @@ class PadButton (ButtonInput):
 class AxisInput (Input):
     components = 2
 
+    def __init__ (self, axis = None, deadzone = 0, device_id = None):
+        Input.__init__(self)
+        self.pos = 0
+        if hasattr(self, 'axis_attr'):
+            if axis is None:
+                raise TypeError('expected axis argument')
+            self.filter(self.axis_attr, axis)
+            self.axis = axis
+        self.deadzone = deadzone
+        if hasattr(self, 'device_id_attr'):
+            self.device_id = device_id
+        print self.filters
 
-class MouseAxis (AxisInput):
-    device = 'mouse'
-    name = 'axis'
-    pgevts = (pg.MOUSEMOTION,)
+    def handle (self, pgevt):
+        rtn = Input.handle(self, pgevt)
+        if hasattr(self, 'axis_val_attr'):
+            pos = getattr(pgevt, self.axis_val_attr)
+            sgn = 1 if pos > 0 else -1
+            dz = self.deadzone
+            pos = sgn * (1 - dz) * max(sgn * pos - dz, 0)
+            if pos != self.pos:
+                self.pos = pos
+                return True
+        else:
+            return rtn
 
 
 class PadAxis (AxisInput):
@@ -237,6 +257,22 @@ class PadAxis (AxisInput):
     name = 'axis'
     device_id_attr = 'joy'
     pgevts = (pg.JOYAXISMOTION,)
+    axis_attr = 'axis'
+    axis_val_attr = 'value'
+
+
+class Relaxis2Input (Input):
+    components = 4
+
+    def __init__ (self):
+        # (max_x, max_y)
+        self.threshold = threshold
+
+
+class MouseAxis (Relaxis2Input):
+    device = 'mouse'
+    name = 'axis'
+    pgevts = (pg.MOUSEMOTION,)
 
 
 class Event (object):
@@ -387,7 +423,19 @@ class Button4 (MultiEvent):
 class Axis (Event):
     name = 'axis'
     components = 2
-    input_types = (ButtonInput, AxisInput)
+    input_types = (ButtonInput, AxisInput, Relaxis2Input)
+
+    def __init__ (self, *args):
+        Event.__init__(self, *args)
+        self._pos = 0
+
+    def respond (self, changed):
+        if changed:
+            self._pos = pos = min(1, max(-1, sum(i.pos for i in self.inputs)))
+        else:
+            pos = self._pos
+        for cb in self.cbs:
+            cb(pos)
 
 
 class Axis2 (MultiEvent):
@@ -627,11 +675,8 @@ class EventHandler (dict):
                     if not all(check_mods()):
                         # mods don't match: don't call
                         continue
-                try:
-                    if i.handle(pgevt):
-                        i.evt._changed = True
-                except DevicelessInput:
-                    pass
+                if i.handle(pgevt):
+                    i.evt._changed = True
         for evts in (self._named, self._unnamed):
             for evt in evts:
                 changed = evt._changed
