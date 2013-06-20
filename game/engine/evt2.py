@@ -15,6 +15,7 @@ import pygame as pg
 # - printable input names (including mods)
 # - mods in config file (like '[CTRL] [ALT] kbd a' - device omitted in modifier when same as main button - varnames omitted since must be the same)
 # - in config file, can omit axis-as-button thresholds and deadzones (global definitions in config file?)
+# - deadzones aren't per-input in config file - can do per-device/axis or overall?
 
 # - domains
 # - axis inputs
@@ -138,7 +139,7 @@ class ButtonInput (Input):
         mod_args = mods
         mods = []
         for m in mod_args:
-            if isinstance(m, ButtonInput):
+            if isinstance(m, Input):
                 mods.append(m)
             else:
                 mods.extend(m)
@@ -157,20 +158,20 @@ class ButtonInput (Input):
         if hasattr(self, 'device_id_attr'):
             self.device_id = device_id
 
-    def down (self):
+    def down (self, component = 0):
         self.held = True
         if not self.is_mod:
             assert self.evt is not None
-            self.evt.down()
+            self.evt.down(self, 0)
             return True
         return False
 
-    def up (self):
+    def up (self, component = 0):
         if self.held:
             self.held = False
             if not self.is_mod:
                 assert self.evt is not None
-                self.evt.up()
+                self.evt.up(self, 0)
                 return True
         return False
 
@@ -226,22 +227,23 @@ class PadButton (ButtonInput):
     mod_devices = ('pad',)
 
 
-class AxisInput (Input):
+class AxisInput (ButtonInput):
     components = 2
 
-    def __init__ (self, axis = None, deadzone = 0, device_id = None):
-        Input.__init__(self)
+    def __init__ (self, axis = None, thresholds = None, mods = (),
+                  device_id = None):
+        if mods and thresholds is None:
+            raise TypeError('an AxisInput must have thresholds defined to ' \
+                            'have modifiers')
+        ButtonInput.__init__(self, None, mods, device_id)
         self.pos = [0, 0]
         if hasattr(self, 'axis_attr'):
             if axis is None:
                 raise TypeError('expected axis argument')
             self.filter(self.axis_attr, axis)
             self.axis = axis
-        if deadzone < 0 or deadzone >= 1:
-            raise ValueError('require 0 <= deadzone < 1')
-        self.deadzone = deadzone
-        if hasattr(self, 'device_id_attr'):
-            self.device_id = device_id
+        self.deadzone = 0
+        self.thresholds = thresholds
 
     def handle (self, pgevt):
         rtn = Input.handle(self, pgevt)
@@ -256,6 +258,16 @@ class AxisInput (Input):
             for i in (0, 1):
                 pos[i] = max(0, pos[i] - dz) / (1 - dz) # know dz != 1
             if pos != self.pos:
+                if self.thresholds is not None:
+                    down, up = self.thresholds
+                    for i, (old, new) in enumerate(zip(self.pos, pos)):
+                        if old < down and new >= down:
+                            self.down(i)
+                        elif self.held and old > up and new <= up:
+                            self.up(i)
+                elif self.is_mod:
+                    raise TypeError('an AxisInput must have thresholds ' \
+                                    'defined to be a modifier')
                 self.pos = pos
                 return True
         else:
@@ -269,6 +281,7 @@ class PadAxis (AxisInput):
     pgevts = (pg.JOYAXISMOTION,)
     axis_attr = 'axis'
     axis_val_attr = 'value'
+    mod_devices = ('pad',)
 
 
 class Relaxis2Input (Input):
@@ -305,7 +318,7 @@ class Event (object):
             if isinstance(i, Input):
                 if i.components != components:
                     raise ValueError(
-                        '{0} got a non-{1}-component input but no component' \
+                        '{0} got a non-{1}-component input but no component ' \
                         'data'.format(type(self).__name__, components)
                     )
                 i = (i,)
@@ -363,10 +376,10 @@ class Event (object):
 
     # dummy methods that inputs use
 
-    def down (self):
+    def down (self, i, component):
         pass
 
-    def up (self):
+    def up (self, i, component):
         pass
 
 
@@ -379,7 +392,7 @@ class Button (Event):
     # TODO: work for AxisInput too
     name = 'button'
     components = 1
-    input_types = (ButtonInput,)# AxisInput, Relaxis2Input)
+    input_types = (ButtonInput, AxisInput)#, Relaxis2Input)
 
     def __init__ (self, *items, **kw):
         modes = 0
@@ -400,14 +413,16 @@ class Button (Event):
                             'required if given the REPEAT mode')
         self._repeating = False
 
-    def down (self):
-        self._downevts += 1
+    def down (self, i, component):
+        if component in self.inputs[i][1]:
+            self._downevts += 1
 
-    def up (self):
-        self._upevts += 1
-        if self.modes & REPEAT and not any(i.held for i in self.inputs):
-            # stop repeating if let go of all buttons at any point in any frame
-            self._repeating = False
+    def up (self, i, component):
+        if component in self.inputs[i][1]:
+            self._upevts += 1
+            if self.modes & REPEAT and not any(i.held for i in self.inputs):
+                # stop repeating if let go of all buttons at any point
+                self._repeating = False
 
     def respond (self, changed):
         modes = self.modes
