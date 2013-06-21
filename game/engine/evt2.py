@@ -16,16 +16,23 @@ import pygame as pg
 # - mods in config file (like '[CTRL] [ALT] kbd a' - device omitted in modifier when same as main button - varnames omitted since must be the same)
 # - in config file, can omit axis-as-button thresholds and deadzones (global definitions in config file?)
 # - deadzones aren't per-input in config file - can do per-device/axis or overall?
+# - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these 
 
 # - domains
-# - axis inputs
-# - axis events
+# - Relaxis, using all input types
+
 
 evt_component_names = {
     0: (),
     1: ('button',),
     2: ('neg', 'pos'),
     4: ('left', 'right', 'up', 'down')
+}
+
+mod_devices = {
+    'kbd': ('kbd',),
+    'mouse': ('kbd', 'mouse'),
+    'pad': ('pad',)
 }
 
 DOWN = 1
@@ -125,17 +132,17 @@ class BasicInput (Input):
 class ButtonInput (Input):
     components = 1
 
-    def __init__ (self, button = None, mods = (), device_id = None):
-        Input.__init__(self)
-        self.held = False
+    def __init__ (self, device_id = None, button = None, *mods):
+        self._held = [False] * self.components
         self.is_mod = False
+        Input.__init__(self)
+        if hasattr(self, 'device_id_attr'):
+            self.device_id = device_id
         if hasattr(self, 'button_attr'):
             if button is None:
                 raise TypeError('expected button argument')
             self.filter(self.button_attr, button)
-            self.button = button
-        if isinstance(mods, Input):
-            mods = (mods,)
+        self.button = button
         mod_args = mods
         mods = []
         for m in mod_args:
@@ -145,7 +152,7 @@ class ButtonInput (Input):
                 mods.extend(m)
         if any(m.mods for m in mods):
             raise ValueError('modifiers may not have modifiers')
-        ds = self.mod_devices
+        ds = mod_devices[self.device]
         if any(m.device not in ds for m in mods):
             raise TypeError(
                 'the modifier {0} is for device {1}, which is not ' \
@@ -154,36 +161,41 @@ class ButtonInput (Input):
             )
         for m in mods:
             m.is_mod = self
+            m.btn_components = (0,) # TODO: do this properly; require in args
         self.mods = mods
-        if hasattr(self, 'device_id_attr'):
-            self.device_id = device_id
+
+    @property
+    def held (self):
+        return [self._held[c] for c in self.btn_components]
 
     def down (self, component = 0):
-        self.held = True
+        self._held[component] = True
         if not self.is_mod:
-            assert self.evt is not None
-            self.evt.down(self, 0)
+            if component in self.btn_components:
+                assert self.evt is not None
+                self.evt.down(self, component)
             return True
         return False
 
     def up (self, component = 0):
-        if self.held:
-            self.held = False
+        if self._held[component]:
+            self._held[component] = False
             if not self.is_mod:
-                assert self.evt is not None
-                self.evt.up(self, 0)
+                if component in self.btn_components:
+                    assert self.evt is not None
+                    self.evt.up(self, component)
                 return True
         return False
 
-    def handle (self, pgevt):
+    def handle (self, pgevt, mods_match):
         rtn = Input.handle(self, pgevt)
         if hasattr(self, 'down_pgevts'):
             if pgevt.type in self.down_pgevts:
-                return self.down() or rtn
+                if mods_match:
+                    rtn |= self.down()
             else:
-                return self.up() or rtn
-        else:
-            return rtn
+                rtn |= self.up()
+        return rtn
 
 
 class KbdKey (ButtonInput):
@@ -192,7 +204,9 @@ class KbdKey (ButtonInput):
     pgevts = (pg.KEYDOWN, pg.KEYUP)
     button_attr = 'key'
     down_pgevts = (pg.KEYDOWN,)
-    mod_devices = ('kbd',)
+
+    def __init__ (self, key, *mods):
+        ButtonInput.__init__(self, None, key, *mods)
 
 
 class _SneakyMultiKbdKey (KbdKey):
@@ -200,11 +214,11 @@ class _SneakyMultiKbdKey (KbdKey):
         KbdKey.__init__(self, buttons[0])
         self.filter(self.button_attr, *buttons[1:])
         self.button = button
-        self._held = dict.fromkeys(buttons, False)
+        self._held_multi = dict.fromkeys(buttons, False)
 
-    def handle (self, pgevt):
-        self._held[pgevt.key] = pgevt.type in self.down_pgevts
-        self.held = any(self._held.itervalues())
+    def handle (self, pgevt, mods_match):
+        self._held_multi[pgevt.key] = pgevt.type in self.down_pgevts
+        self._held[0] = any(self._held_multi.itervalues())
         return False
 
 
@@ -214,7 +228,9 @@ class MouseButton (ButtonInput):
     pgevts = (pg.MOUSEBUTTONDOWN, pg.MOUSEBUTTONUP)
     button_attr = 'button'
     down_pgevts = (pg.MOUSEBUTTONDOWN,)
-    mod_devices = ('kbd', 'mouse')
+
+    def __init__ (self, button, *mods):
+        ButtonInput.__init__(self, None, button, *mods)
 
 
 class PadButton (ButtonInput):
@@ -224,52 +240,82 @@ class PadButton (ButtonInput):
     device_id_attr = 'joy'
     button_attr = 'button'
     down_pgevts = (pg.JOYBUTTONDOWN,)
-    mod_devices = ('pad',)
 
 
 class AxisInput (ButtonInput):
     components = 2
 
-    def __init__ (self, axis = None, thresholds = None, mods = (),
-                  device_id = None):
+    def __init__ (self, device_id = None, axis = None, thresholds = None,
+                  *mods):
+        self.pos = [0] * self.components
         if mods and thresholds is None:
             raise TypeError('an AxisInput must have thresholds defined to ' \
                             'have modifiers')
-        ButtonInput.__init__(self, None, mods, device_id)
-        self.pos = [0, 0]
+        ButtonInput.__init__(self, device_id, None, *mods)
         if hasattr(self, 'axis_attr'):
             if axis is None:
                 raise TypeError('expected axis argument')
             self.filter(self.axis_attr, axis)
-            self.axis = axis
-        self.deadzone = 0
+        self.axis = axis
         self.thresholds = thresholds
+        self.deadzone = 0
 
-    def handle (self, pgevt):
+    @property
+    def deadzone (self):
+        return self.deadzone
+
+    @deadzone.setter
+    def deadzone (self, dz):
+        n = self.components / 2
+        if isinstance(dz, (int, float)):
+            dz = (dz,) * n
+        else:
+            dz = tuple(dz)
+        if len(dz) != n:
+            raise ValueError('{0} deadzone must have {1} components'
+                             .format(type(self).__name__, n))
+        if any(x < 0 or x >= 1 for x in dz):
+            raise ValueError('require 0 <= deadzone < 1')
+        self._deadzone = dz
+
+    def axis_motion (self, mods_match, axis, apos):
+        pos = [0, 0]
+        if apos > 0:
+            pos[1] = apos
+        else:
+            pos[0] = -apos
+        dz = self._deadzone
+        for i in (0, 1):
+            pos[i] = max(0, pos[i] - dz[axis]) / (1 - dz[axis]) # know dz != 1
+        imn = 2 * axis
+        imx = 2 * (axis + 1)
+        old_pos = self.pos
+        if pos != old_pos[imn:imx]:
+            if self.thresholds is not None:
+                # act as button
+                down, up = self.thresholds[imn:imx]
+                l = list(zip(xrange(imn, imx), old_pos[imn:imx], pos))
+                for i, old, new in l:
+                    if self._held[i] and old > up and new <= up:
+                        self.up(i)
+                if mods_match:
+                    for i, old, new in l:
+                        if old < down and new >= down:
+                            self.down(i)
+            elif self.is_mod:
+                raise TypeError('an AxisInput must have thresholds ' \
+                                'defined to be a modifier')
+            for i, j in enumerate(xrange(imn, imx)):
+                old_pos[j] = pos[i]
+            return True
+        else:
+            return False
+
+    def handle (self, pgevt, mods_match):
         rtn = Input.handle(self, pgevt)
         if hasattr(self, 'axis_val_attr'):
             apos = getattr(pgevt, self.axis_val_attr)
-            pos = [0, 0]
-            if apos > 0:
-                pos[1] = apos
-            else:
-                pos[0] = -apos
-            dz = self.deadzone
-            for i in (0, 1):
-                pos[i] = max(0, pos[i] - dz) / (1 - dz) # know dz != 1
-            if pos != self.pos:
-                if self.thresholds is not None:
-                    down, up = self.thresholds
-                    for i, (old, new) in enumerate(zip(self.pos, pos)):
-                        if old < down and new >= down:
-                            self.down(i)
-                        elif self.held and old > up and new <= up:
-                            self.up(i)
-                elif self.is_mod:
-                    raise TypeError('an AxisInput must have thresholds ' \
-                                    'defined to be a modifier')
-                self.pos = pos
-                return True
+            return self.axis_motion(mods_match, 0, apos) or rtn
         else:
             return rtn
 
@@ -281,21 +327,54 @@ class PadAxis (AxisInput):
     pgevts = (pg.JOYAXISMOTION,)
     axis_attr = 'axis'
     axis_val_attr = 'value'
-    mod_devices = ('pad',)
 
 
-class Relaxis2Input (Input):
+class Relaxis2Input (AxisInput):
     components = 4
 
-    def __init__ (self):
-        # (max_x, max_y)
-        self.threshold = threshold
+    def __init__ (self, device_id = None, relaxis = None, bdy = None,
+                  thresholds = None, *mods):
+        self.rel = (0, 0)
+        AxisInput.__init__(self, device_id, None, thresholds, *mods)
+        if hasattr(self, 'relaxis_attr'):
+            if relaxis is None:
+                raise TypeError('expected relaxis argument')
+            self.filter(self.relaxis_attr, relaxis)
+        self.relaxis = relaxis
+        if bdy is not None and any(b <= 0 for b in bdy):
+            raise ValueError('all bdy elements must be greater than zero')
+        self.bdy = bdy
+
+    def handle (self, pgevt, mods_match):
+        rtn = Input.handle(self, pgevt)
+        if hasattr(self, 'relaxis_val_attr'):
+            self.rel = rpos = getattr(pgevt, self.relaxis_val_attr)
+            if self.bdy is not None:
+                # act as axis
+                for i, (bdy, rpos) in enumerate(zip(self.bdy, rpos)):
+                    apos = float(rpos) / bdy + self.pos[2 * i + 1] - \
+                           self.pos[2 * i]
+                    sgn = 1 if apos > 0 else -1
+                    apos = sgn * min(sgn * apos, 1)
+                    rtn |= self.axis_motion(mods_match, i, apos)
+            elif self.is_mod:
+                raise TypeError('a Relaxis2Input must have bdy defined to ' \
+                                'be a modifier')
+        return rtn
 
 
 class MouseAxis (Relaxis2Input):
     device = 'mouse'
     name = 'axis'
     pgevts = (pg.MOUSEMOTION,)
+    relaxis_val_attr = 'rel'
+
+    def __init__ (self, bdy = None, thresholds = None, *mods):
+        if isinstance(bdy, int):
+            bdy = (bdy, bdy)
+        if thresholds is not None and len(thresholds) == 2:
+            thresholds *= 2
+        Relaxis2Input.__init__(self, None, None, bdy, thresholds, *mods)
 
 
 class Event (object):
@@ -313,6 +392,7 @@ class Event (object):
         components = self.components
         self_add = self.inputs.__setitem__
         eh_add = None if self.eh is None else self.eh._add_inputs
+        new_inputs = []
         for i in inputs:
             # work out components and perform checks
             if isinstance(i, Input):
@@ -343,9 +423,11 @@ class Event (object):
                 if i.evt is not None:
                     i.evt.rm(i)
                 self_add(i, (evt_components, input_components))
+                new_inputs.append(i)
                 i.evt = self
                 if eh_add is not None:
                     eh_add(i)
+        return new_inputs
 
     def rm (self, *inputs):
         self_rm = self.inputs.__delitem__
@@ -389,10 +471,9 @@ class MultiEvent (Event):
 
 
 class Button (Event):
-    # TODO: work for AxisInput too
     name = 'button'
     components = 1
-    input_types = (ButtonInput, AxisInput)#, Relaxis2Input)
+    input_types = ButtonInput
 
     def __init__ (self, *items, **kw):
         modes = 0
@@ -413,6 +494,12 @@ class Button (Event):
                             'required if given the REPEAT mode')
         self._repeating = False
 
+    def add (self, *inputs):
+        inputs = Event.add(self, *inputs)
+        all_inputs = self.inputs
+        for i in inputs:
+            i.btn_components = all_inputs[i][1]
+
     def down (self, i, component):
         if component in self.inputs[i][1]:
             self._downevts += 1
@@ -420,14 +507,14 @@ class Button (Event):
     def up (self, i, component):
         if component in self.inputs[i][1]:
             self._upevts += 1
-            if self.modes & REPEAT and not any(i.held for i in self.inputs):
+            if self.modes & REPEAT and not any(i.held[0] for i in self.inputs):
                 # stop repeating if let go of all buttons at any point
                 self._repeating = False
 
     def respond (self, changed):
         modes = self.modes
         if modes & (HELD | REPEAT):
-            held = any(i.held for i in self.inputs)
+            held = any(i.held[0] for i in self.inputs)
         if not changed and not held:
             return
         evts = {}
@@ -478,24 +565,32 @@ class Button4 (MultiEvent):
 class Axis (Event):
     name = 'axis'
     components = 2
-    input_types = (ButtonInput, AxisInput)#, Relaxis2Input)
+    input_types = (AxisInput, ButtonInput)
 
     def __init__ (self, *inputs):
         Event.__init__(self, *inputs)
         self._pos = 0
+
+    def add (self, *inputs):
+        inputs = Event.add(self, *inputs)
+        all_inputs = self.inputs
+        for i in inputs:
+            if isinstance(i, ButtonInput):
+                i.btn_components = all_inputs[i][1]
 
     def respond (self, changed):
         if changed:
             pos = 0
             for i, (evt_components, input_components) \
                 in self.inputs.iteritems():
-                if isinstance(i, ButtonInput):
-                    assert len(evt_components) == 1
-                    if i.held:
-                        pos += 2 * evt_components[0] - 1
-                else: # i is AxisInput
+                if isinstance(i, AxisInput):
                     for ec, ic in zip(evt_components, input_components):
                         pos += (2 * ec - 1) * i.pos[ic]
+                else: # i is ButtonInput
+                    btn_components = i.btn_components
+                    for ec, ic in zip(evt_components, input_components):
+                        if ic in btn_components and i._held[ic]:
+                            pos += 2 * ec - 1
             self._pos = pos = min(1, max(-1, pos))
         else:
             pos = self._pos
@@ -680,7 +775,7 @@ class EventHandler (dict):
             if isinstance(i, ButtonInput):
                 for m in i.mods:
                     added = False
-                    for device in i.mod_devices:
+                    for device in mod_devices[i.device]:
                         this_mods = mods.setdefault(device, {}) \
                                         .setdefault(i.device_id, {})
                         if m in this_mods:
@@ -701,7 +796,7 @@ class EventHandler (dict):
             rm(i) # raises KeyError
             if isinstance(i, ButtonInput):
                 for m in i.mods:
-                    for device in i.mod_devices:
+                    for device in mod_devices[i.device]:
                         d1 = mods[device]
                         d2 = d1[i.device]
                         d3 = d2[m]
@@ -728,19 +823,22 @@ class EventHandler (dict):
                 val = getattr(pgevt, attr) if hasattr(pgevt, attr) else None
                 inputs = inputs[val if val is None or val in inputs else None]
             for i in inputs:
-                if isinstance(i, ButtonInput) and not i.is_mod:
-                    assert ids
-                    this_mods = i.mods
+                args = ()
+                if isinstance(i, ButtonInput):
+                    if i.is_mod:
+                        args = (True,)
+                    else:
+                        assert ids
+                        this_mods = i.mods
 
-                    def check_mods ():
-                        for device in i.mod_devices:
-                            for m in mods.get(device, {}).get(i.device_id, ()):
-                                yield m.held == (m in this_mods)
+                        def check_mods ():
+                            for device in mod_devices[i.device]:
+                                for m in mods.get(device, {}).get(i.device_id,
+                                                                  ()):
+                                    yield m.held[0] == (m in this_mods)
 
-                    if not all(check_mods()):
-                        # mods don't match: don't call
-                        continue
-                if i.handle(pgevt):
+                        args = (all(check_mods()),)
+                if i.handle(pgevt, *args):
                     i.evt._changed = True
         for evts in (self._named, self._unnamed):
             for evt in evts:
