@@ -133,6 +133,7 @@ class ButtonInput (Input):
     def __init__ (self, device_id = None, button = None, *mods):
         self._held = [False] * self.components
         self.is_mod = False
+        self.btn_components = ()
         Input.__init__(self)
         if hasattr(self, 'device_id_attr'):
             self.device_id = device_id
@@ -339,7 +340,7 @@ class Relaxis2Input (AxisInput):
 
     def __init__ (self, device_id = None, relaxis = None, bdy = None,
                   thresholds = None, *mods):
-        self.rel = (0, 0)
+        self.rel = [0, 0, 0, 0]
         AxisInput.__init__(self, device_id, None, thresholds, *mods)
         if hasattr(self, 'relaxis_attr'):
             if relaxis is None:
@@ -353,7 +354,13 @@ class Relaxis2Input (AxisInput):
     def handle (self, pgevt, mods_match):
         rtn = Input.handle(self, pgevt)
         if hasattr(self, 'relaxis_val_attr'):
-            self.rel = rpos = getattr(pgevt, self.relaxis_val_attr)
+            rpos = getattr(pgevt, self.relaxis_val_attr)
+            rel = self.rel
+            for i in (0, 1):
+                if rpos[i] > 0:
+                    rel[2 * i + 1] = rpos[i]
+                else:
+                    rel[2 * i] = -rpos[i]
             if self.bdy is not None:
                 # act as axis
                 for i, (bdy, rpos) in enumerate(zip(self.bdy, rpos)):
@@ -365,7 +372,12 @@ class Relaxis2Input (AxisInput):
             elif self.is_mod:
                 raise TypeError('a Relaxis2Input must have bdy defined to ' \
                                 'be a modifier')
+            else:
+                rtn |= any(rpos)
         return rtn
+
+    def reset (self):
+        self.rel = [0, 0, 0, 0]
 
 
 class MouseAxis (Relaxis2Input):
@@ -437,6 +449,7 @@ class Event (object):
                 self_add(i, (evt_components, input_components))
                 new_inputs.append(i)
                 i.evt = self
+                i.btn_components = input_components
                 if eh_add is not None:
                     eh_add(i)
         return new_inputs
@@ -505,12 +518,6 @@ class Button (Event):
             raise TypeError('initial_delay and repeat_delay arguments are ' \
                             'required if given the REPEAT mode')
         self._repeating = False
-
-    def add (self, *inputs):
-        inputs = Event.add(self, *inputs)
-        all_inputs = self.inputs
-        for i in inputs:
-            i.btn_components = all_inputs[i][1]
 
     def down (self, i, component):
         if component in self.inputs[i][1]:
@@ -583,13 +590,6 @@ class Axis (Event):
         Event.__init__(self, *inputs)
         self._pos = 0
 
-    def add (self, *inputs):
-        inputs = Event.add(self, *inputs)
-        all_inputs = self.inputs
-        for i in inputs:
-            if isinstance(i, ButtonInput):
-                i.btn_components = all_inputs[i][1]
-
     def respond (self, changed):
         if changed:
             pos = 0
@@ -619,7 +619,48 @@ class Relaxis (Event):
     # each input takes a scaling argument, and mouse events have no limits like with Axis
     name = 'relaxis'
     components = 2
-    inputs = (ButtonInput, AxisInput)
+    input_types = (Relaxis2Input, AxisInput, ButtonInput)
+
+    def __init__ (self, *inputs):
+        self.input_scales = {}
+        Event.__init__(self, *inputs)
+
+    def add (self, *inputs):
+        real_inputs = []
+        scale = self.input_scales
+        for i in inputs:
+            scale[i[1]] = i[0]
+            real_inputs.append(i[1:])
+        Event.add(self, *real_inputs)
+
+    def rm (self, *inputs):
+        Event.rm(self, *inputs)
+        scale = self.input_scales
+        for i in inputs:
+            del scale[i]
+
+    def respond (self, changed):
+        rel = 0
+        scale = self.input_scales
+        for i, (evt_components, input_components) \
+            in self.inputs.iteritems():
+            this_rel = 0
+            if isinstance(i, Relaxis2Input):
+                for ec, ic in zip(evt_components, input_components):
+                    this_rel += (2 * ec - 1) * i.rel[ic]
+                i.reset()
+            elif isinstance(i, AxisInput):
+                for ec, ic in zip(evt_components, input_components):
+                    this_rel += (2 * ec - 1) * i.pos[ic]
+            else: # i is ButtonInput
+                btn_components = i.btn_components
+                for ec, ic in zip(evt_components, input_components):
+                    if ic in btn_components and i._held[ic]:
+                        this_rel += 2 * ec - 1
+            rel += this_rel * scale[i]
+        if rel:
+            for cb in self.cbs:
+                cb(rel)
 
 
 class Relaxis2 (MultiEvent):
