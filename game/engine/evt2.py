@@ -7,7 +7,6 @@ import pygame as pg
 TODO:
     [FIRST]
  - domains (eh.{add, rm})
- - Relaxis, using all input types
     [ESSENTIAL]
  - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
  - error on names of events, schemes, domains clashing
@@ -335,7 +334,7 @@ class PadAxis (AxisInput):
     axis_val_attr = 'value'
 
 
-class Relaxis2Input (AxisInput):
+class RelAxis2Input (AxisInput):
     components = 4
 
     def __init__ (self, device_id = None, relaxis = None, bdy = None,
@@ -370,7 +369,7 @@ class Relaxis2Input (AxisInput):
                     apos = sgn * min(sgn * apos, 1)
                     rtn |= self.axis_motion(mods_match, i, apos)
             elif self.is_mod:
-                raise TypeError('a Relaxis2Input must have bdy defined to ' \
+                raise TypeError('a RelAxis2Input must have bdy defined to ' \
                                 'be a modifier')
             else:
                 rtn |= any(rpos)
@@ -380,7 +379,7 @@ class Relaxis2Input (AxisInput):
         self.rel = [0, 0, 0, 0]
 
 
-class MouseAxis (Relaxis2Input):
+class MouseAxis (RelAxis2Input):
     device = 'mouse'
     name = 'axis'
     pgevts = (pg.MOUSEMOTION,)
@@ -391,7 +390,7 @@ class MouseAxis (Relaxis2Input):
             bdy = (bdy, bdy)
         if thresholds is not None and len(thresholds) == 2:
             thresholds *= 2
-        Relaxis2Input.__init__(self, None, None, bdy, thresholds, *mods)
+        RelAxis2Input.__init__(self, None, None, bdy, thresholds, *mods)
 
 
 class Event (object):
@@ -615,11 +614,11 @@ class Axis2 (MultiEvent):
     multiple = 2
 
 
-class Relaxis (Event):
+class RelAxis (Event):
     # each input takes a scaling argument, and mouse events have no limits like with Axis
     name = 'relaxis'
     components = 2
-    input_types = (Relaxis2Input, AxisInput, ButtonInput)
+    input_types = (RelAxis2Input, AxisInput, ButtonInput)
 
     def __init__ (self, *inputs):
         self.input_scales = {}
@@ -645,7 +644,7 @@ class Relaxis (Event):
         for i, (evt_components, input_components) \
             in self.inputs.iteritems():
             this_rel = 0
-            if isinstance(i, Relaxis2Input):
+            if isinstance(i, RelAxis2Input):
                 for ec, ic in zip(evt_components, input_components):
                     this_rel += (2 * ec - 1) * i.rel[ic]
                 i.reset()
@@ -663,8 +662,8 @@ class Relaxis (Event):
                 cb(rel)
 
 
-class Relaxis2 (MultiEvent):
-    child = Relaxis
+class RelAxis2 (MultiEvent):
+    child = RelAxis
     multiple = 2
 
 
