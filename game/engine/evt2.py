@@ -2,43 +2,41 @@ from collections import Sequence
 
 import pygame as pg
 
-# - tools for editing/typing text
-# - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
-# - input recording and playback (allow whitelisting/excluding by registered event name)
-# - a way to register new input/event types (add to inputs_by_name/evts_by_name)
-# - can use part of an input, eg. for a button event, 'pad axis 0:0'; for an axis event, 'pos pad axis 2:1'
-#    - might not be >2-component inputs, but can do, eg. for an axis event, 'neg pos pad axis 0:0,1'
-# - error on names of events, schemes, domains clashing
-# - some eh method to detect and set current held state of all attached ButtonInputs - keys use pg.key.get_pressed() (works for mods/locks) (careful of _SneakyMultiKbdKey)
-# - joy hat/ball
-# - auto joy(/other?) initialisation?
-# - printable input names (including mods)
-# - mods in config file (like '[CTRL] [ALT] kbd a' - device omitted in modifier when same as main button - varnames omitted since must be the same)
-# - in config file, can omit axis-as-button thresholds and deadzones (global definitions in config file?)
-# - deadzones aren't per-input in config file - can do per-device/axis or overall?
-# - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these 
+"""
 
-# - domains
-# - Relaxis, using all input types
+TODO:
+    [FIRST]
+ - domains (eh.{add, rm})
+ - Relaxis, using all input types
+    [ESSENTIAL]
+ - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
+ - error on names of events, schemes, domains clashing
+ - some eh method to detect and set current held state of all attached ButtonInputs - keys use pg.key.get_pressed() (works for mods/locks)
+    - careful of _SneakyMultiKbdKey
+ - joy hat/ball
+ - nice __str__ for inputs (include mods)
+ - auto joy(/other?) initialisation
+ - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these 
+ - eh.assign_devices
+ - eh.grab
+ - eh.set_deadzones
+ - doc/comments
+ - MultiEvent and use thereof
+    [CONFIG]
+ - eh.{load, save, unload, disable, enable}
+ - can use part of an input, eg. for a button event, 'pad axis 0:0'; for an axis event, 'pos pad axis 2:1'
+    - might not be >2-component inputs, but can do, eg. for an axis event, 'neg pos pad axis 0:0,1'
+ - deadzones aren't per-input - can do per-device/axis or overall?
+ - can omit axis-as-button thresholds and deadzones (global definitions in config file?)
+ - mods like '[CTRL] [ALT] kbd a' - device omitted in modifier when same as main button - varnames omitted since must be the same
+    [FUTURE]
+ - eh.*monitor_deadzones
+ - Scheme
+ - tools for editing/typing text
+ - input recording and playback (allow whitelisting/excluding by registered event name)
+ - a way to register new input/event types (consider module data structures)
 
-
-evt_component_names = {
-    0: (),
-    1: ('button',),
-    2: ('neg', 'pos'),
-    4: ('left', 'right', 'up', 'down')
-}
-
-mod_devices = {
-    'kbd': ('kbd',),
-    'mouse': ('kbd', 'mouse'),
-    'pad': ('pad',)
-}
-
-DOWN = 1
-UP = 2
-HELD = 4
-REPEAT = 8
+"""
 
 
 class Input (object):
@@ -143,26 +141,33 @@ class ButtonInput (Input):
                 raise TypeError('expected button argument')
             self.filter(self.button_attr, button)
         self.button = button
-        mod_args = mods
-        mods = []
-        for m in mod_args:
+        mods = list(mods)
+        mods_parsed = []
+        for m in mods:
             if isinstance(m, Input):
-                mods.append(m)
-            else:
+                m = (m, 0)
+            elif len(m) == 1:
+                m = (m[0], 0)
+            if isinstance(m[1], Input):
                 mods.extend(m)
-        if any(m.mods for m in mods):
-            raise ValueError('modifiers may not have modifiers')
+            else:
+                mods_parsed.append(m)
+        if any(m.mods for m, c in mods_parsed):
+            raise ValueError('modifiers cannot have modifiers')
         ds = mod_devices[self.device]
-        if any(m.device not in ds for m in mods):
+        if any(m.device not in ds for m, c in mods_parsed):
             raise TypeError(
                 'the modifier {0} is for device {1}, which is not ' \
                 'compatible with {2} instances'.format(m, m.device,
                                                        type(self).__name__)
             )
-        for m in mods:
+        self.mods = mods = []
+        for m, c in mods_parsed:
+            if c < 0 or c >= m.components:
+                raise ValueError('{0} has no component {1}'.format(m, c))
             m.is_mod = self
-            m.btn_components = (0,) # TODO: do this properly; require in args
-        self.mods = mods
+            m.btn_components = (c,)
+            mods.append(m)
 
     @property
     def held (self):
@@ -415,6 +420,13 @@ class Event (object):
                 evt_components = (evt_components,)
             if isinstance(input_components, int):
                 input_components = (input_components,)
+            for ec in evt_components:
+                if ec < 0 or ec >= components:
+                    raise ValueError('{0} has no component {1}'
+                                     .format(self, ec))
+            for ic in input_components:
+                if ic < 0 or ic >= i.components:
+                    raise ValueError('{0} has no component {1}'.format(i, ic))
             if len(evt_components) != len(input_components):
                 raise ValueError('component mismatch: {0}'
                                  .format(i, evt_components, input_components))
@@ -638,7 +650,7 @@ class EventHandler (dict):
 
     def add (self, *evts, **named_evts):
         """add(*evts, **named_evts, domain = None)"""
-        # TODO: use domain (can call with existing event to change domain)
+        # NOTE: can call with existing event to change domain
         created = []
         named = self._named
         unnamed = self._unnamed
@@ -652,7 +664,7 @@ class EventHandler (dict):
             domain = None
         for evts in (((None, evt) for evt in evts), named_evts.iteritems()):
             for name, evt in evts:
-                if not isinstance(evt, Event): # TODO: also Scheme
+                if not isinstance(evt, Event): # NOTE: also Scheme
                     # got (possibly mixed) list of pgevts/cbs
                     pgevts = []
                     cbs = []
@@ -666,7 +678,7 @@ class EventHandler (dict):
                         prev_name = evt._regname
                         if name != prev_name:
                             # change registered name
-                            # TODO: maybe need to let Scheme know about this
+                            # NOTE: maybe need to let Scheme know about this
                             if prev_name is None:
                                 unnamed.remove(evt)
                             else:
@@ -699,7 +711,6 @@ class EventHandler (dict):
     def rm (self, *evts):
         named = self._named
         unnamed = self._unnamed
-        # TODO: use domain
         for evt in evts:
             if isinstance(evt, basestring):
                 evt = self[evt] # raises KeyError
@@ -825,7 +836,8 @@ class EventHandler (dict):
             for i in inputs:
                 args = ()
                 if isinstance(i, ButtonInput):
-                    if i.is_mod:
+                    is_mod = i.is_mod
+                    if is_mod:
                         args = (True,)
                     else:
                         assert ids
@@ -838,7 +850,9 @@ class EventHandler (dict):
                                     yield m.held[0] == (m in this_mods)
 
                         args = (all(check_mods()),)
-                if i.handle(pgevt, *args):
+                else:
+                    is_mod = False
+                if i.handle(pgevt, *args) and not is_mod:
                     i.evt._changed = True
         for evts in (self._named, self._unnamed):
             for evt in evts:
@@ -886,13 +900,6 @@ class EventHandler (dict):
         pass
 
 
-class mod:
-    CTRL = (_SneakyMultiKbdKey(pg.KMOD_CTRL, pg.K_LCTRL, pg.K_RCTRL))
-    SHIFT = (_SneakyMultiKbdKey(pg.KMOD_SHIFT, pg.K_LSHIFT, pg.K_RSHIFT))
-    ALT = (_SneakyMultiKbdKey(pg.KMOD_ALT, pg.K_LALT, pg.K_RALT))
-    META = (_SneakyMultiKbdKey(pg.KMOD_META, pg.K_LMETA, pg.K_RMETA))
-
-
 #: A ``{cls.device: {cls.name: cls}}`` dict of usable named :class:`Input`
 #: subclasses.
 inputs_by_name = {}
@@ -905,3 +912,27 @@ evts_by_name = dict((evt.name, name) for evt in vars()
                     if (isinstance(evt, Event) and hasattr(evt, 'name')) or
                        (isinstance(evt, MultiEvent) and
                         hasattr(evt.child, 'name')))
+
+evt_component_names = {
+    0: (),
+    1: ('button',),
+    2: ('neg', 'pos'),
+    4: ('left', 'right', 'up', 'down')
+}
+
+mod_devices = {
+    'kbd': ('kbd',),
+    'mouse': ('kbd', 'mouse'),
+    'pad': ('pad',)
+}
+
+class mod:
+    CTRL = (_SneakyMultiKbdKey(pg.KMOD_CTRL, pg.K_LCTRL, pg.K_RCTRL))
+    SHIFT = (_SneakyMultiKbdKey(pg.KMOD_SHIFT, pg.K_LSHIFT, pg.K_RSHIFT))
+    ALT = (_SneakyMultiKbdKey(pg.KMOD_ALT, pg.K_LALT, pg.K_RALT))
+    META = (_SneakyMultiKbdKey(pg.KMOD_META, pg.K_LMETA, pg.K_RMETA))
+
+DOWN = 1
+UP = 2
+HELD = 4
+REPEAT = 8
