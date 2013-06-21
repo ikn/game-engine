@@ -179,15 +179,17 @@ should be passed to that base class).
 """
         scheduler = Scheduler()
         scheduler.add_timeout(self._update, frames = 1, repeat_frames = 1)
-        evthandler = evt.EventHandler({
-            pg.ACTIVEEVENT: self._active_cb,
-            pg.VIDEORESIZE: self._resize_cb,
-            conf.EVENT_ENDMUSIC: self.play_music
-        }, [
-            (conf.KEYS_QUIT, self.quit, evt.MODE_ONDOWN),
-            (conf.KEYS_FULLSCREEN, self.toggle_fullscreen, evt.MODE_ONDOWN),
-            (conf.KEYS_MINIMISE, self.minimise, evt.MODE_ONDOWN)
-        ], False, self.quit)
+        evthandler = evt.EventHandler(scheduler)
+        evthandler.add(
+            (pg.QUIT, self.quit),
+            (pg.ACTIVEEVENT, self._active_cb),
+            (pg.VIDEORESIZE, self._resize_cb),
+            (conf.EVENT_ENDMUSIC, self.play_music),
+            evt.Button(evt.DOWN, *conf.KEYS_QUIT).cb(self.quit),
+            evt.Button(evt.DOWN, *conf.KEYS_MINIMISE).cb(self.minimise),
+            evt.Button(evt.DOWN, *conf.KEYS_FULLSCREEN)
+               .cb(self.toggle_fullscreen)
+        )
         # instantiate class
         world = cls(scheduler, evthandler, *args)
         scheduler.fps = conf.FPS[get_world_id(world)]

@@ -8,6 +8,7 @@ from collections import defaultdict
 import pygame as pg
 
 from . import settings
+from .evt import KbdKey as Key, mod
 from .util import dd
 
 
@@ -60,16 +61,16 @@ class Conf (object):
     ASPECT_RATIO = None
 
     # input
-    KEYS_QUIT = ((pg.K_F4, pg.KMOD_ALT, True),)
-    KEYS_MINIMISE = (pg.K_F10,)
-    KEYS_FULLSCREEN = (pg.K_F11, (pg.K_RETURN, pg.KMOD_ALT, True),
-                    (pg.K_KP_ENTER, pg.KMOD_ALT, True))
-    KEYS_NEXT = (pg.K_RETURN, pg.K_SPACE, pg.K_KP_ENTER)
-    KEYS_BACK = (pg.K_ESCAPE, pg.K_BACKSPACE)
-    KEYS_LEFT = (pg.K_LEFT, pg.K_a, pg.K_q)
-    KEYS_RIGHT = (pg.K_RIGHT, pg.K_d, pg.K_e)
-    KEYS_UP = (pg.K_UP, pg.K_w, pg.K_z, pg.K_COMMA)
-    KEYS_DOWN = (pg.K_DOWN, pg.K_s, pg.K_o)
+    KEYS_QUIT = (Key(pg.K_F4, mod.ALT),)
+    KEYS_MINIMISE = (Key(pg.K_F10),)
+    KEYS_FULLSCREEN = (Key(pg.K_F11), Key(pg.K_RETURN, mod.ALT),
+                       Key(pg.K_KP_ENTER, mod.ALT))
+    KEYS_NEXT = (Key(pg.K_RETURN), Key(pg.K_SPACE), Key(pg.K_KP_ENTER))
+    KEYS_BACK = (Key(pg.K_ESCAPE), Key(pg.K_BACKSPACE))
+    KEYS_LEFT = (Key(pg.K_LEFT), Key(pg.K_a), Key(pg.K_q))
+    KEYS_RIGHT = (Key(pg.K_RIGHT), Key(pg.K_d), Key(pg.K_e))
+    KEYS_UP = (Key(pg.K_UP), Key(pg.K_w), Key(pg.K_z), Key(pg.K_COMMA))
+    KEYS_DOWN = (Key(pg.K_DOWN), Key(pg.K_s), Key(pg.K_o))
     KEYS_DIRN = (KEYS_LEFT, KEYS_UP, KEYS_RIGHT, KEYS_DOWN)
 
     # audio
