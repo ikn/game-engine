@@ -6,7 +6,6 @@ import pygame as pg
 
 TODO:
     [FIRST]
- - nice __str__ for inputs (include mods)
  - joy hat/ball
  - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these
  - domains (eh.{add, rm})
@@ -53,6 +52,20 @@ class Input (object):
         if pgevts:
             self.filters['type'] = pgevts
         self._device_id = None
+
+    def _str_dev_id (self):
+        dev_id = self._device_id
+        if dev_id is None and self.device_var is not None:
+            dev_id = '<{0}>'.format(self.device_var)
+
+    def _str (self, arg):
+        return '{0}({1})'.format(type(self).__name__, arg)
+
+    def __str__ (self):
+        return self._str(self.filters)
+
+    def __repr__ (self):
+        return str(self)
 
     def handle (self, pgevt):
         return False
@@ -114,16 +127,20 @@ class Input (object):
 
 class BasicInput (Input):
     def __init__ (self, pgevt):
+        self.pgevt = pgevt
         Input.__init__(self, pgevt)
-        self.pgevts = []
+        self._pgevts = []
+
+    def __str__ (self):
+        return self._str(pg.event.event_name(self.pgevt).upper())
 
     def handle (self, pgevt):
         Input.handle(self, pgevt)
-        self.pgevts.append(pgevt)
+        self._pgevts.append(pgevt)
         return True
 
     def reset (self):
-        self.pgevts = []
+        self._pgevts = []
 
 
 class ButtonInput (Input):
@@ -169,6 +186,19 @@ class ButtonInput (Input):
             m.btn_components = (c,)
             mods.append(m)
 
+    def __str__ (self):
+        if hasattr(self, '_btn_name'):
+            s = self._btn_name()
+            for m in self.mods:
+                if hasattr(m, '_mod_btn_name'):
+                    mod_s = m._mod_btn_name()
+                else:
+                    mod_s = str(m)
+                s = '[{0}]{1}'.format(mod_s, s)
+            return self._str(s)
+        else:
+            return Input.__str__(self)
+
     @property
     def held (self):
         return [self._held[c] for c in self.btn_components]
@@ -213,6 +243,11 @@ class KbdKey (ButtonInput):
     def __init__ (self, key, *mods):
         ButtonInput.__init__(self, None, key, *mods)
 
+    def _btn_name (self):
+        return pg.key.name(self.button).upper()
+
+    _mod_btn_name = _btn_name
+
 
 class _SneakyMultiKbdKey (KbdKey):
     def __init__ (self, button, *buttons):
@@ -220,6 +255,13 @@ class _SneakyMultiKbdKey (KbdKey):
         self.filter(self.button_attr, *buttons[1:])
         self.button = button
         self._held_multi = dict.fromkeys(buttons, False)
+
+    def _btn_name (self):
+        for attr, val in vars(mod).iteritems():
+            if val is self:
+                return attr
+
+    _mod_btn_name = _btn_name
 
     def handle (self, pgevt, mods_match):
         self._held_multi[pgevt.key] = pgevt.type in self.down_pgevts
@@ -237,6 +279,12 @@ class MouseButton (ButtonInput):
     def __init__ (self, button, *mods):
         ButtonInput.__init__(self, None, button, *mods)
 
+    def _btn_name (self):
+        return '{0}'.format(self.button)
+
+    def _mod_btn_name (self):
+        return 'mouse button {0}'.format(self.button)
+
 
 class PadButton (ButtonInput):
     device = 'pad'
@@ -245,6 +293,12 @@ class PadButton (ButtonInput):
     device_id_attr = 'joy'
     button_attr = 'button'
     down_pgevts = (pg.JOYBUTTONDOWN,)
+
+    def _btn_name (self):
+        return '{0}, {1}'.format(self._str_dev_id(), self.button)
+
+    def _mod_btn_name (self):
+        return 'pad {0} button {1}'.format(self._str_dev_id(), self.button)
 
 
 class AxisInput (ButtonInput):
@@ -333,6 +387,12 @@ class PadAxis (AxisInput):
     axis_attr = 'axis'
     axis_val_attr = 'value'
 
+    def _mod_btn_name (self):
+        return 'pad {0} axis {1}'.format(self._str_dev_id(), self.axis)
+
+    def __str__ (self):
+        return self._str('{0}, {1}'.format(self._str_dev_id(), self.axis))
+
 
 class RelAxis2Input (AxisInput):
     components = 4
@@ -391,6 +451,12 @@ class MouseAxis (RelAxis2Input):
         if thresholds is not None and len(thresholds) == 2:
             thresholds *= 2
         RelAxis2Input.__init__(self, None, None, bdy, thresholds, *mods)
+
+    def _mod_btn_name (self):
+        return 'mouse axis'
+
+    def __str__ (self):
+        return self._str('')
 
 
 class Event (object):
@@ -475,7 +541,7 @@ class Event (object):
         if changed:
             cbs = self.cbs
             for i in self.inputs:
-                for pgevt in i.pgevts:
+                for pgevt in i._pgevts:
                     for cb in cbs:
                         cb(pgevt)
                 i.reset()
@@ -674,15 +740,18 @@ class EventHandler (dict):
     def __init__ (self, scheduler):
         self.scheduler = scheduler
         self._named = set()
-        self._unnamed = set()
+        self.evts = set() # unnamed events
         self._inputs = set()
         self._filtered_inputs = ('type', {None: set()})
         self._mods = {}
 
+    def __str__ (self):
+        return '<EventHandler object at {0}>'.format(hex(id(self)))
+
     def __contains__ (self, item):
         # can be event, scheme or name thereof
         return dict.__contains__(self, item) or item in self._named or \
-               item in self._unnamed
+               item in self.evts
 
     def __setitem__ (self, item, val):
         self.add(**{item: val})
@@ -695,7 +764,7 @@ class EventHandler (dict):
         # NOTE: can call with existing event to change domain
         created = []
         named = self._named
-        unnamed = self._unnamed
+        unnamed = self.evts
         if 'domain' in named_evts:
             domain = named_evts['domain']
             if isinstance(domain, basestring):
@@ -752,7 +821,7 @@ class EventHandler (dict):
 
     def rm (self, *evts):
         named = self._named
-        unnamed = self._unnamed
+        unnamed = self.evts
         for evt in evts:
             if isinstance(evt, basestring):
                 evt = self[evt] # raises KeyError
@@ -830,7 +899,7 @@ class EventHandler (dict):
                     added = False
                     for device in mod_devices[i.device]:
                         this_mods = mods.setdefault(device, {}) \
-                                        .setdefault(i.device_id, {})
+                                        .setdefault(i._device_id, {})
                         if m in this_mods:
                             this_mods[m].add(i)
                         else:
@@ -896,7 +965,7 @@ class EventHandler (dict):
                     is_mod = False
                 if i.handle(pgevt, *args) and not is_mod:
                     i.evt._changed = True
-        for evts in (self._named, self._unnamed):
+        for evts in (self._named, self.evts):
             for evt in evts:
                 changed = evt._changed
                 evt._changed = False
