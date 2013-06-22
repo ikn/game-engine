@@ -1,13 +1,16 @@
-from collections import Sequence
+"""Callback-based event and input handling.
 
-import pygame as pg
-
-"""
+---NODOC---
 
 TODO:
     [FIRST]
- - joy hat/ball
+ - doc/comments (then merge into master)
+    - using __str__ backends
+    - Input.name
+    - data structures used in config file
+ - removing event callbacks
  - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these
+ - joy hat/ball (seems like AxisInput/RelAxisInput, but need to test (and need a pad with a ball))
  - domains (eh.{add, rm})
     [ESSENTIAL]
  - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
@@ -18,7 +21,6 @@ TODO:
  - eh.assign_devices
  - eh.grab (and maybe have grab toggle for getting all input for a while)
  - eh.set_deadzones
- - doc/comments
  - MultiEvent and use thereof
     [CONFIG]
  - eh.{load, save, unload, disable, enable}
@@ -34,20 +36,48 @@ TODO:
  - input recording and playback (allow whitelisting/excluding by registered event name)
  - a way to register new input/event types (consider module data structures)
 
+---NODOC---
+
 """
+
+from collections import Sequence
+
+import pygame as pg
 
 
 class Input (object):
+    """Base class for handling events.  By itself, this class does nothing.
+
+Input(*pgevts)
+
+:arg pgevts: Pygame event IDs to listen for.
+
+If a subclass has a ``pgevts`` attribute, this is a list of events to add to
+the argument at initialisation.
+
+"""
+
+    #: Number of components ('directions'/'button-likes') represented by this
+    #: input.
     components = 0
+    #: The string device name that this input type corresponds to (see
+    #: :data:`inputs_by_name`).
     device = None
+    #: A value that the device ID will never take (see :attr:`device_id`).
     invalid_device_id = -1
 
     def __init__ (self, *pgevts):
+        #: Variable representing the current device ID; may be a string as a
+        #: variable name, or ``None`` (see :meth:`EventHandler.assign_devices`
+        #: for details).
         self.device_var = None
+        #: The :class:`Event` instance that contains this input, or ``None``.
         self.evt = None
         pgevts = set(pgevts)
         if hasattr(self, 'pgevts'):
             pgevts.update(self.pgevts)
+        #: A ``{pgevt_attr: val}`` dict that represents how events are filtered
+        #: before being passed to this input (see :meth:`filter`).
         self.filters = {}
         if pgevts:
             self.filters['type'] = pgevts
@@ -68,9 +98,29 @@ class Input (object):
         return str(self)
 
     def handle (self, pgevt):
+        """Called by :class:`EventHandler` with a ``pygame.event.Event``.
+
+The passed event matches :attr:`filters`.
+
+:return: whether anything in the input's state changed.
+
+"""
         return False
 
     def filter (self, attr, *vals, **kw):
+        """Filter events passed to this input.
+
+filter(attr, *vals, refilter = False) -> self
+
+:arg attr: Pygame event attribute to filter by.
+:arg vals: allowed values of the given attribute for filtered events.
+:arg refilter: if ``True``, replace previous filtering by ``attr`` with the
+               given ``vals``, else add to the values already filtered by.
+
+Note that due to the implementation, there is a value that cannot be filtered
+for: :data:`UNFILTERABLE`.
+
+"""
         # note cannot filter for None (have a module-wide UNFILTERABLE?)
         refilter = kw.get('refilter', False)
         if not vals:
@@ -82,6 +132,8 @@ class Input (object):
         eh = None if self.evt is None or self.evt.eh is None else self.evt.eh
         if eh is not None:
             eh._rm_inputs(self)
+        if UNFILTERABLE in vals:
+            raise ValueError('cannot filter for {0}'.format(UNFILTERABLE))
         if refilter:
             self.filters[attr] = set(vals)
         else:
@@ -91,6 +143,13 @@ class Input (object):
         return self
 
     def unfilter (self, attr, *vals):
+        """Remove filtering by the given attribute.
+
+:arg attr: Pygame event attribute to modify filtering for.
+:arg vals: values to remove filtering for.  If none are given, all filtering
+           by ``attr`` is removed.
+
+"""
         if attr not in self.filters:
             return self
         eh = None if self.evt is None or self.evt.eh is None else self.evt.eh
@@ -110,6 +169,17 @@ class Input (object):
 
     @property
     def device_id (self):
+        """The particular device that this input captures input for.
+
+May be ``None``.
+
+Subclasses may set an attribute ``device_id_attr``, in which case setting this
+attribute filters using ``device_id_attr`` as the event attribute and the set
+value as the attribute value to filter by.  If a subclass does not provide
+``device_id_attr`` and does not override the setter, this operation raises
+``TypeError``.
+
+"""
         return self._device_id
 
     @device_id.setter
@@ -126,7 +196,16 @@ class Input (object):
 
 
 class BasicInput (Input):
+    """An input that handles Pygame events of a single type.
+
+BasicInput(pgevt)
+
+:arg pgevt: Pygame event ID to listen for.
+
+"""
+
     def __init__ (self, pgevt):
+        #: Pygame event ID as passed to the constructor.
         self.pgevt = pgevt
         Input.__init__(self, pgevt)
         self._pgevts = []
@@ -135,28 +214,56 @@ class BasicInput (Input):
         return self._str(pg.event.event_name(self.pgevt).upper())
 
     def handle (self, pgevt):
+        """:meth:`Input.handle`."""
         Input.handle(self, pgevt)
         self._pgevts.append(pgevt)
         return True
 
     def reset (self):
+        """Clear cached Pygame events.
+
+Called by the owning :class:`Event`.
+
+"""
         self._pgevts = []
 
 
 class ButtonInput (Input):
+    """Abstract base class representing a button-like action (:class:`Input`
+subclass).
+
+ButtonInput([button], *mods)
+
+:arg button: button ID to listen for.  To use this, subclasses must set a
+             ``button_attr`` property to filter by that Pygame event attribute
+             with this ID as the value.  Otherwise, they must implement
+             filtering themselves.
+:arg mods: inputs to use as modifiers.  Each may be a :class:`ButtonInput`, a
+           sequence of them, or ``(input, component)`` giving the component of
+           the input to use (from ``0`` to ``input.components - 1``).
+
+Subclasses must have a :attr:`device <Input.device>` in :data:`mod_devices`,
+which restricts allowed devices of modifiers.
+
+"""
+
     components = 1
 
-    def __init__ (self, device_id = None, button = None, *mods):
+    def __init__ (self, button = None, *mods):
         self._held = [False] * self.components
+        #: Whether this input is acting as a modifier.
         self.is_mod = False
-        self.btn_components = ()
+        #: A sequence of the components of this input that are being used.
+        #: This is set by a container when the input is registered with one
+        #: (such as an :class:`Event`, or another :class:`ButtonInput` as a
+        #: modifier).
+        self.used_components = ()
         Input.__init__(self)
-        if hasattr(self, 'device_id_attr'):
-            self.device_id = device_id
         if hasattr(self, 'button_attr'):
             if button is None:
                 raise TypeError('expected button argument')
             self.filter(self.button_attr, button)
+        #: The button ID this input represents, as taken by the constructor.
         self.button = button
         mods = list(mods)
         mods_parsed = []
@@ -178,12 +285,14 @@ class ButtonInput (Input):
                 'compatible with {2} instances'.format(m, m.device,
                                                        type(self).__name__)
             )
+        #: List of modifiers (:class:`ButtonInput` instances) that affect this
+        #: input.
         self.mods = mods = []
         for m, c in mods_parsed:
             if c < 0 or c >= m.components:
                 raise ValueError('{0} has no component {1}'.format(m, c))
             m.is_mod = self
-            m.btn_components = (c,)
+            m.used_components = (c,)
             mods.append(m)
 
     def __str__ (self):
@@ -201,28 +310,46 @@ class ButtonInput (Input):
 
     @property
     def held (self):
-        return [self._held[c] for c in self.btn_components]
+        """A list of the held state of this button for used component.
+
+Each item is a bool corresponds to the component in the same position in
+:attr:`used_components`.
+
+"""
+        return [self._held[c] for c in self.used_components]
 
     def down (self, component = 0):
+        """Set the given component's button state to down."""
         self._held[component] = True
         if not self.is_mod:
-            if component in self.btn_components:
+            if component in self.used_components:
                 assert self.evt is not None
                 self.evt.down(self, component)
             return True
         return False
 
     def up (self, component = 0):
+        """Set the given component's button state to up."""
         if self._held[component]:
             self._held[component] = False
             if not self.is_mod:
-                if component in self.btn_components:
+                if component in self.used_components:
                     assert self.evt is not None
                     self.evt.up(self, component)
                 return True
         return False
 
     def handle (self, pgevt, mods_match):
+        """:meth:`Input.handle`.
+
+:arg mods_match: whether the modifiers attached to this button are currently
+                 active.
+
+If a subclass has a ``down_pgevts`` attribute, this sets the button down on
+component ``0`` for Pygame events with IDs in this list, and up on component
+``0`` for all other events.  Otherwise, it does nothing.
+
+"""
         rtn = Input.handle(self, pgevt)
         if hasattr(self, 'down_pgevts'):
             if pgevt.type in self.down_pgevts:
@@ -234,6 +361,12 @@ class ButtonInput (Input):
 
 
 class KbdKey (ButtonInput):
+    """:class:`ButtonInput` subclass representing a keyboard key.
+
+The ``button`` argument is required, and is the key code.
+
+"""
+
     device = 'kbd'
     name = 'key'
     pgevts = (pg.KEYDOWN, pg.KEYUP)
@@ -241,7 +374,7 @@ class KbdKey (ButtonInput):
     down_pgevts = (pg.KEYDOWN,)
 
     def __init__ (self, key, *mods):
-        ButtonInput.__init__(self, None, key, *mods)
+        ButtonInput.__init__(self, key, *mods)
 
     def _btn_name (self):
         return pg.key.name(self.button).upper()
@@ -270,6 +403,12 @@ class _SneakyMultiKbdKey (KbdKey):
 
 
 class MouseButton (ButtonInput):
+    """:class:`ButtonInput` subclass representing a mouse button.
+
+The ``button`` argument is required, and is the mouse button ID.
+
+"""
+
     device = 'mouse'
     name = 'button'
     pgevts = (pg.MOUSEBUTTONDOWN, pg.MOUSEBUTTONUP)
@@ -277,7 +416,7 @@ class MouseButton (ButtonInput):
     down_pgevts = (pg.MOUSEBUTTONDOWN,)
 
     def __init__ (self, button, *mods):
-        ButtonInput.__init__(self, None, button, *mods)
+        ButtonInput.__init__(self, button, *mods)
 
     def _btn_name (self):
         return '{0}'.format(self.button)
@@ -287,12 +426,30 @@ class MouseButton (ButtonInput):
 
 
 class PadButton (ButtonInput):
+    """:class:`ButtonInput` subclass representing a gamepad button.
+
+PadButton(device_id, button, *mods)
+
+:arg device_id: the gamepad's device ID, either a variable
+                (:attr:`device_var <Input.device_var>`), a non-string ID
+                (:attr:`device_id <Input.device_id>`) or ``None``.
+:arg button, mods: as taken by :class:`ButtonInput`.
+
+"""
+
     device = 'pad'
     name = 'button'
     pgevts = (pg.JOYBUTTONDOWN, pg.JOYBUTTONUP)
     device_id_attr = 'joy'
     button_attr = 'button'
     down_pgevts = (pg.JOYBUTTONDOWN,)
+
+    def __init__ (self, device_id, button, *mods):
+        ButtonInput.__init__(self, button, *mods)
+        if isinstance(device_id, basestring):
+            self.device_var = device_id
+        else:
+            self.device_id = device_id
 
     def _btn_name (self):
         return '{0}, {1}'.format(self._str_dev_id(), self.button)
@@ -302,25 +459,61 @@ class PadButton (ButtonInput):
 
 
 class AxisInput (ButtonInput):
+    """Abstract base class representing 2-component axes
+(:class:`ButtonInput` subclass).
+
+AxisInput([axis][, thresholds], *mods)
+
+:arg axis: axis ID to listen for.  To use this, subclasses must set an
+           ``axis_attr`` property to filter by that Pygame event attribute with
+           this ID as the value, and with an attribute giving the axis's value.
+           Otherwise, they must implement filtering themselves.
+:arg thresholds: required if the axis is to act as a button.  For each axis
+                 (that is, for each pair of :attr:`Input.components`), this
+                 list has two elements: ``down`` followed by ``up``, positive
+                 numbers giving the magnitude of the value of the axis in
+                 either direction that triggers a button down or up event.  For
+                 example, a 2-component axis might have ``(.6, .4)``.
+
+                 A subclass with more than 2 components may pass a length-2
+                 sequence here, which is expanded by assuming the same
+                 thresholds for each axis.
+:arg mods: as taken by :class:`ButtonInput`.  Only used if this axis is treated
+           as a button.
+
+Subclasses must have an even number of components.
+
+"""
+
     components = 2
 
-    def __init__ (self, device_id = None, axis = None, thresholds = None,
-                  *mods):
+    def __init__ (self, axis = None, thresholds = None, *mods):
+        #: Position (magnitude) in each direction of each axis, eg. for a
+        #: single axis at ``-.3``, this is ``[.3, 0]``.
         self.pos = [0] * self.components
         if mods and thresholds is None:
             raise TypeError('an AxisInput must have thresholds defined to ' \
                             'have modifiers')
-        ButtonInput.__init__(self, device_id, None, *mods)
+        ButtonInput.__init__(self, None, *mods)
         if hasattr(self, 'axis_attr'):
             if axis is None:
                 raise TypeError('expected axis argument')
             self.filter(self.axis_attr, axis)
+        #: Axis ID, as passed to the constructor.
         self.axis = axis
+        if thresholds is not None and len(thresholds) == 2:
+            thresholds *= (self.components / 2)
+        #: As passed to the constructor.
         self.thresholds = thresholds
         self.deadzone = 0
 
     @property
     def deadzone (self):
+        """Axis value magnitude below which the value is mapped to ``0``.
+
+Above this value, the mapped value increases linearly from ``0``.
+
+"""
         return self.deadzone
 
     @deadzone.setter
@@ -338,6 +531,14 @@ class AxisInput (ButtonInput):
         self._deadzone = dz
 
     def axis_motion (self, mods_match, axis, apos):
+        """Signal a change in axis position.
+
+:arg mods_match: as taken by :meth:`handle`.
+:arg axis: the index of the axis to modify (a 2-component :class:`AxisInput`
+           has one axis, with index ``0``).
+:arg apos: the new axis position (``-1 <= apos <= 1``).
+
+"""
         pos = [0, 0]
         if apos > 0:
             pos[1] = apos
@@ -371,6 +572,13 @@ class AxisInput (ButtonInput):
             return False
 
     def handle (self, pgevt, mods_match):
+        """:meth:`ButtonInput.handle`.
+
+If a subclass has an ``axis_val_attr`` attribute, this value of this attribute
+in the Pygame event is used as the axis position.  Otherwise, this method does
+nothing.
+
+"""
         rtn = Input.handle(self, pgevt)
         if hasattr(self, 'axis_val_attr'):
             apos = getattr(pgevt, self.axis_val_attr)
@@ -380,12 +588,31 @@ class AxisInput (ButtonInput):
 
 
 class PadAxis (AxisInput):
+    """:class:`AxisInput` subclass representing a gamepad axis.
+
+PadAxis(device_id, axis[, thresholds], *mods)
+
+:arg device_id: the gamepad's device ID, either a variable
+                (:attr:`device_var <Input.device_var>`), a non-string ID
+                (:attr:`device_id <Input.device_id>`) or ``None``.
+:arg axis, thresholds: as taken by :class:`AxisInput`.
+:arg mods: as taken by :class:`ButtonInput`.
+
+"""
+
     device = 'pad'
     name = 'axis'
     device_id_attr = 'joy'
     pgevts = (pg.JOYAXISMOTION,)
     axis_attr = 'axis'
     axis_val_attr = 'value'
+
+    def __init__ (self, device_id, axis, thresholds = None, *mods):
+        AxisInput.__init__(self, axis, thresholds, *mods)
+        if isinstance(device_id, basestring):
+            self.device_var = device_id
+        else:
+            self.device_id = device_id
 
     def _mod_btn_name (self):
         return 'pad {0} axis {1}'.format(self._str_dev_id(), self.axis)
@@ -394,28 +621,56 @@ class PadAxis (AxisInput):
         return self._str('{0}, {1}'.format(self._str_dev_id(), self.axis))
 
 
-class RelAxis2Input (AxisInput):
-    components = 4
+class RelAxisInput (AxisInput):
+    """Abstract base class representing 2-component relative axes
+(:class:`AxisInput` subclass).
 
-    def __init__ (self, device_id = None, relaxis = None, bdy = None,
-                  thresholds = None, *mods):
-        self.rel = [0, 0, 0, 0]
-        AxisInput.__init__(self, device_id, None, thresholds, *mods)
+RelAxisInput([relaxis][, bdy][, thresholds][, mods])
+
+:arg relaxis: axis ID to listen for.  To use this, subclasses must set a
+              ``relaxis_attr`` property to filter by that Pygame event
+              attribute with this ID as the value, and with an attribute giving
+              the axis's value.  Otherwise, they must implement filtering
+              themselves.
+:arg bdy: required if the relative axis is to act as an axis.  For each axis
+          (each 2 components), this sequence contains a positive number giving
+          the maximum magnitude of the axis.  The normalised axis position is
+          then obtained by dividing by this value.
+:arg thresholds: as taken by :class:`AxisInput`.
+:arg mods: as taken by :class:`ButtonInput`.
+
+A relative axis is one where events convey a change in the axis's value, rather
+than its absolute position.  Subclasses must have an even number of components.
+
+"""
+
+    components = 2
+
+    def __init__ (self, relaxis = None, bdy = None, thresholds = None, *mods):
+        #: The change in each component since last :meth:`reset`.
+        self.rel = [0, 0] * (self.components / 2)
+        AxisInput.__init__(self, None, thresholds, *mods)
         if hasattr(self, 'relaxis_attr'):
             if relaxis is None:
                 raise TypeError('expected relaxis argument')
             self.filter(self.relaxis_attr, relaxis)
+        #: Axis ID, as passed to the constructor.
         self.relaxis = relaxis
-        if bdy is not None and any(b <= 0 for b in bdy):
-            raise ValueError('all bdy elements must be greater than zero')
+        if bdy is not None:
+            if isinstance(bdy, (int, float)):
+                bdy = (bdy,) * (self.components / 2)
+            if any(b <= 0 for b in bdy):
+                raise ValueError('all bdy elements must be greater than zero')
+        #: As taken by the constructor.
         self.bdy = bdy
 
     def handle (self, pgevt, mods_match):
+        """:class:`ButtonInput.handle`."""
         rtn = Input.handle(self, pgevt)
         if hasattr(self, 'relaxis_val_attr'):
             rpos = getattr(pgevt, self.relaxis_val_attr)
             rel = self.rel
-            for i in (0, 1):
+            for i in xrange(self.components / 2):
                 if rpos[i] > 0:
                     rel[2 * i + 1] = rpos[i]
                 else:
@@ -429,17 +684,33 @@ class RelAxis2Input (AxisInput):
                     apos = sgn * min(sgn * apos, 1)
                     rtn |= self.axis_motion(mods_match, i, apos)
             elif self.is_mod:
-                raise TypeError('a RelAxis2Input must have bdy defined to ' \
-                                'be a modifier')
+                raise TypeError('a RelAxisInput must have bdy defined to be ' \
+                                'a modifier')
             else:
                 rtn |= any(rpos)
         return rtn
 
     def reset (self):
-        self.rel = [0, 0, 0, 0]
+        """Reset values in :attr:`rel` to ``0``.
+
+Called by the owning :class:`Event`.
+
+"""
+        self.rel = [0, 0] * (self.components / 2)
 
 
-class MouseAxis (RelAxis2Input):
+class MouseAxis (RelAxisInput):
+    """:class:`RelAxisInput` subclass representing both mouse axes.
+
+MouseAxis([bdy][, thresholds], *mods)
+
+:arg bdy: as taken by :class:`RelAxisInput`.
+:arg thresholds: as taken by :class:`AxisInput`.
+:arg mods: as taken by :class:`ButtonInput`.
+
+"""
+
+    components = 4
     device = 'mouse'
     name = 'axis'
     pgevts = (pg.MOUSEMOTION,)
@@ -448,9 +719,7 @@ class MouseAxis (RelAxis2Input):
     def __init__ (self, bdy = None, thresholds = None, *mods):
         if isinstance(bdy, int):
             bdy = (bdy, bdy)
-        if thresholds is not None and len(thresholds) == 2:
-            thresholds *= 2
-        RelAxis2Input.__init__(self, None, None, bdy, thresholds, *mods)
+        RelAxisInput.__init__(self, None, bdy, thresholds, *mods)
 
     def _mod_btn_name (self):
         return 'mouse axis'
@@ -460,16 +729,48 @@ class MouseAxis (RelAxis2Input):
 
 
 class Event (object):
+    """Connects inputs and callbacks.
+
+Takes any number of inputs like :meth:`add`.
+
+This event type calls callbacks with a single ``pygame.event.Event`` instance,
+once for each event gathered by the inputs.
+
+"""
+
+    #: Like :attr:`Input.components`---the number of components the event can
+    #: handle.
     components = 0
+    #: A sequence of classes or a single class giving the input types accepted
+    #: by this event type.
     input_types = BasicInput
 
     def __init__ (self, *inputs):
+        #: Containing :class:`EventHandler`, or ``None``.
         self.eh = None
+        #: ``{input: (evt_components, input_components)}`` (see :meth:`add`).
         self.inputs = {}
         self.add(*inputs)
+        #: ``set`` of functions to call on input.  Change this directly if you
+        #: want.
         self.cbs = set()
 
     def add (self, *inputs):
+        """Add inputs to this event.
+
+Takes any number of inputs matching :attr:`input_types`, or
+``(input[, evt_components][, input_components])`` tuples.
+
+ - ``evt_components`` is a sequence of the component indices (or a single
+   component index) of this event that this input provides data for.  Defaults
+   to every component, in order.
+ - ``input_components`` is a sequence of the component indices of (or a single
+   component index) of the input to match up to ``evt_components``.  Defaults
+   to every component of the input, in order.
+
+If there is a mismatch in numbers of components, ``ValueError`` is raised.
+
+"""
         types = self.input_types
         components = self.components
         self_add = self.inputs.__setitem__
@@ -514,12 +815,18 @@ class Event (object):
                 self_add(i, (evt_components, input_components))
                 new_inputs.append(i)
                 i.evt = self
-                i.btn_components = input_components
+                i.used_components = input_components
                 if eh_add is not None:
                     eh_add(i)
         return new_inputs
 
     def rm (self, *inputs):
+        """Remove inputs from this event.
+
+Takes any number of :class:`Input` instances and raises ``KeyError`` if
+missing.
+
+"""
         self_rm = self.inputs.__delitem__
         eh_rm = None if self.eh is None else self.eh._rm_inputs
         for i in inputs:
@@ -534,10 +841,18 @@ class Event (object):
                 raise KeyError(i)
 
     def cb (self, *cbs):
+        """Add any number of callbacks to :attr:`cbs`."""
         self.cbs.update(cbs)
         return self
 
     def respond (self, changed):
+        """Handle inputs and call callbacks.
+
+:arg changed: whether any inputs changed in any way.
+
+Called by the containing :class:`EventHandler`.
+
+"""
         if changed:
             cbs = self.cbs
             for i in self.inputs:
@@ -549,18 +864,52 @@ class Event (object):
     # dummy methods that inputs use
 
     def down (self, i, component):
+        """Used by subclasses to handle :class:`ButtonInput` instances.
+
+:arg i: the calling input.
+:arg component: the input's component that has been toggled down.
+
+"""
         pass
 
     def up (self, i, component):
+        """Used by subclasses to handle :class:`ButtonInput` instances.
+
+:arg i: the calling input.
+:arg component: the input's component that has been toggled up.
+
+"""
         pass
 
 
 class MultiEvent (Event):
+    """Not implemented."""
     # to get cb args, calls static method _merge_args with cb args for each Event
     pass
 
 
 class Button (Event):
+    """:class:`Event` subclass representing a button.
+
+Button(*items[, initial_delay][, repeat_delay])
+
+:arg items: each item is either an input as taken by :class:`Event`, or a
+            button mode (one of :data:`DOWN`, :data:`UP`, :data:`HELD` and
+            :data:`REPEAT`) or a bitwise-OR of button modes.
+:arg initial_delay: keyword-only argument.  If the :data:`REPEAT` mode is
+                    given, this is the initial delay in seconds before a button
+                    starts repeating while held.
+:arg repeat_delay: like initial_delay, the time between repeats in seconds.
+
+Callbacks are called with ``{mode: count}`` for each ``mode`` given, where
+``count`` is the number of occurrences of events corresponding to that mode
+that have happened within the last frame.  The ``count`` for :data:`HELD` is
+only ever ``0`` or ``1``, and indicates whether the button was held at the end
+of the frame.  The ``count`` for :data:`REPEAT` may only be ``> 1`` if either
+repeat rate is greater than the current framerate.
+
+"""
+
     name = 'button'
     components = 1
     input_types = ButtonInput
@@ -574,9 +923,12 @@ class Button (Event):
             else:
                 inputs.append(item)
         Event.__init__(self, *inputs)
+        #: A bitwise-OR of all button modes passed to the constructor.
         self.modes = modes
         self._downevts = self._upevts = 0
+        #: As passed to the constructor.
         self.initial_delay = kw.get('initial_delay')
+        #: As passed to the constructor.
         self.repeat_delay = kw.get('repeat_delay')
         if modes & REPEAT and (self.initial_delay is None or
                                self.repeat_delay is None):
@@ -585,10 +937,12 @@ class Button (Event):
         self._repeating = False
 
     def down (self, i, component):
+        """:meth:`Event.down`."""
         if component in self.inputs[i][1]:
             self._downevts += 1
 
     def up (self, i, component):
+        """:meth:`Event.up`."""
         if component in self.inputs[i][1]:
             self._upevts += 1
             if self.modes & REPEAT and not any(i.held[0] for i in self.inputs):
@@ -596,6 +950,7 @@ class Button (Event):
                 self._repeating = False
 
     def respond (self, changed):
+        """:meth:`Event.respond`."""
         modes = self.modes
         if modes & (HELD | REPEAT):
             held = any(i.held[0] for i in self.inputs)
@@ -639,16 +994,28 @@ class Button (Event):
 
 
 class Button2 (MultiEvent):
+    """Not implemented."""
     child = Button
     multiple = 2
 
 
 class Button4 (MultiEvent):
+    """Not implemented."""
     child = Button
     multiple = 4
 
 
 class Axis (Event):
+    """:class:`Event` subclass representing an axis.
+
+The magnitude of the axis position for a button is ``1`` if it is held, else
+``0``.
+
+Callbacks are called every frame with the current axis position (after summing
+over each registered input and restricting to ``[-1, +1]``).
+
+"""
+
     name = 'axis'
     components = 2
     input_types = (AxisInput, ButtonInput)
@@ -658,6 +1025,7 @@ class Axis (Event):
         self._pos = 0
 
     def respond (self, changed):
+        """:meth:`Event.respond`."""
         if changed:
             pos = 0
             for i, (evt_components, input_components) \
@@ -666,9 +1034,9 @@ class Axis (Event):
                     for ec, ic in zip(evt_components, input_components):
                         pos += (2 * ec - 1) * i.pos[ic]
                 else: # i is ButtonInput
-                    btn_components = i.btn_components
+                    used_components = i.used_components
                     for ec, ic in zip(evt_components, input_components):
-                        if ic in btn_components and i._held[ic]:
+                        if ic in used_components and i._held[ic]:
                             pos += 2 * ec - 1
             self._pos = pos = min(1, max(-1, pos))
         else:
@@ -678,41 +1046,64 @@ class Axis (Event):
 
 
 class Axis2 (MultiEvent):
+    """Not implemented."""
     child = Axis
     multiple = 2
 
 
 class RelAxis (Event):
-    # each input takes a scaling argument, and mouse events have no limits like with Axis
+    """:class:`Event` subclass representing a relative axis.
+
+Each input is scaled by a positive number (see :meth:`add` for details).
+
+The magnitude of the relative position for an axis is its position, and for a
+button is ``1`` if it is held, else ``0``.
+
+Callbacks are called with the total, scaled relative change over all inputs
+registered with this event.
+
+"""
     name = 'relaxis'
     components = 2
-    input_types = (RelAxis2Input, AxisInput, ButtonInput)
+    input_types = (RelAxisInput, AxisInput, ButtonInput)
 
     def __init__ (self, *inputs):
+        #: ``{scale: input}`` (see :meth:`add`).
         self.input_scales = {}
         Event.__init__(self, *inputs)
 
     def add (self, *inputs):
+        """:meth:`Event.add`.
+
+Inputs are ``(scale, input[, evt_components][, input_components])``, where
+``scale`` is a positive number to scale the relative axis's position by before
+calling callbacks.
+
+"""
         real_inputs = []
         scale = self.input_scales
         for i in inputs:
+            if i[0] < 0:
+                raise ValueError("input scaling must be non-negative.")
             scale[i[1]] = i[0]
             real_inputs.append(i[1:])
         Event.add(self, *real_inputs)
 
     def rm (self, *inputs):
+        """:meth:`Event.rm`."""
         Event.rm(self, *inputs)
         scale = self.input_scales
         for i in inputs:
             del scale[i]
 
     def respond (self, changed):
+        """:meth:`Event.respond`."""
         rel = 0
         scale = self.input_scales
         for i, (evt_components, input_components) \
             in self.inputs.iteritems():
             this_rel = 0
-            if isinstance(i, RelAxis2Input):
+            if isinstance(i, RelAxisInput):
                 for ec, ic in zip(evt_components, input_components):
                     this_rel += (2 * ec - 1) * i.rel[ic]
                 i.reset()
@@ -720,9 +1111,9 @@ class RelAxis (Event):
                 for ec, ic in zip(evt_components, input_components):
                     this_rel += (2 * ec - 1) * i.pos[ic]
             else: # i is ButtonInput
-                btn_components = i.btn_components
+                used_components = i.used_components
                 for ec, ic in zip(evt_components, input_components):
-                    if ic in btn_components and i._held[ic]:
+                    if ic in used_components and i._held[ic]:
                         this_rel += 2 * ec - 1
             rel += this_rel * scale[i]
         if rel:
@@ -731,25 +1122,46 @@ class RelAxis (Event):
 
 
 class RelAxis2 (MultiEvent):
+    """Not implemented."""
     child = RelAxis
     multiple = 2
 
 
 class EventHandler (dict):
-    # is {name: Event|Scheme}
+    """Handles events.
+
+EventHandler(scheduler)
+
+:arg scheduler: :class:`sched.Scheduler <engine.sched.Scheduler>` instance to
+                use for determining the current framerate.
+
+Call :meth:`update` every frame to process and progagate Pygame events and call
+callbacks.
+
+Some notes:
+
+ - Events are named or unnamed, and an :class:`EventHandler` is a ``dict`` of
+   named events.
+ - The ``'domain'`` name is reserved.
+ - The ``__contains__`` method (``event in event_handler``) works for
+   :class:`Event` instances. as well as names.
+
+"""
+
     def __init__ (self, scheduler):
+        #: As passed to the constructor.
         self.scheduler = scheduler
         self._named = set()
-        self.evts = set() # unnamed events
+        #: A ``set`` of all registered unnamed events.
+        self.evts = set()
         self._inputs = set()
-        self._filtered_inputs = ('type', {None: set()})
+        self._filtered_inputs = ('type', {UNFILTERABLE: set()})
         self._mods = {}
 
     def __str__ (self):
         return '<EventHandler object at {0}>'.format(hex(id(self)))
 
     def __contains__ (self, item):
-        # can be event, scheme or name thereof
         return dict.__contains__(self, item) or item in self._named or \
                item in self.evts
 
@@ -760,7 +1172,13 @@ class EventHandler (dict):
         self.rm(item)
 
     def add (self, *evts, **named_evts):
-        """add(*evts, **named_evts, domain = None)"""
+        """Register events.
+
+:arg evts, named_evts: any number of :class:`Event` instances.  Keyword
+                       arguments define named events with the key as the name.
+
+"""
+        # add(*evts, **named_evts, domain = None)
         # NOTE: can call with existing event to change domain
         created = []
         named = self._named
@@ -820,6 +1238,11 @@ class EventHandler (dict):
         return created
 
     def rm (self, *evts):
+        """Takes any number of registered events to remove them.
+
+Raises ``KeyError`` if any arguments are missing.
+
+"""
         named = self._named
         unnamed = self.evts
         for evt in evts:
@@ -841,7 +1264,7 @@ class EventHandler (dict):
         attr, filtered = filtered
         filters = dict(filters)
         # Input guarantees that this is non-empty
-        vals = filters.pop(attr, (None,))
+        vals = filters.pop(attr, (UNFILTERABLE,))
         for val in vals:
             if val in filtered:
                 child = filtered[val]
@@ -856,7 +1279,7 @@ class EventHandler (dict):
                 if filters:
                     # create new levels for each remaining filter
                     for attr, vals in filters.iteritems():
-                        child = (attr, {None: child})
+                        child = (attr, {UNFILTERABLE: child})
                     filtered[val] = child
                     self._prefilter(child, filters, i)
                 else:
@@ -865,7 +1288,7 @@ class EventHandler (dict):
     def _unprefilter (self, filtered, filters, i):
         attr, filtered = filtered
         # Input guarantees that this is non-empty
-        vals = filters.pop(attr, (None,))
+        vals = filters.pop(attr, (UNFILTERABLE,))
         for val in vals:
             assert val in filtered
             child = filtered[val]
@@ -878,8 +1301,8 @@ class EventHandler (dict):
                 child.remove(i)
             if not child:
                 # child is now empty
-                if val is None:
-                    # retain the None branch
+                if val is UNFILTERABLE:
+                    # retain the UNFILTERABLE branch
                     filtered[val] = set()
                 else:
                     del filtered[val]
@@ -934,6 +1357,7 @@ class EventHandler (dict):
             self._unprefilter(filtered, i.filters, i)
 
     def update (self):
+        """Process Pygame events and call callbacks."""
         all_inputs = self._filtered_inputs
         changed = set()
         unchanged = set()
@@ -942,8 +1366,10 @@ class EventHandler (dict):
             inputs = all_inputs
             while isinstance(inputs, tuple):
                 attr, inputs = inputs
-                val = getattr(pgevt, attr) if hasattr(pgevt, attr) else None
-                inputs = inputs[val if val is None or val in inputs else None]
+                val = getattr(pgevt, attr) if hasattr(pgevt, attr) \
+                                           else UNFILTERABLE
+                inputs = inputs[val if val is UNFILTERABLE or val in inputs
+                                    else UNFILTERABLE]
             for i in inputs:
                 args = ()
                 if isinstance(i, ButtonInput):
@@ -972,58 +1398,74 @@ class EventHandler (dict):
                 evt.respond(changed)
 
     def load (self, filename, domain = None):
+        """Not implemented."""
         # doesn't add events used in schemes - they _only_ go in the scheme
         pass
 
     def save (self, filename, domain):
+        """Not implemented."""
         # save everything in the domain to file
         pass
 
     def unload(self, domain):
+        """Not implemented."""
         pass
 
     def disable (self, domain):
+        """Not implemented."""
         pass
 
     def enable (self, domain):
+        """Not implemented."""
         pass
 
     def assign_devices (**devices):
+        """Not implemented."""
         # takes {varname: device_ids}, device_ids False for none, True for all, id or list of ids
         pass
 
     def grab (self, cb, *types):
+        """Not implemented."""
         # grabs next 'on'-type event from given devices/types and passes it to cb
         # types are device name or (device, type_name)
         pass
 
     def monitor_deadzones (self, *deadzones):
+        """Not implemented."""
         # takes list of  (device, id, *args); do for all if none given
         pass
 
     def stop_monitor_deadzones (self):
+        """Not implemented."""
         # returns {(device, id, *args): deadzone}, args is axis for pad
         # can register other deadzone events?
         pass
 
     def set_deadzones (self, deadzones):
+        """Not implemented."""
         # takes stop_monitor_deadzones result
         pass
 
 
-#: A ``{cls.device: {cls.name: cls}}`` dict of usable named :class:`Input`
-#: subclasses.
+##: A ``{cls.device: {cls.name: cls}}`` dict of usable named :class:`Input`
+##: subclasses.
 inputs_by_name = {}
 for i in dict(vars()): # copy or it'll change size during iteration
     if isinstance(i, Input) and hasattr(i, name):
         inputs_by_name.setdefault(i.device, {})[i.name] = i
 del i
-#: A ``{cls.name: cls}`` dict of usable named :class:`Event` subclasses.
+##: A ``{cls.name: cls}`` dict of usable named :class:`Event` subclasses.
 evts_by_name = dict((evt.name, name) for evt in vars()
                     if (isinstance(evt, Event) and hasattr(evt, 'name')) or
                        (isinstance(evt, MultiEvent) and
                         hasattr(evt.child, 'name')))
 
+#: A value that an :class:`Input` cannot filter for.  If you want to filter for
+#: ``None``, you may change this in the module, but make sure to do so before
+#: creating any :class:`EventHandler` instances, and never after.
+UNFILTERABLE = None
+
+##: Needs doc.
 evt_component_names = {
     0: (),
     1: ('button',),
@@ -1031,6 +1473,9 @@ evt_component_names = {
     4: ('left', 'right', 'up', 'down')
 }
 
+#: ``{device: allowed_mod_devices}`` for :class:`ButtonInput` instances.  An
+#: input for :attr:`device <Input.device>` ``device`` may only have modifiers
+#: with :attr:`device <Input.device>` in ``allowed_mod_devices``.
 mod_devices = {
     'kbd': ('kbd',),
     'mouse': ('kbd', 'mouse'),
@@ -1038,12 +1483,17 @@ mod_devices = {
 }
 
 class mod:
+    """Contains objects that act as specific keyboard modifiers."""
     CTRL = (_SneakyMultiKbdKey(pg.KMOD_CTRL, pg.K_LCTRL, pg.K_RCTRL))
     SHIFT = (_SneakyMultiKbdKey(pg.KMOD_SHIFT, pg.K_LSHIFT, pg.K_RSHIFT))
     ALT = (_SneakyMultiKbdKey(pg.KMOD_ALT, pg.K_LALT, pg.K_RALT))
     META = (_SneakyMultiKbdKey(pg.KMOD_META, pg.K_LMETA, pg.K_RMETA))
 
+#: :class:`Button` mode: key down.
 DOWN = 1
+#: :class:`Button` mode: key up.
 UP = 2
+#: :class:`Button` mode: key held down.
 HELD = 4
+#: :class:`Button` mode: key repeat (virtual key down).
 REPEAT = 8
