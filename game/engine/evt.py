@@ -4,13 +4,10 @@
 
 TODO:
     [FIRST]
- - doc/comments (then merge into master)
-    - using __str__ backends
-    - Input.name
-    - data structures used in config file
- - removing event callbacks
+ - document data structures used in config file
+ - comments
  - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these
- - joy hat/ball (seems like AxisInput/RelAxisInput, but need to test (and need a pad with a ball))
+ - joy ball (seems like RelAxisInput, but need a pad with a ball to test)
  - domains (eh.{add, rm})
     [ESSENTIAL]
  - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
@@ -29,12 +26,14 @@ TODO:
  - deadzones aren't per-input - can do per-device/axis or overall?
  - can omit axis-as-button thresholds and deadzones (global definitions in config file?)
  - mods like '[CTRL] [ALT] kbd a' - device omitted in modifier when same as main button - varnames omitted since must be the same
+ - document Input.name
     [FUTURE]
  - eh.*monitor_deadzones
  - Scheme
  - tools for editing/typing text
  - input recording and playback (allow whitelisting/excluding by registered event name)
  - a way to register new input/event types (consider module data structures)
+    - document using __str__ backends
 
 ---NODOC---
 
@@ -575,16 +574,23 @@ Above this value, the mapped value increases linearly from ``0``.
         """:meth:`ButtonInput.handle`.
 
 If a subclass has an ``axis_val_attr`` attribute, this value of this attribute
-in the Pygame event is used as the axis position.  Otherwise, this method does
-nothing.
+in the Pygame event is used as a list of axis positions (or just one, if a
+number).  Otherwise, this method does nothing.
 
 """
         rtn = Input.handle(self, pgevt)
         if hasattr(self, 'axis_val_attr'):
             apos = getattr(pgevt, self.axis_val_attr)
-            return self.axis_motion(mods_match, 0, apos) or rtn
-        else:
-            return rtn
+            if isinstance(apos, (int, float)):
+                apos = (apos,)
+            if len(apos) != self.components / 2:
+                raise ValueError(
+                    'the event attribute given by the axis_val_attr ' \
+                    'attribute has the wrong number of components'
+                )
+            for i, apos in enumerate(apos):
+                rtn |= self.axis_motion(mods_match, i, apos)
+        return rtn
 
 
 class PadAxis (AxisInput):
@@ -616,6 +622,42 @@ PadAxis(device_id, axis[, thresholds], *mods)
 
     def _mod_btn_name (self):
         return 'pad {0} axis {1}'.format(self._str_dev_id(), self.axis)
+
+    def __str__ (self):
+        return self._str('{0}, {1}'.format(self._str_dev_id(), self.axis))
+
+
+class PadHat (AxisInput):
+    """:class:`AxisInput` subclass representing a gamepad axis.
+
+PadHat(device_id, axis[, thresholds], *mods)
+
+:arg device_id: the gamepad's device ID, either a variable
+                (:attr:`device_var <Input.device_var>`), a non-string ID
+                (:attr:`device_id <Input.device_id>`) or ``None``.
+:arg hat: the hat ID to listen for.
+:arg thresholds: as taken by :class:`AxisInput`.
+:arg mods: as taken by :class:`ButtonInput`.
+
+"""
+
+    components = 4
+    device = 'pad'
+    name = 'hat'
+    device_id_attr = 'joy'
+    pgevts = (pg.JOYHATMOTION,)
+    axis_attr = 'hat'
+    axis_val_attr = 'value'
+
+    def __init__ (self, device_id, hat, thresholds = None, *mods):
+        AxisInput.__init__(self, hat, thresholds, *mods)
+        if isinstance(device_id, basestring):
+            self.device_var = device_id
+        else:
+            self.device_id = device_id
+
+    def _mod_btn_name (self):
+        return 'pad {0} hat {1}'.format(self._str_dev_id(), self.axis)
 
     def __str__ (self):
         return self._str('{0}, {1}'.format(self._str_dev_id(), self.axis))
@@ -841,8 +883,23 @@ missing.
                 raise KeyError(i)
 
     def cb (self, *cbs):
-        """Add any number of callbacks to :attr:`cbs`."""
+        """Add any number of callbacks to :attr:`cbs`.
+
+cb(*cbs) -> self
+
+"""
         self.cbs.update(cbs)
+        return self
+
+    def rm_cbs (self, *cbs):
+        """Remove any number of callbacks from :attr:`cbs`.
+
+rm_cbs(*cbs) -> self
+
+Missing items are ignored.
+
+"""
+        self.cbs.difference_update(cbs)
         return self
 
     def respond (self, changed):
