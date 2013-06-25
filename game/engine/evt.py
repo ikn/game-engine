@@ -1288,7 +1288,7 @@ Some notes:
     def add (self, *evts, **named_evts):
         """Register events.
 
-add(*evts, **named_evts) -> created
+add(*evts, **named_evts) -> unnamed
 
 :arg evts, named_evts: any number of events.  Keyword arguments define named
                        events with the key as the name.  An event can be a
@@ -1297,13 +1297,13 @@ add(*evts, **named_evts) -> created
                        listens for the given Pygame events and has the
                        functions as callbacks.
 
-:return: a list of unnamed events (positional arguments) that were created in
-         this call.
+:return: a list of added unnamed events (positional arguments) (possibly
+         created in this call).
 
 """
         # NOTE: add(*evts, **named_evts, domain = None)
         # NOTE: can call with existing event to change domain
-        created = []
+        new_unnamed = []
         unnamed = self.evts
         by_domain = self._evts_by_domain
         # extract domain from keyword args
@@ -1321,7 +1321,6 @@ add(*evts, **named_evts) -> created
             if domain is not None:
                 self.active_domains.add(domain)
         for evts in (((None, evt) for evt in evts), named_evts.iteritems()):
-            this_created = False
             for name, evt in evts:
                 if not isinstance(evt, Event): # NOTE: also Scheme
                     # got (possibly mixed) list of pgevts/cbs: create event
@@ -1331,7 +1330,6 @@ add(*evts, **named_evts) -> created
                         (cbs if callable(item) else pgevts).append(item)
                     evt = Event(*(BasicInput(pgevt)
                                   for pgevt in pgevts)).cb(*cbs)
-                    this_created = True
                 if evt.eh is not None:
                     if evt.eh is self:
                         # already own this event
@@ -1368,13 +1366,11 @@ add(*evts, **named_evts) -> created
                     by_domain[domain].append(evt)
                     if name is None:
                         unnamed.add(evt)
-                        if this_created:
-                            # created unnamed event
-                            created.append(evt)
+                        new_unnamed.append(evt)
                     else:
                         dict.__setitem__(self, name, evt)
                     self._add_inputs(*evt.inputs)
-        return created
+        return new_unnamed
 
     def rm (self, *evts):
         """Takes any number of registered event names or events to remove them.
@@ -1384,15 +1380,22 @@ Raises ``KeyError`` if any arguments are missing.
 """
         unnamed = self.evts
         by_domain = self._evts_by_domain
+        active = self.active_domains
+        inactive = self.inactive_domains
         for evt in evts:
             if isinstance(evt, basestring):
                 # got name
                 evt = self[evt] # raises KeyError
             if evt.eh is self:
                 evt.eh = None
-                by_domain[evt._domain].remove(evt)
-                if not by_domain[evt._domain]:
-                    del by_domain[evt._domain]
+                domain = evt._domain
+                by_domain[domain].remove(evt)
+                if not by_domain[domain]:
+                    del by_domain[domain]
+                    if domain in active:
+                        active.remove(domain)
+                    else:
+                        inactive.remove(domain)
                 evt._domain = None
                 if evt._regname is None:
                     unnamed.remove(evt)
@@ -1429,6 +1432,7 @@ Raises ``KeyError`` if any arguments are missing.
                     child.add(i)
 
     def _unprefilter (self, filtered, filters, i):
+        filters = dict(filters)
         attr, filtered = filtered
         # Input guarantees that this is non-empty
         vals = filters.pop(attr, (UNFILTERABLE,))
@@ -1478,17 +1482,20 @@ Raises ``KeyError`` if any arguments are missing.
         for i in inputs:
             if isinstance(i, ButtonInput):
                 for m in i.mods:
+                    rmd = False
                     for device in mod_devices[i.device]:
                         d1 = mods[device]
-                        d2 = d1[i.device]
+                        d2 = d1[i._device_id]
                         d3 = d2[m]
                         assert i in d3
                         d3.remove(i)
                         if not d3:
-                            del d3[m]
-                            self._rm_inputs(m)
+                            del d2[m]
+                            if not rmd:
+                                rmd = True
+                                self._rm_inputs(m)
                             if not d2:
-                                del d1[i.device]
+                                del d1[i._device_id]
                                 if not d1:
                                     del mods[device]
             self._unprefilter(self._filtered_inputs, i.filters, i)
@@ -1534,10 +1541,11 @@ Raises ``KeyError`` if any arguments are missing.
         by_domain = self._evts_by_domain
         for domains in ((None,), self.active_domains):
             for domain in domains:
-                for evt in by_domain[domain]:
-                    changed = evt._changed
-                    evt._changed = False
-                    evt.respond(changed)
+                if domain is not None or domain in by_domain:
+                    for evt in by_domain[domain]:
+                        changed = evt._changed
+                        evt._changed = False
+                        evt.respond(changed)
 
     def load (self, filename, domain = None):
         """Not implemented."""
@@ -1550,8 +1558,24 @@ Raises ``KeyError`` if any arguments are missing.
         pass
 
     def unload (self, *domains):
-        """Not implemented."""
-        pass
+        """Remove all events in the given domains.
+
+unload(*domains) -> evts
+
+:return: list of all removed events.
+
+Raises KeyError if a domain is missing.
+
+"""
+        items = []
+        for domain in domains:
+            if domain is None:
+                raise KeyError(domain)
+            items.extend(self._evts_by_domain[domain]) # raises KeyError
+        # now all domains exist so we can safely make changes
+        # this removes empty domains
+        self.rm(*items)
+        return items
 
     def disable (self, domain):
         """Not implemented."""
