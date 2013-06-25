@@ -4,10 +4,8 @@
 
 TODO:
     [FIRST]
- - document data structures used in config file
- - comments
+ - comments (L850)
  - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these
- - joy ball (seems like RelAxisInput, but need a pad with a ball to test)
  - domains (eh.{add, rm})
     [ESSENTIAL]
  - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
@@ -27,7 +25,9 @@ TODO:
  - can omit axis-as-button thresholds and deadzones (global definitions in config file?)
  - mods like '[CTRL] [ALT] kbd a' - device omitted in modifier when same as main button - varnames omitted since must be the same
  - document Input.name
+ - document data structures used in config file [##]
     [FUTURE]
+ - joy ball (seems like RelAxisInput, but need a pad with a ball to test)
  - eh.*monitor_deadzones
  - Scheme
  - tools for editing/typing text
@@ -83,11 +83,13 @@ the argument at initialisation.
         self._device_id = None
 
     def _str_dev_id (self):
+        # device id/var for printing
         dev_id = self._device_id
         if dev_id is None and self.device_var is not None:
             dev_id = '<{0}>'.format(self.device_var)
 
     def _str (self, arg):
+        # string representation with some contained data
         return '{0}({1})'.format(type(self).__name__, arg)
 
     def __str__ (self):
@@ -120,7 +122,6 @@ Note that due to the implementation, there is a value that cannot be filtered
 for: :data:`UNFILTERABLE`.
 
 """
-        # note cannot filter for None (have a module-wide UNFILTERABLE?)
         refilter = kw.get('refilter', False)
         if not vals:
             if refilter:
@@ -129,6 +130,7 @@ for: :data:`UNFILTERABLE`.
             # else nothing to do
             return self
         eh = None if self.evt is None or self.evt.eh is None else self.evt.eh
+        # wrap with removal from/readdition to handler
         if eh is not None:
             eh._rm_inputs(self)
         if UNFILTERABLE in vals:
@@ -152,12 +154,15 @@ for: :data:`UNFILTERABLE`.
         if attr not in self.filters:
             return self
         eh = None if self.evt is None or self.evt.eh is None else self.evt.eh
+        # wrap with removal from/readdition to handler
         if eh is not None:
             eh._rm_inputs(self)
         got = self.filters[attr]
         if vals:
+            # remove given values
             got.difference_update(vals)
             if not got:
+                # no longer filtering by this attribute
                 del self.filters[attr]
         else:
             # remove all
@@ -170,7 +175,8 @@ for: :data:`UNFILTERABLE`.
     def device_id (self):
         """The particular device that this input captures input for.
 
-May be ``None``.
+May be ``None``, in which case no input will be registered; this is done by
+filtering by :attr:`invalid_device_id`.
 
 Subclasses may set an attribute ``device_id_attr``, in which case setting this
 attribute filters using ``device_id_attr`` as the event attribute and the set
@@ -185,6 +191,7 @@ value as the attribute value to filter by.  If a subclass does not provide
     def device_id (self, device_id):
         if hasattr(self, 'device_id_attr'):
             if device_id is None:
+                # sort by an invalid ID to make sure we get no events
                 ids = (self.invalid_device_id,)
             else:
                 ids = (device_id,)
@@ -207,6 +214,7 @@ BasicInput(pgevt)
         #: Pygame event ID as passed to the constructor.
         self.pgevt = pgevt
         Input.__init__(self, pgevt)
+        # stored Pygame events, used by :class:`Event`
         self._pgevts = []
 
     def __str__ (self):
@@ -264,16 +272,21 @@ which restricts allowed devices of modifiers.
             self.filter(self.button_attr, button)
         #: The button ID this input represents, as taken by the constructor.
         self.button = button
+
         mods = list(mods)
         mods_parsed = []
         for m in mods:
+            # default to using component 0 of the modifier
             if isinstance(m, Input):
                 m = (m, 0)
             elif len(m) == 1:
                 m = (m[0], 0)
+            # now we have a sequence
             if isinstance(m[1], Input):
+                # sequence of mods
                 mods.extend(m)
             else:
+                # (mod, component)
                 mods_parsed.append(m)
         if any(m.mods for m, c in mods_parsed):
             raise ValueError('modifiers cannot have modifiers')
@@ -290,15 +303,19 @@ which restricts allowed devices of modifiers.
         for m, c in mods_parsed:
             if c < 0 or c >= m.components:
                 raise ValueError('{0} has no component {1}'.format(m, c))
+            # we're now the mod's container
             m.is_mod = self
             m.used_components = (c,)
             mods.append(m)
 
     def __str__ (self):
         if hasattr(self, '_btn_name'):
+            # make something like [mod1]...[modn]self to pass to Input._str
+            # _btn_name should give form for displaying within type wrapper
             s = self._btn_name()
             for m in self.mods:
                 if hasattr(m, '_mod_btn_name'):
+                    # _mod_btn_name should give form for displaying as a mod
                     mod_s = m._mod_btn_name()
                 else:
                     mod_s = str(m)
@@ -320,6 +337,7 @@ Each item is a bool corresponds to the component in the same position in
     def down (self, component = 0):
         """Set the given component's button state to down."""
         self._held[component] = True
+        # mods don't have events
         if not self.is_mod:
             if component in self.used_components:
                 assert self.evt is not None
@@ -329,8 +347,10 @@ Each item is a bool corresponds to the component in the same position in
 
     def up (self, component = 0):
         """Set the given component's button state to up."""
+        # don't allow an up without a down
         if self._held[component]:
             self._held[component] = False
+            # mods don't have events
             if not self.is_mod:
                 if component in self.used_components:
                     assert self.evt is not None
@@ -382,13 +402,18 @@ The ``button`` argument is required, and is the key code.
 
 
 class _SneakyMultiKbdKey (KbdKey):
+    # KbdKey wrapper to handle multiple keys, for use as a modifier (held if
+    # any key is held) - only for module.mod
+
     def __init__ (self, button, *buttons):
         KbdKey.__init__(self, buttons[0])
         self.filter(self.button_attr, *buttons[1:])
         self.button = button
+        # track each key's held state
         self._held_multi = dict.fromkeys(buttons, False)
 
     def _btn_name (self):
+        # grab name from attribute name in module.mod
         for attr, val in vars(mod).iteritems():
             if val is self:
                 return attr
@@ -500,6 +525,7 @@ Subclasses must have an even number of components.
             self.filter(self.axis_attr, axis)
         #: Axis ID, as passed to the constructor.
         self.axis = axis
+        # same threshold for each axis if only given for one
         if thresholds is not None and len(thresholds) == 2:
             thresholds *= (self.components / 2)
         #: As passed to the constructor.
@@ -538,11 +564,13 @@ Above this value, the mapped value increases linearly from ``0``.
 :arg apos: the new axis position (``-1 <= apos <= 1``).
 
 """
+        # get magnitude in each direction
         pos = [0, 0]
         if apos > 0:
             pos[1] = apos
         else:
             pos[0] = -apos
+        # apply deadzone (linear scale up from it)
         dz = self._deadzone
         for i in (0, 1):
             pos[i] = max(0, pos[i] - dz[axis]) / (1 - dz[axis]) # know dz != 1
@@ -554,6 +582,8 @@ Above this value, the mapped value increases linearly from ``0``.
                 # act as button
                 down, up = self.thresholds[imn:imx]
                 l = list(zip(xrange(imn, imx), old_pos[imn:imx], pos))
+                # all up (towards 0/centre) first, then all down, to end up
+                # held if move down
                 for i, old, new in l:
                     if self._held[i] and old > up and new <= up:
                         self.up(i)
@@ -562,12 +592,14 @@ Above this value, the mapped value increases linearly from ``0``.
                         if old < down and new >= down:
                             self.down(i)
             elif self.is_mod:
+                # mod, but can't act as a button
                 raise TypeError('an AxisInput must have thresholds ' \
                                 'defined to be a modifier')
             for i, j in enumerate(xrange(imn, imx)):
                 old_pos[j] = pos[i]
             return True
         else:
+            # neither magnitude changed
             return False
 
     def handle (self, pgevt, mods_match):
@@ -712,14 +744,16 @@ than its absolute position.  Subclasses must have an even number of components.
         if hasattr(self, 'relaxis_val_attr'):
             rpos = getattr(pgevt, self.relaxis_val_attr)
             rel = self.rel
+            # split relative axis motion into magnitudes in each direction
             for i in xrange(self.components / 2):
                 if rpos[i] > 0:
                     rel[2 * i + 1] = rpos[i]
                 else:
                     rel[2 * i] = -rpos[i]
             if self.bdy is not None:
-                # act as axis
+                # act as axis (add relative pos to current pos)
                 for i, (bdy, rpos) in enumerate(zip(self.bdy, rpos)):
+                    # normalise and restrict magnitude to 1
                     apos = float(rpos) / bdy + self.pos[2 * i + 1] - \
                            self.pos[2 * i]
                     sgn = 1 if apos > 0 else -1
@@ -1503,32 +1537,10 @@ Raises ``KeyError`` if any arguments are missing.
         # takes stop_monitor_deadzones result
         pass
 
-
-##: A ``{cls.device: {cls.name: cls}}`` dict of usable named :class:`Input`
-##: subclasses.
-inputs_by_name = {}
-for i in dict(vars()): # copy or it'll change size during iteration
-    if isinstance(i, Input) and hasattr(i, name):
-        inputs_by_name.setdefault(i.device, {})[i.name] = i
-del i
-##: A ``{cls.name: cls}`` dict of usable named :class:`Event` subclasses.
-evts_by_name = dict((evt.name, name) for evt in vars()
-                    if (isinstance(evt, Event) and hasattr(evt, 'name')) or
-                       (isinstance(evt, MultiEvent) and
-                        hasattr(evt.child, 'name')))
-
 #: A value that an :class:`Input` cannot filter for.  If you want to filter for
 #: ``None``, you may change this in the module, but make sure to do so before
 #: creating any :class:`EventHandler` instances, and never after.
 UNFILTERABLE = None
-
-##: Needs doc.
-evt_component_names = {
-    0: (),
-    1: ('button',),
-    2: ('neg', 'pos'),
-    4: ('left', 'right', 'up', 'down')
-}
 
 #: ``{device: allowed_mod_devices}`` for :class:`ButtonInput` instances.  An
 #: input for :attr:`device <Input.device>` ``device`` may only have modifiers
@@ -1554,3 +1566,24 @@ UP = 2
 HELD = 4
 #: :class:`Button` mode: key repeat (virtual key down).
 REPEAT = 8
+
+##: A ``{cls.device: {cls.name: cls}}`` dict of usable named :class:`Input`
+##: subclasses.
+inputs_by_name = {}
+for i in dict(vars()): # copy or it'll change size during iteration
+    if isinstance(i, Input) and hasattr(i, name):
+        inputs_by_name.setdefault(i.device, {})[i.name] = i
+del i
+##: A ``{cls.name: cls}`` dict of usable named :class:`Event` subclasses.
+evts_by_name = dict((evt.name, name) for evt in vars()
+                    if (isinstance(evt, Event) and hasattr(evt, 'name')) or
+                       (isinstance(evt, MultiEvent) and
+                        hasattr(evt.child, 'name')))
+
+##: Needs doc.
+evt_component_names = {
+    0: (),
+    1: ('button',),
+    2: ('neg', 'pos'),
+    4: ('left', 'right', 'up', 'down')
+}
