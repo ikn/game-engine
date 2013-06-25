@@ -4,9 +4,8 @@
 
 TODO:
     [FIRST]
- - comments (L850)
  - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these
- - domains (eh.{add, rm})
+ - domains (eh.{add, rm}) [NOTE]
     [ESSENTIAL]
  - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
  - some eh method to detect and set current held state of all attached ButtonInputs - keys use pg.key.get_pressed() (works for mods/locks)
@@ -29,7 +28,7 @@ TODO:
     [FUTURE]
  - joy ball (seems like RelAxisInput, but need a pad with a ball to test)
  - eh.*monitor_deadzones
- - Scheme
+ - Scheme [NOTE]
  - tools for editing/typing text
  - input recording and playback (allow whitelisting/excluding by registered event name)
  - a way to register new input/event types (consider module data structures)
@@ -887,6 +886,7 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
             # add if not already added
             if i.evt is not self:
                 if i.evt is not None:
+                    # remove from current event
                     i.evt.rm(i)
                 self_add(i, (evt_components, input_components))
                 new_inputs.append(i)
@@ -907,7 +907,8 @@ missing.
         eh_rm = None if self.eh is None else self.eh._rm_inputs
         for i in inputs:
             if i.evt is self:
-                # not necessary, but a good sanity check
+                # not necessary since we may raise KeyError, but a good sanity
+                # check
                 assert i in self.inputs
                 self_rm(i)
                 i.evt = None
@@ -947,6 +948,7 @@ Called by the containing :class:`EventHandler`.
         if changed:
             cbs = self.cbs
             for i in self.inputs:
+                # call once for each Pygame event stored
                 for pgevt in i._pgevts:
                     for cb in cbs:
                         cb(pgevt)
@@ -1025,6 +1027,7 @@ repeat rate is greater than the current framerate.
                                self.repeat_delay is None):
             raise TypeError('initial_delay and repeat_delay arguments are ' \
                             'required if given the REPEAT mode')
+        # whether currently repeating
         self._repeating = False
 
     def down (self, i, component):
@@ -1036,8 +1039,8 @@ repeat rate is greater than the current framerate.
         """:meth:`Event.up`."""
         if component in self.inputs[i][1]:
             self._upevts += 1
+            # stop repeating if let go of all buttons at any point
             if self.modes & REPEAT and not any(i.held[0] for i in self.inputs):
-                # stop repeating if let go of all buttons at any point
                 self._repeating = False
 
     def respond (self, changed):
@@ -1048,7 +1051,9 @@ repeat rate is greater than the current framerate.
         else:
             held = False
         if not changed and not held:
+            # nothing to do
             return
+        # construct callback argument
         evts = {}
         if modes & DOWN:
             evts[DOWN] = self._downevts
@@ -1066,13 +1071,15 @@ repeat rate is greater than the current framerate.
                         raise RuntimeError('cannot respond properly if not ' \
                                            'attached to an EventHandler')
                     t = self._repeat_remain
+                    # use target framerate for determinism
                     t -= self.eh.scheduler.frame
-                    while t < 0:
-                        n_repeats += 1
-                        t += self.repeat_delay
+                    if t < 0:
+                        # repeat rate may be greater than the framerate
+                        n_repeats, t = divmod(t, self.repeat_delay)
+                        n_repeats = -int(n_repeats)
                     self._repeat_remain = t
                 else:
-                    # stop reapeating
+                    # stop repeating
                     self._repeating = False
             elif held:
                 # start repeating
@@ -1103,7 +1110,7 @@ The magnitude of the axis position for a button is ``1`` if it is held, else
 ``0``.
 
 Callbacks are called every frame with the current axis position (after summing
-over each registered input and restricting to ``[-1, +1]``).
+over each registered input and restricting to ``-1 <= x <= 1``).
 
 """
 
@@ -1118,19 +1125,24 @@ over each registered input and restricting to ``[-1, +1]``).
     def respond (self, changed):
         """:meth:`Event.respond`."""
         if changed:
+            # compute position: sum over every input
             pos = 0
             for i, (evt_components, input_components) \
                 in self.inputs.iteritems():
                 if isinstance(i, AxisInput):
+                    # add current axis position for each component
                     for ec, ic in zip(evt_components, input_components):
                         pos += (2 * ec - 1) * i.pos[ic]
                 else: # i is ButtonInput
                     used_components = i.used_components
+                    # add 1 for each held component
                     for ec, ic in zip(evt_components, input_components):
                         if ic in used_components and i._held[ic]:
                             pos += 2 * ec - 1
+            # clamp to [-1, 1]
             self._pos = pos = min(1, max(-1, pos))
         else:
+            # use previous position
             pos = self._pos
         for cb in self.cbs:
             cb(pos)
@@ -1171,6 +1183,7 @@ Inputs are ``(scale, input[, evt_components][, input_components])``, where
 calling callbacks.
 
 """
+        # extract and store scales before passing to Event.add
         real_inputs = []
         scale = self.input_scales
         for i in inputs:
@@ -1183,6 +1196,7 @@ calling callbacks.
     def rm (self, *inputs):
         """:meth:`Event.rm`."""
         Event.rm(self, *inputs)
+        # remove stored scales (no KeyError means all inputs exist)
         scale = self.input_scales
         for i in inputs:
             del scale[i]
@@ -1191,6 +1205,7 @@ calling callbacks.
         """:meth:`Event.respond`."""
         rel = 0
         scale = self.input_scales
+        # sum all relative positions
         for i, (evt_components, input_components) \
             in self.inputs.iteritems():
             this_rel = 0
@@ -1199,11 +1214,13 @@ calling callbacks.
                     this_rel += (2 * ec - 1) * i.rel[ic]
                 i.reset()
             elif isinstance(i, AxisInput):
+                # use axis position
                 for ec, ic in zip(evt_components, input_components):
                     this_rel += (2 * ec - 1) * i.pos[ic]
             else: # i is ButtonInput
                 used_components = i.used_components
                 for ec, ic in zip(evt_components, input_components):
+                    # use 1 for each held component
                     if ic in used_components and i._held[ic]:
                         this_rel += 2 * ec - 1
             rel += this_rel * scale[i]
@@ -1235,26 +1252,28 @@ Some notes:
    named events.
  - The ``'domain'`` name is reserved.
  - The ``__contains__`` method (``event in event_handler``) works for
-   :class:`Event` instances. as well as names.
+   :class:`Event` instances as well as names.
 
 """
 
     def __init__ (self, scheduler):
         #: As passed to the constructor.
         self.scheduler = scheduler
+        # registered named events (to access them separately from schemes)
         self._named = set()
         #: A ``set`` of all registered unnamed events.
         self.evts = set()
-        self._inputs = set()
+        # all inputs registered with events, prefiltered by Input.filters
         self._filtered_inputs = ('type', {UNFILTERABLE: set()})
+        # all registered modifiers
         self._mods = {}
 
     def __str__ (self):
         return '<EventHandler object at {0}>'.format(hex(id(self)))
 
     def __contains__ (self, item):
-        return dict.__contains__(self, item) or item in self._named or \
-               item in self.evts
+        return (dict.__contains__(self, item) or item in self._named or
+                item in self.evts)
 
     def __setitem__ (self, item, val):
         self.add(**{item: val})
@@ -1265,15 +1284,25 @@ Some notes:
     def add (self, *evts, **named_evts):
         """Register events.
 
-:arg evts, named_evts: any number of :class:`Event` instances.  Keyword
-                       arguments define named events with the key as the name.
+add(*evts, **named_evts) -> created
+
+:arg evts, named_evts: any number of events.  Keyword arguments define named
+                       events with the key as the name.  An event can be a
+                       :class:`Event` instance, or a sequence of Pygame event
+                       IDs and functions to create an :class:`Event` that
+                       listens for the given Pygame events and has the
+                       functions as callbacks.
+
+:return: a list of unnamed events (positional arguments) that were created in
+         this call.
 
 """
-        # add(*evts, **named_evts, domain = None)
+        # NOTE: add(*evts, **named_evts, domain = None)
         # NOTE: can call with existing event to change domain
         created = []
         named = self._named
         unnamed = self.evts
+        # extract domain from keyword args
         if 'domain' in named_evts:
             domain = named_evts['domain']
             if isinstance(domain, basestring):
@@ -1283,15 +1312,17 @@ Some notes:
         else:
             domain = None
         for evts in (((None, evt) for evt in evts), named_evts.iteritems()):
+            this_created = False
             for name, evt in evts:
                 if not isinstance(evt, Event): # NOTE: also Scheme
-                    # got (possibly mixed) list of pgevts/cbs
+                    # got (possibly mixed) list of pgevts/cbs: create event
                     pgevts = []
                     cbs = []
                     for item in evt:
                         (cbs if callable(item) else pgevts).append(item)
-                    inputs = [BasicInput(pgevt) for pgevt in pgevts]
-                    evt = Event(*inputs).cb(*cbs)
+                    evt = Event(*(BasicInput(pgevt)
+                                  for pgevt in pgevts)).cb(*cbs)
+                    this_created = True
                 if evt.eh is not None:
                     if evt.eh is self:
                         # already own this event
@@ -1321,7 +1352,9 @@ Some notes:
                     evt._regname = name
                     if name is None:
                         unnamed.add(evt)
-                        created.append(evt)
+                        if this_created:
+                            # created unnamed event
+                            created.append(evt)
                     else:
                         named.add(evt)
                         dict.__setitem__(self, name, evt)
@@ -1338,6 +1371,7 @@ Raises ``KeyError`` if any arguments are missing.
         unnamed = self.evts
         for evt in evts:
             if isinstance(evt, basestring):
+                # got name
                 evt = self[evt] # raises KeyError
             if evt.eh is self:
                 evt.eh = None
@@ -1402,13 +1436,10 @@ Raises ``KeyError`` if any arguments are missing.
             filtered.clear()
 
     def _add_inputs (self, *inputs):
-        add = self._inputs.add
-        prefilter = self._prefilter
-        filtered = self._filtered_inputs
         mods = self._mods
         for i in inputs:
-            add(i)
             if isinstance(i, ButtonInput):
+                # add mods, sorted by device and device ID
                 for m in i.mods:
                     added = False
                     for device in mod_devices[i.device]:
@@ -1416,20 +1447,17 @@ Raises ``KeyError`` if any arguments are missing.
                                         .setdefault(i._device_id, {})
                         if m in this_mods:
                             this_mods[m].add(i)
+                            # already added as an input
                         else:
                             this_mods[m] = set((i,))
                             if not added:
                                 added = True
                                 self._add_inputs(m)
-            prefilter(filtered, i.filters, i)
+            self._prefilter(self._filtered_inputs, i.filters, i)
 
     def _rm_inputs (self, *inputs):
-        filtered = self._filtered_inputs
-        rm = self._inputs.remove
         mods = self._mods
         for i in inputs:
-            assert i in self._inputs
-            rm(i) # raises KeyError
             if isinstance(i, ButtonInput):
                 for m in i.mods:
                     for device in mod_devices[i.device]:
@@ -1445,27 +1473,28 @@ Raises ``KeyError`` if any arguments are missing.
                                 del d1[i.device]
                                 if not d1:
                                     del mods[device]
-            self._unprefilter(filtered, i.filters, i)
+            self._unprefilter(self._filtered_inputs, i.filters, i)
 
     def update (self):
         """Process Pygame events and call callbacks."""
         all_inputs = self._filtered_inputs
-        changed = set()
-        unchanged = set()
         mods = self._mods
         for pgevt in pg.event.get():
+            # find matching inputs
             inputs = all_inputs
             while isinstance(inputs, tuple):
                 attr, inputs = inputs
                 val = getattr(pgevt, attr) if hasattr(pgevt, attr) \
                                            else UNFILTERABLE
                 inputs = inputs[val if val is UNFILTERABLE or val in inputs
-                                    else UNFILTERABLE]
+                                else UNFILTERABLE]
+            # check all modifiers are active
             for i in inputs:
                 args = ()
                 if isinstance(i, ButtonInput):
                     is_mod = i.is_mod
                     if is_mod:
+                        # mods have no mods, so always match
                         args = (True,)
                     else:
                         assert ids
@@ -1480,8 +1509,10 @@ Raises ``KeyError`` if any arguments are missing.
                         args = (all(check_mods()),)
                 else:
                     is_mod = False
+                # careful: mods have no event
                 if i.handle(pgevt, *args) and not is_mod:
                     i.evt._changed = True
+        # call callbacks
         for evts in (self._named, self.evts):
             for evt in evts:
                 changed = evt._changed
