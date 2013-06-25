@@ -5,19 +5,18 @@
 TODO:
     [FIRST]
  - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these
- - domains (eh.{add, rm}) [NOTE]
     [ESSENTIAL]
- - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
  - some eh method to detect and set current held state of all attached ButtonInputs - keys use pg.key.get_pressed() (works for mods/locks)
     - careful of _SneakyMultiKbdKey
  - auto joy(/other?) initialisation
- - autocapture mouse?
+ - autocapture/centre mouse?
  - eh.assign_devices
  - eh.grab (and maybe have grab toggle for getting all input for a while)
  - eh.set_deadzones
  - MultiEvent and use thereof
     [CONFIG]
  - eh.{load, save, unload, disable, enable}
+ - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
  - can use part of an input, eg. for a button event, 'pad axis 0:0'; for an axis event, 'pos pad axis 2:1'
     - might not be >2-component inputs, but can do, eg. for an axis event, 'neg pos pad axis 0:0,1'
  - deadzones aren't per-input - can do per-device/axis or overall?
@@ -1248,6 +1247,7 @@ callbacks.
 
 Some notes:
 
+ - An event may be placed in a 'domain', which is represented by a string name.
  - Events are named or unnamed, and an :class:`EventHandler` is a ``dict`` of
    named events.
  - The ``'domain'`` name is reserved.
@@ -1259,8 +1259,12 @@ Some notes:
     def __init__ (self, scheduler):
         #: As passed to the constructor.
         self.scheduler = scheduler
-        # registered named events (to access them separately from schemes)
-        self._named = set()
+        #: A ``set`` of domains that will recieve relevant events.
+        self.active_domains = set()
+        #: A ``set`` of domains that have been disabled through
+        #: :meth:`disable`.
+        self.inactive_domains = set()
+        self._evts_by_domain = {}
         #: A ``set`` of all registered unnamed events.
         self.evts = set()
         # all inputs registered with events, prefiltered by Input.filters
@@ -1272,7 +1276,7 @@ Some notes:
         return '<EventHandler object at {0}>'.format(hex(id(self)))
 
     def __contains__ (self, item):
-        return (dict.__contains__(self, item) or item in self._named or
+        return (dict.__contains__(self, item) or item in self.itervalues() or
                 item in self.evts)
 
     def __setitem__ (self, item, val):
@@ -1300,8 +1304,8 @@ add(*evts, **named_evts) -> created
         # NOTE: add(*evts, **named_evts, domain = None)
         # NOTE: can call with existing event to change domain
         created = []
-        named = self._named
         unnamed = self.evts
+        by_domain = self._evts_by_domain
         # extract domain from keyword args
         if 'domain' in named_evts:
             domain = named_evts['domain']
@@ -1311,6 +1315,11 @@ add(*evts, **named_evts) -> created
                 domain = None
         else:
             domain = None
+        if domain not in by_domain:
+            # domain doesn't exist yet
+            by_domain[domain] = []
+            if domain is not None:
+                self.active_domains.add(domain)
         for evts in (((None, evt) for evt in evts), named_evts.iteritems()):
             this_created = False
             for name, evt in evts:
@@ -1326,20 +1335,25 @@ add(*evts, **named_evts) -> created
                 if evt.eh is not None:
                     if evt.eh is self:
                         # already own this event
+                        prev_domain = evt._domain
+                        if domain != prev_domain:
+                            # change registered domain
+                            by_domain[prev_domain].remove(evt)
+                            if not by_domain[prev_domain]:
+                                del by_domain[prev_domain]
+                            evt._domain = domain
+                            by_domain[domain].append(evt)
                         prev_name = evt._regname
                         if name != prev_name:
                             # change registered name
-                            # NOTE: maybe need to let Scheme know about this
                             if prev_name is None:
                                 unnamed.remove(evt)
                             else:
-                                named.remove(evt)
                                 dict.__delitem__(self, prev_name)
                             evt._regname = name
                             if name is None:
                                 unnamed.add(evt)
                             else:
-                                named.add(evt)
                                 dict.__setitem__(self, name, evt)
                     else:
                         # owned by another handler
@@ -1349,36 +1363,40 @@ add(*evts, **named_evts) -> created
                     # new event
                     evt.eh = self
                     evt._changed = False
+                    evt._domain = domain
                     evt._regname = name
+                    by_domain[domain].append(evt)
                     if name is None:
                         unnamed.add(evt)
                         if this_created:
                             # created unnamed event
                             created.append(evt)
                     else:
-                        named.add(evt)
                         dict.__setitem__(self, name, evt)
                     self._add_inputs(*evt.inputs)
         return created
 
     def rm (self, *evts):
-        """Takes any number of registered events to remove them.
+        """Takes any number of registered event names or events to remove them.
 
 Raises ``KeyError`` if any arguments are missing.
 
 """
-        named = self._named
         unnamed = self.evts
+        by_domain = self._evts_by_domain
         for evt in evts:
             if isinstance(evt, basestring):
                 # got name
                 evt = self[evt] # raises KeyError
             if evt.eh is self:
                 evt.eh = None
+                by_domain[evt._domain].remove(evt)
+                if not by_domain[evt._domain]:
+                    del by_domain[evt._domain]
+                evt._domain = None
                 if evt._regname is None:
                     unnamed.remove(evt)
                 else:
-                    named.remove(evt)
                     dict.__delitem__(self, evt._regname)
                 evt._regname = None
                 self._rm_inputs(*evt.inputs)
@@ -1513,23 +1531,25 @@ Raises ``KeyError`` if any arguments are missing.
                 if i.handle(pgevt, *args) and not is_mod:
                     i.evt._changed = True
         # call callbacks
-        for evts in (self._named, self.evts):
-            for evt in evts:
-                changed = evt._changed
-                evt._changed = False
-                evt.respond(changed)
+        by_domain = self._evts_by_domain
+        for domains in ((None,), self.active_domains):
+            for domain in domains:
+                for evt in by_domain[domain]:
+                    changed = evt._changed
+                    evt._changed = False
+                    evt.respond(changed)
 
     def load (self, filename, domain = None):
         """Not implemented."""
         # doesn't add events used in schemes - they _only_ go in the scheme
         pass
 
-    def save (self, filename, domain):
+    def save (self, filename, *domains):
         """Not implemented."""
-        # save everything in the domain to file
+        # save everything in the domains to file
         pass
 
-    def unload(self, domain):
+    def unload (self, *domains):
         """Not implemented."""
         pass
 
