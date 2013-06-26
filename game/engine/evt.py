@@ -6,7 +6,7 @@ TODO:
     [FIRST]
  - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these
     [ESSENTIAL]
- - some eh method to detect and set current held state of all attached ButtonInputs - keys use pg.key.get_pressed() (works for mods/locks)
+ - some eh method to detect and set current held state of all attached [%%] ButtonInputs - keys use pg.key.get_pressed() (works for mods/locks)
     - careful of _SneakyMultiKbdKey
  - auto joy(/other?) initialisation
  - autocapture/centre mouse?
@@ -1557,6 +1557,8 @@ Raises ``KeyError`` if any arguments are missing.
         # save everything in the domains to file
         pass
 
+    # TODO: also load_s() and save_s()
+
     def unload (self, *domains):
         """Remove all events in the given domains.
 
@@ -1564,7 +1566,7 @@ unload(*domains) -> evts
 
 :return: list of all removed events.
 
-Raises KeyError if a domain is missing.
+Raises ``KeyError`` if a domain is missing.
 
 """
         items = []
@@ -1577,13 +1579,35 @@ Raises KeyError if a domain is missing.
         self.rm(*items)
         return items
 
-    def disable (self, domain):
-        """Not implemented."""
-        pass
+    def disable (self, *domains):
+        """Disable event handling in all of the given domains.
 
-    def enable (self, domain):
-        """Not implemented."""
-        pass
+Missing or already disabled domains are ignored (a domain is missing if it is
+empty).
+
+"""
+        active = self.active_domains
+        inactive = self.inactive_domains
+        for domain in domains:
+            if domain in active:
+                active.remove(domain)
+                inactive.add(domain)
+
+    def enable (self, *domains):
+        """Re-enable event handling in all of the given domains.
+
+Missing or already active domains are ignored.  Beware that state is preserved,
+so buttons that were held when disabled remain held when enabled, no matter how
+much time has passed, without sending a :data:`DOWN`.
+
+"""
+        # %% refer to it here
+        active = self.active_domains
+        inactive = self.inactive_domains
+        for domain in domains:
+            if domain in inactive:
+                inactive.remove(domain)
+                active.add(domain)
 
     def assign_devices (**devices):
         """Not implemented."""
