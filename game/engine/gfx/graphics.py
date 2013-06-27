@@ -3,6 +3,7 @@
 ---NODOC---
 
 TODO:
+ - tiled graphic
  - Text
  - Animation(surface | filename[image])
 

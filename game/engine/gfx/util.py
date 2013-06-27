@@ -230,7 +230,7 @@ so ``spritemap[(col, row)]`` works as well.)
                                               *expected_size))
         for axis in (0, 1):
             if ncells[axis] is None:
-                ncells[axis] = (img_sz[axis] + pad[axis]) / \
+                ncells[axis] = (img_sz[axis] + pad[axis]) // \
                                (ss[axis] + pad[axis])
         self._grid = Grid(ncells, ss, pad)
         ncells = ncells[0] * ncells[1]
@@ -249,7 +249,7 @@ so ``spritemap[(col, row)]`` works as well.)
             if i < 0:
                 raise IndexError('spritemap index out of bounds')
             col = i % ncols
-            row = i / ncols
+            row = i // ncols
         else:
             col, row = i
         if col < 0:

@@ -212,7 +212,7 @@ BasicInput(pgevt)
         #: Pygame event ID as passed to the constructor.
         self.pgevt = pgevt
         Input.__init__(self, pgevt)
-        # stored Pygame events, used by :class:`Event <engine.evt.evts.Event>`
+        # stored Pygame events, used by Event
         self._pgevts = []
 
     def __str__ (self):
@@ -526,7 +526,7 @@ Subclasses must have an even number of components.
         # same threshold for each axis if only given for one
         if thresholds is not None:
             if len(thresholds) == 2:
-                thresholds *= (self.components / 2)
+                thresholds *= (self.components // 2)
             if len(thresholds) != self.components:
                 raise ValueError('invalid number of threshold arguments')
         #: As passed to the constructor.
@@ -544,7 +544,7 @@ Above this value, the mapped value increases linearly from ``0``.
 
     @deadzone.setter
     def deadzone (self, dz):
-        n = self.components / 2
+        n = self.components // 2
         if isinstance(dz, (int, float)):
             dz = (dz,) * n
         else:
@@ -616,7 +616,7 @@ number).  Otherwise, this method does nothing.
             apos = getattr(pgevt, self.axis_val_attr)
             if isinstance(apos, (int, float)):
                 apos = (apos,)
-            if len(apos) != self.components / 2:
+            if len(apos) != self.components // 2:
                 raise ValueError(
                     'the event attribute given by the axis_val_attr attribute'
                     'has the wrong number of components'
@@ -724,7 +724,7 @@ than its absolute position.  Subclasses must have an even number of components.
 
     def __init__ (self, relaxis = None, bdy = None, thresholds = None, *mods):
         #: The change in each component since last :meth:`reset`.
-        self.rel = [0, 0] * (self.components / 2)
+        self.rel = [0, 0] * (self.components // 2)
         AxisInput.__init__(self, None, thresholds, *mods)
         if hasattr(self, 'relaxis_attr'):
             if relaxis is None:
@@ -734,8 +734,8 @@ than its absolute position.  Subclasses must have an even number of components.
         self.relaxis = relaxis
         if bdy is not None:
             if isinstance(bdy, (int, float)):
-                bdy = (bdy,) * (self.components / 2)
-            if len(bdy) != self.components / 2:
+                bdy = (bdy,) * (self.components // 2)
+            if len(bdy) != self.components // 2:
                 raise ValueError('invalid number of bdy arguments')
             if any(b <= 0 for b in bdy):
                 raise ValueError('all bdy elements must be greater than zero')
@@ -749,7 +749,7 @@ than its absolute position.  Subclasses must have an even number of components.
             rpos = getattr(pgevt, self.relaxis_val_attr)
             rel = self.rel
             # split relative axis motion into magnitudes in each direction
-            for i in xrange(self.components / 2):
+            for i in xrange(self.components // 2):
                 if rpos[i] > 0:
                     rel[2 * i + 1] = rpos[i]
                 else:
@@ -776,7 +776,7 @@ than its absolute position.  Subclasses must have an even number of components.
 Called by the owning :class:`Event <engine.evt.evts.Event>`.
 
 """
-        self.rel = [0, 0] * (self.components / 2)
+        self.rel = [0, 0] * (self.components // 2)
 
 
 class MouseAxis (RelAxisInput):

@@ -22,11 +22,11 @@ for i in vars(inputs).values(): # copy or it'll change size during iteration
         inputs_by_name.setdefault(i.device, {})[i.name] = i
 del i
 #: A ``{cls.name: cls}`` dict of usable named
-#: :class:`Event <engine.evt.evts.Event>` subclasses.
+#: :class:`BaseEvent <engine.evt.evts.BaseEvent>` subclasses.
 evts_by_name = dict(
     (evt.name, evt) for evt in vars(evts).values()
     if (isinstance(evt, type) and
-        (issubclass(evt, evts.Event) and hasattr(evt, 'name')))
+        (issubclass(evt, evts.BaseEvent) and hasattr(evt, 'name')))
 )
 
 _input_identifiers = {
@@ -192,7 +192,7 @@ def _parse_evthead (lnum, words):
         if words:
             raise ValueError('line {0}: axis and relaxis events take no '
                              'arguments'.format(lnum))
-    elif evt_type == 'button':
+    elif evt_type in ('button', 'button2', 'button4'):
         # args are modes, last two may be repeat delays
         for i in xrange(len(words)):
             if hasattr(evts.bmode, words[i]):
@@ -223,7 +223,7 @@ parse(config) -> parsed
 :arg config: an open file-like object (with a ``readline`` method).
 
 :return: ``{name: event}`` for each named
-         :class:`Event <engine.evt.evts.Event>` instance.
+         :class:`BaseEvent <engine.evt.evts.BaseEvent>` instance.
 
 """
     parsed = {} # events
@@ -248,7 +248,11 @@ parse(config) -> parsed
                 if evt_cls is None:
                     raise ValueError('line {0}: expected event'.format(lnum))
                 # input line
-                args.append(_parse_input(lnum, evt_cls.components, words))
+                if issubclass(evt_cls, evts.MultiEvent):
+                    n_cs = evt_cls.multiple * evt_cls.child.components
+                else:
+                    n_cs = evt_cls.components
+                args.append(_parse_input(lnum, n_cs, words))
         # else blank line
         lnum += 1
     if evt_cls is not None:
@@ -264,7 +268,7 @@ parse(config) -> parsed
 :arg config: the string to parse
 
 :return: ``{name: event}`` for each named
-         :class:`Event <engine.evt.evts.Event>` instance.
+         :class:`BaseEvent <engine.evt.evts.BaseEvent>` instance.
 
 """
     return parse(StringIO(config))

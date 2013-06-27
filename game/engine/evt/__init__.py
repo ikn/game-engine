@@ -13,7 +13,7 @@ TODO:
  - eh.assign_devices
  - eh.grab (and maybe have grab toggle for getting all input for a while)
  - eh.set_deadzones
- - MultiEvent and use thereof (put in evts_by_name, use in conffile)
+ - axis/relaxis MultiEvents
     [CONFIG]
  - document config format
  - how to do relaxis scale?

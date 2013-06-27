@@ -4,7 +4,7 @@ import pygame as pg
 
 from ..conf import conf
 from . import inputs
-from .evts import Event
+from .evts import BaseEvent, Event
 from . import conffile
 
 
@@ -26,7 +26,7 @@ Some notes:
    named events.
  - The ``'domain'`` name is reserved.
  - The ``__contains__`` method (``event in event_handler``) works for
-   :class:`Event <engine.evt.evts.Event>` instances as well as names.
+   :class:`BaseEvent <engine.evt.evts.BaseEvent>` instances as well as names.
 
 """
 
@@ -65,10 +65,11 @@ Some notes:
 add(*evts, **named_evts) -> unnamed
 
 Arguments are any number of events.  Keyword arguments define named events with
-the key as the name.  An event can be a :class:`Event <engine.evt.evts.Event>`
-instance, or a sequence of Pygame event IDs and functions to create an
-:class:`Event <engine.evt.evts.Event>` that listens for the given Pygame events
-and has the functions as callbacks.
+the key as the name.  An event can be a
+:class:`BaseEvent <engine.evt.evts.BaseEvent>` instance, or a sequence of
+Pygame event IDs and functions to create an
+:class:`BaseEvent <engine.evt.evts.BaseEvent>` that listens for the given
+Pygame events and has the functions as callbacks.
 
 :return: a list of added unnamed events (positional arguments) (possibly
          created in this call).
@@ -95,7 +96,7 @@ and has the functions as callbacks.
                 self.active_domains.add(domain)
         for evts in (((None, evt) for evt in evts), named_evts.iteritems()):
             for name, evt in evts:
-                if not isinstance(evt, Event): # NOTE: also Scheme
+                if not isinstance(evt, BaseEvent): # NOTE: also Scheme
                     # got (possibly mixed) list of pgevts/cbs: create event
                     pgevts = []
                     cbs = []
@@ -128,7 +129,7 @@ and has the functions as callbacks.
                                 dict.__setitem__(self, name, evt)
                     else:
                         # owned by another handler
-                        raise RuntimeError('an Event should not be added to '
+                        raise RuntimeError('an event should not be added to '
                                            'more than one EventHandler')
                 else:
                     # new event

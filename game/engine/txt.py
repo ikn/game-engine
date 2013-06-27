@@ -184,7 +184,7 @@ by ``str.splitlines``), as does the width restriction.
                     if just == 2:
                         sfc.blit(s, (width - s.get_width() + o[0], h + o[1]))
                     elif just == 1:
-                        sfc.blit(s, ((width - s.get_width()) / 2 + o[0],
+                        sfc.blit(s, ((width - s.get_width()) // 2 + o[0],
                                      h + o[1]))
                     else:
                         sfc.blit(s, (o[0], h + o[1]))
