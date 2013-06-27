@@ -1,6 +1,6 @@
 import pygame as pg
 
-from .inputs import *
+from . import inputs
 
 class bmode:
     """Contains :class:`Button` modes."""
@@ -35,19 +35,19 @@ once for each event gathered by the inputs.
     components = 0
     #: A sequence of classes or a single class giving the input types accepted
     #: by this event type.
-    input_types = BasicInput
+    input_types = inputs.BasicInput
 
-    def __init__ (self, *inputs):
+    def __init__ (self, *inps):
         #: Containing :class:`EventHandler`, or ``None``.
         self.eh = None
         #: ``{input: (evt_components, input_components)}`` (see :meth:`add`).
         self.inputs = {}
-        self.add(*inputs)
+        self.add(*inps)
         #: ``set`` of functions to call on input.  Change this directly if you
         #: want.
         self.cbs = set()
 
-    def add (self, *inputs):
+    def add (self, *inps):
         """Add inputs to this event.
 
 Takes any number of inputs matching :attr:`input_types`, or
@@ -71,9 +71,9 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
         self_add = self.inputs.__setitem__
         eh_add = None if self.eh is None else self.eh._add_inputs
         new_inputs = []
-        for i in inputs:
+        for i in inps:
             # work out components and perform checks
-            if isinstance(i, Input):
+            if isinstance(i, inputs.Input):
                 if i.components != components:
                     raise ValueError(
                         '{0} got a non-{1}-component input but no component '
@@ -130,7 +130,7 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
                     eh_add(i)
         return new_inputs
 
-    def rm (self, *inputs):
+    def rm (self, *inps):
         """Remove inputs from this event.
 
 Takes any number of :class:`Input` instances and raises ``KeyError`` if
@@ -139,7 +139,7 @@ missing.
 """
         self_rm = self.inputs.__delitem__
         eh_rm = None if self.eh is None else self.eh._rm_inputs
-        for i in inputs:
+        for i in inps:
             if i.evt is self:
                 # not necessary since we may raise KeyError, but a good sanity
                 # check
@@ -240,17 +240,17 @@ if either repeat rate is greater than the current framerate.
 
     name = 'button'
     components = 1
-    input_types = ButtonInput
+    input_types = inputs.ButtonInput
 
     def __init__ (self, *items, **kw):
         modes = 0
-        inputs = []
+        inps = []
         for item in items:
             if isinstance(item, int):
                 modes |= item
             else:
-                inputs.append(item)
-        Event.__init__(self, *inputs)
+                inps.append(item)
+        Event.__init__(self, *inps)
         #: A bitwise-OR of all button modes passed to the constructor.
         self.modes = modes
         self._downevts = self._upevts = 0
@@ -354,10 +354,10 @@ over each registered input and restricting to ``-1 <= x <= 1``).
 
     name = 'axis'
     components = 2
-    input_types = (AxisInput, ButtonInput)
+    input_types = (inputs.AxisInput, inputs.ButtonInput)
 
-    def __init__ (self, *inputs):
-        Event.__init__(self, *inputs)
+    def __init__ (self, *inps):
+        Event.__init__(self, *inps)
         self._pos = 0
 
     def respond (self, changed):
@@ -367,7 +367,7 @@ over each registered input and restricting to ``-1 <= x <= 1``).
             pos = 0
             for i, (evt_components, input_components) \
                 in self.inputs.iteritems():
-                if isinstance(i, AxisInput):
+                if isinstance(i, inputs.AxisInput):
                     # add current axis position for each component
                     for ec, ic in zip(evt_components, input_components):
                         pos += (2 * ec - 1) * i.pos[ic]
@@ -406,14 +406,14 @@ registered with this event.
 """
     name = 'relaxis'
     components = 2
-    input_types = (RelAxisInput, AxisInput, ButtonInput)
+    input_types = (inputs.RelAxisInput, inputs.AxisInput, inputs.ButtonInput)
 
-    def __init__ (self, *inputs):
+    def __init__ (self, *inps):
         #: ``{scale: input}`` (see :meth:`add`).
         self.input_scales = {}
-        Event.__init__(self, *inputs)
+        Event.__init__(self, *inps)
 
-    def add (self, *inputs):
+    def add (self, *inps):
         """:meth:`Event.add`.
 
 Inputs are ``(scale, input[, evt_components][, input_components])``, where
@@ -424,19 +424,19 @@ calling callbacks.
         # extract and store scales before passing to Event.add
         real_inputs = []
         scale = self.input_scales
-        for i in inputs:
+        for i in inps:
             if i[0] < 0:
                 raise ValueError("input scaling must be non-negative.")
             scale[i[1]] = i[0]
             real_inputs.append(i[1:])
         Event.add(self, *real_inputs)
 
-    def rm (self, *inputs):
+    def rm (self, *inps):
         """:meth:`Event.rm`."""
-        Event.rm(self, *inputs)
+        Event.rm(self, *inps)
         # remove stored scales (no KeyError means all inputs exist)
         scale = self.input_scales
-        for i in inputs:
+        for i in inps:
             del scale[i]
 
     def respond (self, changed):
@@ -447,11 +447,11 @@ calling callbacks.
         for i, (evt_components, input_components) \
             in self.inputs.iteritems():
             this_rel = 0
-            if isinstance(i, RelAxisInput):
+            if isinstance(i, inputs.RelAxisInput):
                 for ec, ic in zip(evt_components, input_components):
                     this_rel += (2 * ec - 1) * i.rel[ic]
                 i.reset()
-            elif isinstance(i, AxisInput):
+            elif isinstance(i, inputs.AxisInput):
                 # use axis position
                 for ec, ic in zip(evt_components, input_components):
                     this_rel += (2 * ec - 1) * i.pos[ic]

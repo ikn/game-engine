@@ -1,7 +1,6 @@
 import pygame as pg
 
 from . import inputs
-from .inputs import *
 from .evts import Event
 from . import conffile
 
@@ -40,7 +39,7 @@ Some notes:
         #: A ``set`` of all registered unnamed events.
         self.evts = set()
         # all inputs registered with events, prefiltered by Input.filters
-        self._filtered_inputs = ('type', {UNFILTERABLE: set()})
+        self._filtered_inputs = ('type', {inputs.UNFILTERABLE: set()})
         # all registered modifiers
         self._mods = {}
 
@@ -100,7 +99,7 @@ add(*evts, **named_evts) -> unnamed
                     cbs = []
                     for item in evt:
                         (cbs if callable(item) else pgevts).append(item)
-                    evt = Event(*(BasicInput(pgevt)
+                    evt = Event(*(inputs.BasicInput(pgevt)
                                   for pgevt in pgevts)).cb(*cbs)
                 if evt.eh is not None:
                     if evt.eh is self:
@@ -182,7 +181,7 @@ Raises ``KeyError`` if any arguments are missing.
         attr, filtered = filtered
         filters = dict(filters)
         # Input guarantees that this is non-empty
-        vals = filters.pop(attr, (UNFILTERABLE,))
+        vals = filters.pop(attr, (inputs.UNFILTERABLE,))
         for val in vals:
             if val in filtered:
                 child = filtered[val]
@@ -197,7 +196,7 @@ Raises ``KeyError`` if any arguments are missing.
                 if filters:
                     # create new levels for each remaining filter
                     for attr, vals in filters.iteritems():
-                        child = (attr, {UNFILTERABLE: child})
+                        child = (attr, {inputs.UNFILTERABLE: child})
                     filtered[val] = child
                     self._prefilter(child, filters, i)
                 else:
@@ -207,7 +206,7 @@ Raises ``KeyError`` if any arguments are missing.
         filters = dict(filters)
         attr, filtered = filtered
         # Input guarantees that this is non-empty
-        vals = filters.pop(attr, (UNFILTERABLE,))
+        vals = filters.pop(attr, (inputs.UNFILTERABLE,))
         for val in vals:
             assert val in filtered
             child = filtered[val]
@@ -220,7 +219,7 @@ Raises ``KeyError`` if any arguments are missing.
                 child.remove(i)
             if not child:
                 # child is now empty
-                if val is UNFILTERABLE:
+                if val is inputs.UNFILTERABLE:
                     # retain the UNFILTERABLE branch
                     filtered[val] = set()
                 else:
@@ -229,14 +228,14 @@ Raises ``KeyError`` if any arguments are missing.
             # all branches are empty (but always retain the 'type' branch)
             filtered.clear()
 
-    def _add_inputs (self, *inputs):
+    def _add_inputs (self, *inps):
         mods = self._mods
-        for i in inputs:
-            if isinstance(i, ButtonInput):
+        for i in inps:
+            if isinstance(i, inputs.ButtonInput):
                 # add mods, sorted by device and device ID
                 for m in i.mods:
                     added = False
-                    for device in mod_devices[i.device]:
+                    for device in inputs.mod_devices[i.device]:
                         this_mods = mods.setdefault(device, {}) \
                                         .setdefault(i._device_id, {})
                         if m in this_mods:
@@ -249,13 +248,13 @@ Raises ``KeyError`` if any arguments are missing.
                                 self._add_inputs(m)
             self._prefilter(self._filtered_inputs, i.filters, i)
 
-    def _rm_inputs (self, *inputs):
+    def _rm_inputs (self, *inps):
         mods = self._mods
-        for i in inputs:
-            if isinstance(i, ButtonInput):
+        for i in inps:
+            if isinstance(i, inputs.ButtonInput):
                 for m in i.mods:
                     rmd = False
-                    for device in mod_devices[i.device]:
+                    for device in inputs.mod_devices[i.device]:
                         d1 = mods[device]
                         d2 = d1[i._device_id]
                         d3 = d2[m]
@@ -278,17 +277,17 @@ Raises ``KeyError`` if any arguments are missing.
         mods = self._mods
         for pgevt in pg.event.get():
             # find matching inputs
-            inputs = all_inputs
-            while isinstance(inputs, tuple):
-                attr, inputs = inputs
+            inps = all_inputs
+            while isinstance(inps, tuple):
+                attr, inps = inps
                 val = getattr(pgevt, attr) if hasattr(pgevt, attr) \
-                                           else UNFILTERABLE
-                inputs = inputs[val if val is UNFILTERABLE or val in inputs
-                                else UNFILTERABLE]
+                                           else inputs.UNFILTERABLE
+                inps = inps[val if val is inputs.UNFILTERABLE or val in inps
+                                else inputs.UNFILTERABLE]
             # check all modifiers are active
-            for i in inputs:
+            for i in inps:
                 args = ()
-                if isinstance(i, ButtonInput):
+                if isinstance(i, inputs.ButtonInput):
                     is_mod = i.is_mod
                     if is_mod:
                         # mods have no mods, so always match
@@ -298,10 +297,14 @@ Raises ``KeyError`` if any arguments are missing.
                         this_mods = i.mods
 
                         def check_mods ():
-                            for device in mod_devices[i.device]:
+                            for device in inputs.mod_devices[i.device]:
                                 for m in mods.get(device, {}).get(i.device_id,
                                                                   ()):
-                                    yield m.held[0] == (m in this_mods)
+                                    # mod matches if it's the same button as
+                                    # the input itself or is held iff a mod of
+                                    # the input
+                                    yield (m.held[0] == (m in this_mods) or
+                                           m == i)
 
                         args = (all(check_mods()),)
                 else:

@@ -40,7 +40,7 @@ TODO:
 
 """
 
-from .handler import EventHandler
+from .handler import *
 from .inputs import *
 from .evts import *
 from . import conffile

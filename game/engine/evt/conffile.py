@@ -22,8 +22,7 @@ evts_by_name = dict(
 
 _input_identifiers = {
     inputs.KbdKey: lambda k: getattr(pg, 'K_' + k),
-    inputs.MouseButton:
-        {'LEFT': 1, 'RIGHT': 2, 'MIDDLE': 3, 'UP': 4, 'DOWN': 5}.__getitem__,
+    inputs.MouseButton: lambda k: getattr(inputs.mbtn, k),
     inputs.PadButton: {}.__getitem__,
     inputs.PadAxis: {}.__getitem__,
     inputs.PadHat: {}.__getitem__
@@ -56,22 +55,44 @@ def _parse_input (lnum, n_components, words):
         evt_components = None
     words = words[device_i + 1:]
     # find the name
-    # TODO: input components
     names = inputs_by_name[device]
     name_i = None
     for i, w in enumerate(words):
-        if w in names:
+        if w in names or (':' in w and
+                          (w[:w.find(':')] in names or w[0] == ':')):
             name_i = i
             break
     if name_i is None:
+        name = None
+        input_components = None
+    else:
+        name = words[name_i]
+        # parse input components
+        if ':' in name:
+            i = name.find(':')
+            input_components = name[i + 1:]
+            name = name[:i]
+            if input_components:
+                # comma-separated ints
+                try:
+                    # int() handles whitespace fine
+                    input_components = [int(ic)
+                                        for ic in input_components.split(',')]
+                except ValueError:
+                    raise ValueError('line {0}: invalid input components'
+                                     .format(lnum))
+            else:
+                input_components = None
+        else:
+            input_components = None
+    if not name:
+        # name empty or entire argument omitted
         if len(names) == 1:
-            # no name, but there's only one choice
+            # but there's only one choice
             name = names.keys()[0]
         else:
             raise ValueError('line {0}: input declaration contains no name'
                              .format(lnum))
-    else:
-        name = words[name_i]
     cls = names[name]
     # only device ID preceeds name
     if name_i is None or name_i == 0:
@@ -141,7 +162,7 @@ def _parse_input (lnum, n_components, words):
                                      .format(lnum))
         if thresholds:
             args.append(thresholds)
-    return (cls(*args), evt_components)
+    return (cls(*args), evt_components, input_components)
 
 
 def _parse_evthead (lnum, words):

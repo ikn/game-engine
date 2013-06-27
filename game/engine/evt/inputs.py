@@ -14,6 +14,14 @@ mod_devices = {
     'pad': ('pad',)
 }
 
+class mbtn:
+    """Contains mouse button aliases."""
+    LEFT = 1
+    MIDDLE = 2
+    RIGHT = 3
+    UP = 4
+    DOWN = 5
+
 
 class Input (object):
     """Base class for handling events.  By itself, this class does nothing.
@@ -24,6 +32,9 @@ Input(*pgevts)
 
 If a subclass has a ``pgevts`` attribute, this is a list of events to add to
 the argument at initialisation.
+
+Comparing inputs for equality compares filters only (so inputs of different
+types may be equal).
 
 """
 
@@ -71,6 +82,9 @@ the argument at initialisation.
 
     def __repr__ (self):
         return str(self)
+
+    def __eq__ (self, other):
+        return isinstance(other, Input) and other.filters == self.filters
 
     def handle (self, pgevt):
         """Called by :class:`EventHandler` with a ``pygame.event.Event``.
