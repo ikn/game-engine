@@ -5,6 +5,7 @@ disk).
 
 """
 
+import sys
 import os
 from copy import deepcopy
 import json
@@ -70,7 +71,8 @@ setting to its default (initial) value, delete it.
                 v = self._tricky_types.get(t, t)(v)
             except (TypeError, ValueError):
                 # invalid: fall back to default
-                print 'warning: {0} has invalid type for \'{1}\'; falling ' \
+                print >> sys.stderr, \
+                      'warning: {0} has invalid type for \'{1}\'; falling ' \
                       'back to default'.format(repr(v), k)
                 v = self._defaults[k]
         # check if different
@@ -105,7 +107,8 @@ class SettingsManager (DummySettingsManager):
         except IOError:
             new_settings = {}
         except ValueError:
-            print 'warning: invalid JSON: \'{0}\''.format(self._fn)
+            print >> sys.stderr, 'warning: invalid JSON: \'{0}\'' \
+                                 .format(self._fn)
             new_settings = {}
         for k, v in new_settings.iteritems():
             if k in save:
@@ -130,7 +133,8 @@ existing settings, only those changed later.
                 os.makedirs(d)
             except OSError, e:
                 if e.errno != 17: # 17 means already exists
-                    print 'warning: can\'t create directory: \'{0}\''.format(d)
+                    print >> sys.stderr, 'warning: can\'t create directory: ' \
+                                         '\'{0}\''.format(d)
             settings = self._settings
             self._save.update((k, settings.get(k)) for k in save)
 
@@ -140,7 +144,7 @@ existing settings, only those changed later.
             return
         # save to file
         if k in self._save:
-            print 'info: saving setting: \'{0}\''.format(k)
+            print >> sys.stderr, 'info: saving setting: \'{0}\''.format(k)
             self._save[k] = v
             self.dump(False)
 
@@ -151,9 +155,10 @@ dump()
 
 """
         if public:
-            print 'info: saving settings'
+            print >> sys.stderr, 'info: saving settings'
         try:
             with open(self._fn, 'w') as f:
                 json.dump(self._save, f, indent = 4, cls = _JSONEncoder)
         except IOError:
-            print 'warning: can\'t write to file: \'{0}\''.format(self._fn)
+            print >> sys.stderr, 'warning: can\'t write to file: ' \
+                                 '\'{0}\''.format(self._fn)

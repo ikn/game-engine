@@ -185,9 +185,9 @@ should be passed to that base class).
             (pg.ACTIVEEVENT, self._active_cb),
             (pg.VIDEORESIZE, self._resize_cb),
             (conf.EVENT_ENDMUSIC, self.play_music),
-            evt.Button(evt.DOWN, *conf.KEYS_QUIT).cb(self.quit),
-            evt.Button(evt.DOWN, *conf.KEYS_MINIMISE).cb(self.minimise),
-            evt.Button(evt.DOWN, *conf.KEYS_FULLSCREEN)
+            evt.Button(evt.bmode.DOWN, *conf.KEYS_QUIT).cb(self.quit),
+            evt.Button(evt.bmode.DOWN, *conf.KEYS_MINIMISE).cb(self.minimise),
+            evt.Button(evt.bmode.DOWN, *conf.KEYS_FULLSCREEN)
                .cb(self.toggle_fullscreen)
         )
         # instantiate class
