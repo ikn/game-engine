@@ -1,6 +1,6 @@
 PYTHON_VERSION := 2
 
-.PHONY: all clean distclean
+.PHONY: all doc clean distclean
 
 all:
 	echo $(PYTHON_VERSION) > py_ver
@@ -14,10 +14,14 @@ endif
 	@ # Python 3 generates weirdly-named lib files
 	cp -a build/lib*-$(PYTHON_VERSION).[0-9]*/*.so game/engine/gfx/_gm.so
 
+doc:
+	$(MAKE) -C doc/ html
+
 clean:
 	./3to2
 	$(RM) -r build/ py_ver bak/
 	find -regex 'game/engine/.*\.so' -delete
+	$(MAKE) -C doc/ clean
 
 distclean: clean
 	find -regex '.*\.py[co]' -delete

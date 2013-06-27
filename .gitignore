@@ -4,3 +4,4 @@ bak/*
 py_ver
 *.py[co]
 __pycache__
+doc/_build/*
