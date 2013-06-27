@@ -1,3 +1,5 @@
+"""An event handler, which stores events and passes Pygame events to them."""
+
 import pygame as pg
 
 from . import inputs
@@ -23,7 +25,7 @@ Some notes:
    named events.
  - The ``'domain'`` name is reserved.
  - The ``__contains__`` method (``event in event_handler``) works for
-   :class:`Event` instances as well as names.
+   :class:`Event <engine.evt.evts.Event>` instances as well as names.
 
 """
 
@@ -61,12 +63,11 @@ Some notes:
 
 add(*evts, **named_evts) -> unnamed
 
-:arg evts, named_evts: any number of events.  Keyword arguments define named
-                       events with the key as the name.  An event can be a
-                       :class:`Event` instance, or a sequence of Pygame event
-                       IDs and functions to create an :class:`Event` that
-                       listens for the given Pygame events and has the
-                       functions as callbacks.
+Arguments are any number of events.  Keyword arguments define named events with
+the key as the name.  An event can be a :class:`Event <engine.evt.evts.Event>`
+instance, or a sequence of Pygame event IDs and functions to create an
+:class:`Event <engine.evt.evts.Event>` that listens for the given Pygame events
+and has the functions as callbacks.
 
 :return: a list of added unnamed events (positional arguments) (possibly
          created in this call).
@@ -126,7 +127,7 @@ add(*evts, **named_evts) -> unnamed
                                 dict.__setitem__(self, name, evt)
                     else:
                         # owned by another handler
-                        raise RuntimeError('an Event should not be added to ' \
+                        raise RuntimeError('an Event should not be added to '
                                            'more than one EventHandler')
                 else:
                     # new event
@@ -373,7 +374,8 @@ empty).
 
 Missing or already active domains are ignored.  Beware that state is preserved,
 so buttons that were held when disabled remain held when enabled, no matter how
-much time has passed, without sending a :data:`DOWN`.
+much time has passed, without sending a
+:data:`DOWN <engine.evt.evts.bmode.DOWN>`.
 
 """
         # %% refer to it here

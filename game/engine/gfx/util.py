@@ -145,7 +145,8 @@ align(self, graphic, col, row, alignment = 0, pad = 0, offset = 0)
               Pygame surface.  In the former case, the
               :meth:`Graphic.align <engine.gfx.graphic.Graphic.align>` method
               is called (but the graphic is not cropped to fit in the tile).
-:arg col, row: column and row of the tile.
+:arg col: column of the tile.
+:arg row: row of the tile.
 
 :return: a Pygame rect clipped within the tile giving the area the graphic
          should be put in, relative to the grid's top-left corner.
@@ -169,9 +170,10 @@ Spritemap(img[, sw][, sh], pad = 0[, nsprites])
 
 :arg img: a surface or filename to load from; this is a grid of sprites with
           the same size.
-:arg sw, sh: the width and height of individual sprites, in pixels.  If the
-             spritesheet is a single row, ``sh`` may be omitted, and if it is a
-             single column, ``sw`` may be omitted.
+:arg sw: the width of individual sprites, in pixels.  May be omitted if the
+         spritesheet is a single column.
+:arg sh: the height of individual sprites.  May be omitted if the spritesheet
+         is a single row.
 :arg pad: padding in pixels between each sprite.  This may be
           ``(col_gap, row_gap)``, or a single number for the same gap in both
           cases.

@@ -1,3 +1,5 @@
+"""Event classes for connecting inputs with callbacks."""
+
 import pygame as pg
 
 from . import inputs
@@ -30,15 +32,16 @@ once for each event gathered by the inputs.
 
 """
 
-    #: Like :attr:`Input.components`---the number of components the event can
-    #: handle.
+    #: Like :attr:`Input.components <engine.evt.inputs.Input.components>`---the
+    #: number of components the event can handle.
     components = 0
     #: A sequence of classes or a single class giving the input types accepted
     #: by this event type.
     input_types = inputs.BasicInput
 
     def __init__ (self, *inps):
-        #: Containing :class:`EventHandler`, or ``None``.
+        #: Containing :class:`EventHandler <engine.evt.handler.EventHandler>`,
+        #: or ``None``.
         self.eh = None
         #: ``{input: (evt_components, input_components)}`` (see :meth:`add`).
         self.inputs = {}
@@ -133,8 +136,8 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
     def rm (self, *inps):
         """Remove inputs from this event.
 
-Takes any number of :class:`Input` instances and raises ``KeyError`` if
-missing.
+Takes any number of :class:`Input <engine.evt.inputs.Input>` instances and
+raises ``KeyError`` if any are missing.
 
 """
         self_rm = self.inputs.__delitem__
@@ -176,7 +179,8 @@ Missing items are ignored.
 
 :arg changed: whether any inputs changed in any way.
 
-Called by the containing :class:`EventHandler`.
+Called by the containing
+:class:`EventHandler <engine.evt.handler.EventHandler>`.
 
 """
         if changed:
@@ -191,7 +195,8 @@ Called by the containing :class:`EventHandler`.
     # dummy methods that inputs use
 
     def down (self, i, component):
-        """Used by subclasses to handle :class:`ButtonInput` instances.
+        """Used by subclasses to handle
+:class:`ButtonInput <engine.evt.inputs.ButtonInput>` instances.
 
 :arg i: the calling input.
 :arg component: the input's component that has been toggled down.
@@ -200,7 +205,8 @@ Called by the containing :class:`EventHandler`.
         pass
 
     def up (self, i, component):
-        """Used by subclasses to handle :class:`ButtonInput` instances.
+        """Used by subclasses to handle
+:class:`ButtonInput <engine.evt.inputs.ButtonInput>` instances.
 
 :arg i: the calling input.
 :arg component: the input's component that has been toggled up.
@@ -211,7 +217,8 @@ Called by the containing :class:`EventHandler`.
 
 class MultiEvent (Event):
     """Not implemented."""
-    # to get cb args, calls static method _merge_args with cb args for each Event
+    # to get cb args, calls static method _merge_args with cb args for each
+    # Event
     pass
 
 
@@ -260,7 +267,7 @@ if either repeat rate is greater than the current framerate.
         self.repeat_delay = kw.get('repeat_delay')
         if modes & bmode.REPEAT and (self.initial_delay is None or
                                      self.repeat_delay is None):
-            raise TypeError('initial_delay and repeat_delay arguments are ' \
+            raise TypeError('initial_delay and repeat_delay arguments are '
                             'required if given the REPEAT mode')
         # whether currently repeating
         self._repeating = False
@@ -304,7 +311,7 @@ if either repeat rate is greater than the current framerate.
                 if held:
                     # continue repeating
                     if self.eh is None:
-                        raise RuntimeError('cannot respond properly if not ' \
+                        raise RuntimeError('cannot respond properly if not '
                                            'attached to an EventHandler')
                     t = self._repeat_remain
                     # use target framerate for determinism

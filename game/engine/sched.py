@@ -1,4 +1,4 @@
-"""Event scheduler."""
+"""Event scheduler and interpolation."""
 
 from time import time
 from bisect import bisect
@@ -475,9 +475,9 @@ add_timeout(cb, *args[, seconds][, frames][, repeat_seconds][, repeat_frames])
 :arg cb: the function to call.
 :arg args: list of arguments to pass to cb.
 :arg seconds: how long to wait before calling, in seconds (respects changes to
-              :attr:`fps`).  If passed, ``frames`` is ignored.
+              :attr:`Timer.fps`).  If passed, ``frames`` is ignored.
 :arg frames: how long to wait before calling, in frames (same number of frames
-             even if :attr:`fps` changes).
+             even if :attr:`Timer.fps` changes).
 :arg repeat_seconds: how long to wait between calls, in seconds; time is
                      determined as for ``seconds``.  If passed,
                      ``repeat_frames`` is ignored; if neither is passed, the

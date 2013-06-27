@@ -149,7 +149,7 @@ existing settings, only those changed later.
             self.dump(False)
 
     def dump (self, public = True):
-        """Force saving all settings.
+        """Force syncing to disk.
 
 dump()
 

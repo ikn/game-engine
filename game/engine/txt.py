@@ -77,18 +77,18 @@ render(font, text, colour[, shadow][, width], just = 0, minimise = False,
        line_spacing = 0, aa = True[, bg], pad = (0, 0, 0, 0))
     -> (surface, num_lines)
 
-:arg string font: name of a registered font.
+:arg font: name of a registered font.
 :arg text: text to render.
 :arg colour: ``(R, G, B)`` tuple.
 :arg shadow: to draw a drop-shadow: ``(colour, offset)`` tuple, where offset is
              ``(x, y)``.
-:arg int width: maximum width of returned surface (wrap text).  ``ValueError``
-                is raised if any words are too long to fit in this width.
+:arg width: maximum width of returned surface (wrap text).  ``ValueError`` is
+            raised if any words are too long to fit in this width.
 :arg just: if the text has multiple lines, justify: ``0`` = left,
            `1`` = centre, ``2`` = right.
 :arg minimise: if width is set, treat it as a minimum instead of absolute width
                (that is, shrink the surface after, if possible).
-:arg int line_spacing: space between lines, in pixels.
+:arg line_spacing: space between lines, in pixels.
 :arg aa: whether to anti-alias the text.
 :arg bg: background colour (``(R, G, B[, A])`` tuple); defaults to alpha.
 :arg pad: ``(left, top, right, bottom)`` padding in pixels.  Can also be one

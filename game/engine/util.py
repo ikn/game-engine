@@ -8,7 +8,7 @@ import pygame as pg
 
 __all__ = ('dd', 'ir', 'sum_pos', 'normalise_colour', 'randsgn', 'rand0',
            'weighted_rand', 'align_rect', 'position_sfc', 'convert_sfc',
-           'combine_drawn', 'blank_sfc')
+           'combine_drawn', 'blank_sfc') # be sure to change util.rst
 
 
 # abstract
@@ -182,7 +182,8 @@ position_sfc(sfc, dest, alignment = 0, pad = 0, offset = 0,
              rect = sfc.get_rect(), within = dest.get_rect(), blit_flags = 0)
 
 ``alignment``, ``pad``, ``offset``, ``rect`` and ``within`` are as taken by
-:func:`align_rect`.  Only the portion of ``sfc`` within ``rect`` is copied.
+:func:`align_rect <engine.util.align_rect>`.  Only the portion of ``sfc``
+within ``rect`` is copied.
 
 :arg sfc: source surface to copy.
 :arg dest: destination surface to blit to.

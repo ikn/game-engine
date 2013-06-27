@@ -3,7 +3,7 @@ import pygame as pg
 from . import game, sched, evt, gfx, txt, util, settings
 from .conf import conf
 
-__all__ = ('conf',)
+__all__ = ('conf', 'init', 'quit')
 
 pg.mixer.pre_init(buffer = 1024)
 

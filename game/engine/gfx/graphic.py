@@ -28,15 +28,16 @@ class Graphic (object):
 
 Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
 
-:arg img: surface or filename (under :data:`conf.IMG_DIR <IMG_DIR>`) to load.
-          If a surface, it should be already converted for blitting.
+:arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.  If a
+          surface, it should be already converted for blitting.
 :arg pos: initial ``(x, y)`` position.  The existence of a default is because
           you might use :meth:`align` immediately on adding to a
           :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`.
 :arg layer: the layer to draw in, lower being closer to the 'front'. This can
             actually be any hashable object except ``None``, as long as all
-            layers used in the same :class:`GraphicsManager` can be ordered
-            with respect to each other.
+            layers used in the same
+            :class:`GraphicsManager <engine.gfx.container.GraphicsManager>` can
+            be ordered with respect to each other.
 :arg blit_flags: when blitting the surface to the screen, this is passed as the
                  ``special_flags`` argument.
 
@@ -908,7 +909,8 @@ rescale(w = 1, h = 1, about = (0, 0)) -> self
 
 resize_both([w][, h], about = (0, 0)) -> self
 
-:arg w, h: the new width/height; pass only one of these.
+:arg w: the new width; pass only one of ``w`` and ``h``.
+:arg h: the new height.
 :arg about: the ``(x, y)`` position relative to the top-left of the graphic to
             scale about.
 

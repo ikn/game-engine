@@ -32,8 +32,8 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
 :arg rect: ``(left, top, width, height)`` rect (of ints) to draw in (or
            anything taken by ``pygame.Rect``, like a ``Rect``, or
            ``((left, top), (width, height))``).
-:arg layer, blit_flags: as taken by
-                        :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg blit_flags: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
 :meth:`fill` corresponds to a builtin transform.
 
@@ -170,7 +170,8 @@ Tilemap(grid, tile_data, tile_types, pos = (0, 0), layer = 0[, translate_type], 
     instance gives a valid ``tile_graphic`` form, making them valid forms for
     this argument.
 
-:arg pos, layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg pos: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 :arg translate_type: a function that takes tile type IDs obtained from the
                      ``tile_data`` argument and returns the ID to use with the
                      ``tile_types`` argument in obtaining ``tile_graphic``.

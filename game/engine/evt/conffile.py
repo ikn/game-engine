@@ -1,3 +1,10 @@
+"""Parse configuration strings to events and vice versa.
+
+If an input or event class has a ``name`` attribute, it is 'named' and is
+supported in configuration strings.
+
+"""
+
 import sys
 import shlex
 
@@ -5,15 +12,16 @@ import pygame as pg
 
 from . import inputs, evts
 
-##: A ``{cls.device: {cls.name: cls}}`` dict of usable named :class:`Input`
-##: subclasses.
+#: A ``{cls.device: {cls.name: cls}}`` dict of usable named
+#: :class:`Input <engine.evt.inputs.Input>` subclasses.
 inputs_by_name = {}
 for i in vars(inputs).values(): # copy or it'll change size during iteration
     if (isinstance(i, type) and issubclass(i, inputs.Input) and
         hasattr(i, 'name')):
         inputs_by_name.setdefault(i.device, {})[i.name] = i
 del i
-##: A ``{cls.name: cls}`` dict of usable named :class:`Event` subclasses.
+#: A ``{cls.name: cls}`` dict of usable named
+#: :class:`Event <engine.evt.evts.Event>` subclasses.
 evts_by_name = dict(
     (evt.name, evt) for evt in vars(evts).values()
     if (isinstance(evt, type) and
@@ -211,7 +219,8 @@ def parse (s):
 
 parse(s) -> parsed
 
-:return: ``{name: event}`` for each named :class:`Event` instance.
+:return: ``{name: event}`` for each named
+         :class:`Event <engine.evt.evts.Event>` instance.
 
 """
     lines = s.splitlines()

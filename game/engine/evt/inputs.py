@@ -1,8 +1,11 @@
+"""Input classes, representing filtered subsets of Pygame events."""
+
 import pygame as pg
 
 #: A value that an :class:`Input` cannot filter for.  If you want to filter for
 #: ``None``, you may change this in the module, but make sure to do so before
-#: creating any :class:`EventHandler` instances, and never after.
+#: creating any :class:`EventHandler <engine.evt.handler.EventHandler>`
+#: instances, and never after.
 UNFILTERABLE = None
 
 #: ``{device: allowed_mod_devices}`` for :class:`ButtonInput` instances.  An
@@ -24,7 +27,7 @@ class mbtn:
 
 
 class Input (object):
-    """Base class for handling events.  By itself, this class does nothing.
+    """Base class for handling input events.  Does nothing by itself.
 
 Input(*pgevts)
 
@@ -42,17 +45,18 @@ types may be equal).
     #: input.
     components = 0
     #: The string device name that this input type corresponds to (see
-    #: :data:`inputs_by_name`).
+    #: :data:`inputs_by_name <engine.evt.conffile.inputs_by_name>`).
     device = None
     #: A value that the device ID will never take (see :attr:`device_id`).
     invalid_device_id = -1
 
     def __init__ (self, *pgevts):
         #: Variable representing the current device ID; may be a string as a
-        #: variable name, or ``None`` (see :meth:`EventHandler.assign_devices`
-        #: for details).
+        #: variable name, or ``None`` (see :meth:`EventHandler.assign_devices
+        #: <engine.evt.handler.EventHandler.assign_devices>` for details).
         self.device_var = None
-        #: The :class:`Event` instance that contains this input, or ``None``.
+        #: The :class:`Event <engine.evt.evts.Event>` instance that contains
+        #: this input, or ``None``.
         self.evt = None
         pgevts = set(pgevts)
         if hasattr(self, 'pgevts'):
@@ -87,7 +91,8 @@ types may be equal).
         return isinstance(other, Input) and other.filters == self.filters
 
     def handle (self, pgevt):
-        """Called by :class:`EventHandler` with a ``pygame.event.Event``.
+        """Called by :class:`EventHandler <engine.evt.handler.EventHandler>`
+with a ``pygame.event.Event``.
 
 The passed event matches :attr:`filters`.
 
@@ -207,7 +212,7 @@ BasicInput(pgevt)
         #: Pygame event ID as passed to the constructor.
         self.pgevt = pgevt
         Input.__init__(self, pgevt)
-        # stored Pygame events, used by :class:`Event`
+        # stored Pygame events, used by :class:`Event <engine.evt.evts.Event>`
         self._pgevts = []
 
     def __str__ (self):
@@ -222,7 +227,7 @@ BasicInput(pgevt)
     def reset (self):
         """Clear cached Pygame events.
 
-Called by the owning :class:`Event`.
+Called by the owning :class:`Event <engine.evt.evts.Event>`.
 
 """
         self._pgevts = []
@@ -255,8 +260,8 @@ which restricts allowed devices of modifiers.
         self.is_mod = False
         #: A sequence of the components of this input that are being used.
         #: This is set by a container when the input is registered with one
-        #: (such as an :class:`Event`, or another :class:`ButtonInput` as a
-        #: modifier).
+        #: (such as an :class:`Event <engine.evt.evts.Event>`, or another
+        #: :class:`ButtonInput` as a modifier).
         self.used_components = ()
         Input.__init__(self)
         if hasattr(self, 'button_attr'):
@@ -286,9 +291,8 @@ which restricts allowed devices of modifiers.
         ds = mod_devices[self.device]
         if any(m.device not in ds for m, c in mods_parsed):
             raise TypeError(
-                'the modifier {0} is for device {1}, which is not ' \
-                'compatible with {2} instances'.format(m, m.device,
-                                                       type(self).__name__)
+                'the modifier {0} is for device {1}, which is not compatible '
+                'with {2} instances'.format(m, m.device, type(self).__name__)
             )
         #: List of modifiers (:class:`ButtonInput` instances) that affect this
         #: input.
@@ -450,7 +454,8 @@ PadButton(device_id, button, *mods)
 :arg device_id: the gamepad's device ID, either a variable
                 (:attr:`device_var <Input.device_var>`) or a non-string ID
                 (:attr:`device_id <Input.device_id>`).
-:arg button, mods: as taken by :class:`ButtonInput`.
+:arg button: as taken by :class:`ButtonInput`.
+:arg mods: as taken by :class:`ButtonInput`.
 
 """
 
@@ -509,7 +514,7 @@ Subclasses must have an even number of components.
         #: single axis at ``-.3``, this is ``[.3, 0]``.
         self.pos = [0] * self.components
         if mods and thresholds is None:
-            raise TypeError('an AxisInput must have thresholds defined to ' \
+            raise TypeError('an AxisInput must have thresholds defined to '
                             'have modifiers')
         ButtonInput.__init__(self, None, *mods)
         if hasattr(self, 'axis_attr'):
@@ -589,8 +594,8 @@ Above this value, the mapped value increases linearly from ``0``.
                             self.down(i)
             elif self.is_mod:
                 # mod, but can't act as a button
-                raise TypeError('an AxisInput must have thresholds ' \
-                                'defined to be a modifier')
+                raise TypeError('an AxisInput must have thresholds denfined '
+                                'to be a modifier')
             for i, j in enumerate(xrange(imn, imx)):
                 old_pos[j] = pos[i]
             return True
@@ -613,8 +618,8 @@ number).  Otherwise, this method does nothing.
                 apos = (apos,)
             if len(apos) != self.components / 2:
                 raise ValueError(
-                    'the event attribute given by the axis_val_attr ' \
-                    'attribute has the wrong number of components'
+                    'the event attribute given by the axis_val_attr attribute'
+                    'has the wrong number of components'
                 )
             for i, apos in enumerate(apos):
                 rtn |= self.axis_motion(mods_match, i, apos)
@@ -629,7 +634,8 @@ PadAxis(device_id, axis[, thresholds], *mods)
 :arg device_id: the gamepad's device ID, either a variable
                 (:attr:`device_var <Input.device_var>`) or a non-string ID
                 (:attr:`device_id <Input.device_id>`).
-:arg axis, thresholds: as taken by :class:`AxisInput`.
+:arg axis: as taken by :class:`AxisInput`.
+:arg thresholds: as taken by :class:`AxisInput`.
 :arg mods: as taken by :class:`ButtonInput`.
 
 """
@@ -758,8 +764,8 @@ than its absolute position.  Subclasses must have an even number of components.
                     apos = sgn * min(sgn * apos, 1)
                     rtn |= self.axis_motion(mods_match, i, apos)
             elif self.is_mod:
-                raise TypeError('a RelAxisInput must have bdy defined to be ' \
-                                'a modifier')
+                raise TypeError('a RelAxisInput must have bdy defined to be a '
+                                'modifier')
             else:
                 rtn |= any(rpos)
         return rtn
@@ -767,7 +773,7 @@ than its absolute position.  Subclasses must have an even number of components.
     def reset (self):
         """Reset values in :attr:`rel` to ``0``.
 
-Called by the owning :class:`Event`.
+Called by the owning :class:`Event <engine.evt.evts.Event>`.
 
 """
         self.rel = [0, 0] * (self.components / 2)

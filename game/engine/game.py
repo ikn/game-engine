@@ -1,9 +1,9 @@
 """Main loop and world handling.
 
 Only one :class:`Game` instance should ever exist, and it stores itself in
-:data:`conf.GAME <GAME>`.  Start the game with :func:`run` and use the
-:class:`Game` instance for changing worlds, clearing media caches, handling the
-display and playing audio.
+:data:`conf.GAME`.  Start the game with :func:`run` and use the :class:`Game`
+instance for changing worlds, clearing media caches, handling the display and
+playing audio.
 
 """
 
@@ -57,12 +57,13 @@ World(scheduler, evthandler)
 
 :arg scheduler: the :class:`sched.Scheduler <engine.sched.Scheduler>` instance
                 this world should use for timing.
-:arg evthandler: the :class:`evt.EventHandler <engine.evt.EventHandler>`
+:arg evthandler: the
+                 :class:`evt.EventHandler <engine.evt.handler.EventHandler>`
                  instance this world should use for input.
 
 """
 
-    #: A unique identifier used for some settings in :doc:`conf`; if ``None``,
+    #: A unique identifier used for some settings in :mod:`conf`; if ``None``,
     #: ``type(world).__name__.lower()`` will be used.
     id = None
 
@@ -70,8 +71,8 @@ World(scheduler, evthandler)
         #: :class:`sched.Scheduler <engine.sched.Scheduler>` instance taken by
         #: the constructor.
         self.scheduler = scheduler
-        #: :class:`evt.EventHandler <engine.evt.EventHandler>` instance taken
-        #: by the constructor.
+        #: :class:`evt.EventHandler <engine.evt.handler.EventHandler>` instance
+        #: taken by the constructor.
         self.evthandler = evthandler
         #: :class:`gfx.GraphicsManager <engine.gfx.container.GraphicsManager>`
         #: instance used for drawing by default.
@@ -388,8 +389,8 @@ play_snd(base_id, volume = 1)
 
 :arg base_id: the identifier of the sound to play (we look for ``base_id + i``
               for a number ``i``---there are as many sounds as set in
-              :data:`conf.SOUNDS <SOUNDS>`).
-:arg float volume: amount scale the playback volume by.
+              :data:`conf.SOUNDS`).
+:arg volume: amount to scale the playback volume by.
 
 """
         ident = randrange(conf.SOUNDS[base_id])
@@ -427,7 +428,7 @@ play_snd(base_id, volume = 1)
     # display
 
     def refresh_display (self, *args):
-        """Update the display mode from :doc:`conf`.
+        """Update the display mode from :mod:`conf`.
 
 refresh_display()
 
