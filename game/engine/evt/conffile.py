@@ -131,7 +131,6 @@ def _parse_input (lnum, n_components, words):
                 words = words[1:]
         # next args are optional thresholds
         thresholds = []
-        args.append(thresholds)
         if words:
             # let the input check values/numbers of components
             for w in words:
@@ -140,8 +139,9 @@ def _parse_input (lnum, n_components, words):
                 except ValueError:
                     raise ValueError('line {0}: invalid \'threshold\' argument'
                                      .format(lnum))
-    print cls, args, evt_components
-    return (cls(*args), None if evt_components is None else [cnames.index(c) for c in evt_components])
+        if thresholds:
+            args.append(thresholds)
+    return (cls(*args), evt_components)
 
 
 def _parse_evthead (lnum, words):

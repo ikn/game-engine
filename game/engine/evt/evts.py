@@ -9,7 +9,9 @@ class bmode:
     HELD = 4
     REPEAT = 8
 
-##: Needs doc. # TODO: doc; support names in input args passed to events (then fix _parse_input return line)
+#: ``{n_components: component_names}`` for event components, giving a sequence
+#: of component names corresponding to their indices for an event's number of
+#: components.
 evt_component_names = {
     0: (),
     1: ('button',),
@@ -53,7 +55,8 @@ Takes any number of inputs matching :attr:`input_types`, or
 
  - ``evt_components`` is a sequence of the component indices (or a single
    component index) of this event that this input provides data for.  Defaults
-   to every component, in order.
+   to every component, in order.  Instead of indices, components can also be
+   names from :data:``evt_component_names``.
  - ``input_components`` is a sequence of the component indices of (or a single
    component index) of the input to match up to ``evt_components``.  Defaults
    to every component of the input, in order.
@@ -63,6 +66,8 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
 """
         types = self.input_types
         components = self.components
+        c_by_name = dict((v, i) for i, v in
+                         enumerate(evt_component_names[components]))
         self_add = self.inputs.__setitem__
         eh_add = None if self.eh is None else self.eh._add_inputs
         new_inputs = []
@@ -71,7 +76,7 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
             if isinstance(i, Input):
                 if i.components != components:
                     raise ValueError(
-                        '{0} got a non-{1}-component input but no component ' \
+                        '{0} got a non-{1}-component input but no component '
                         'data'.format(type(self).__name__, components)
                     )
                 i = (i,)
@@ -83,19 +88,29 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
                 i = (i[0], range(components), i[2])
             if i[2] is None:
                 i = (i[0], i[1], range(i[0].components))
-            i, evt_components, input_components = i
+            i, orig_evt_components, input_components = i
             if not isinstance(i, types):
-                raise TypeError('{0} events only accept inputs of type {1}' \
+                raise TypeError('{0} events only accept inputs of type {1}'
                                 .format(type(self).__name__,
                                         tuple(t.__name__ for t in types)))
-            if isinstance(evt_components, int):
-                evt_components = (evt_components,)
+            if isinstance(orig_evt_components, (int, basestring)):
+                orig_evt_components = (orig_evt_components,)
             if isinstance(input_components, int):
                 input_components = (input_components,)
-            for ec in evt_components:
+            evt_components = []
+            for ec in orig_evt_components:
+                # translate from name
+                if isinstance(ec, basestring):
+                    try:
+                        ec = c_by_name[ec]
+                    except KeyError:
+                        raise ValueError('unknown component name: \'{0}\''
+                                         .format(ec))
+                # check validity
                 if ec < 0 or ec >= components:
                     raise ValueError('{0} has no component {1}'
                                      .format(self, ec))
+                evt_components.append(ec)
             for ic in input_components:
                 if ic < 0 or ic >= i.components:
                     raise ValueError('{0} has no component {1}'.format(i, ic))

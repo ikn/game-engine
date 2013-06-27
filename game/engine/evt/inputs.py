@@ -505,8 +505,11 @@ Subclasses must have an even number of components.
         #: Axis ID, as passed to the constructor.
         self.axis = axis
         # same threshold for each axis if only given for one
-        if thresholds is not None and len(thresholds) == 2:
-            thresholds *= (self.components / 2)
+        if thresholds is not None:
+            if len(thresholds) == 2:
+                thresholds *= (self.components / 2)
+            if len(thresholds) != self.components:
+                raise ValueError('invalid number of threshold arguments')
         #: As passed to the constructor.
         self.thresholds = thresholds
         self.deadzone = 0
@@ -712,6 +715,8 @@ than its absolute position.  Subclasses must have an even number of components.
         if bdy is not None:
             if isinstance(bdy, (int, float)):
                 bdy = (bdy,) * (self.components / 2)
+            if len(bdy) != self.components / 2:
+                raise ValueError('invalid number of bdy arguments')
             if any(b <= 0 for b in bdy):
                 raise ValueError('all bdy elements must be greater than zero')
         #: As taken by the constructor.
