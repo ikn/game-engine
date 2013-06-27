@@ -7,6 +7,7 @@ supported in configuration strings.
 
 import sys
 import shlex
+from StringIO import StringIO
 
 import pygame as pg
 
@@ -214,36 +215,56 @@ def _parse_evthead (lnum, words):
     return (evts_by_name[evt_type], name, args)
 
 
-def parse (s):
-    """Parse the given string as an event configuration.
+def parse (config):
+    """Parse an event configuration.
 
-parse(s) -> parsed
+parse(config) -> parsed
+
+:arg config: an open file-like object (with a ``readline`` method).
 
 :return: ``{name: event}`` for each named
          :class:`Event <engine.evt.evts.Event>` instance.
 
 """
-    lines = s.splitlines()
     parsed = {} # events
     evt_cls = None
-    for i, line in enumerate(lines):
+    lnum = 1
+    while True:
+        line = config.readline()
+        if not line:
+            # end of file
+            break
         words = shlex.split(line, True)
-        if not words:
-            # blank line
-            continue
-        if words[0] in evts_by_name:
-            # new event: create and add current event
-            if evt_cls is not None:
-                parsed[evt_name] = evt_cls(*args)
-            evt_cls, evt_name, args = _parse_evthead(i + 1, words)
-            if evt_name in parsed:
-                raise ValueError('line {0}: duplicate event name'
-                                 .format(i + 1))
-        else:
-            if evt_cls is None:
-                raise ValueError('line {0}: expected event'.format(i + 1))
-            # input line
-            args.append(_parse_input(i + 1, evt_cls.components, words))
+        if words:
+            if words[0] in evts_by_name:
+                # new event: create and add current event
+                if evt_cls is not None:
+                    parsed[evt_name] = evt_cls(*args)
+                evt_cls, evt_name, args = _parse_evthead(lnum, words)
+                if evt_name in parsed:
+                    raise ValueError('line {0}: duplicate event name'
+                                    .format(lnum))
+            else:
+                if evt_cls is None:
+                    raise ValueError('line {0}: expected event'.format(lnum))
+                # input line
+                args.append(_parse_input(lnum, evt_cls.components, words))
+        # else blank line
+        lnum += 1
     if evt_cls is not None:
         parsed[evt_name] = evt_cls(*args)
     return parsed
+
+
+def parse_s (config):
+    """Parse an event configuration from a string.
+
+parse(config) -> parsed
+
+:arg config: the string to parse
+
+:return: ``{name: event}`` for each named
+         :class:`Event <engine.evt.evts.Event>` instance.
+
+"""
+    return parse(StringIO(config))

@@ -14,9 +14,8 @@ import pygame as pg
 from pygame.display import update as update_display
 
 from .conf import conf
-from . import gfx
 from .sched import Scheduler
-from . import evt
+from . import evt, gfx
 from .txt import Fonts
 from .util import ir, convert_sfc
 
@@ -186,10 +185,17 @@ should be passed to that base class).
             (pg.ACTIVEEVENT, self._active_cb),
             (pg.VIDEORESIZE, self._resize_cb),
             (conf.EVENT_ENDMUSIC, self.play_music),
-            evt.Button(evt.bmode.DOWN, *conf.KEYS_QUIT).cb(self.quit),
-            evt.Button(evt.bmode.DOWN, *conf.KEYS_MINIMISE).cb(self.minimise),
-            evt.Button(evt.bmode.DOWN, *conf.KEYS_FULLSCREEN)
-               .cb(self.toggle_fullscreen)
+            evt.Button(
+                evt.bmode.DOWN, evt.KbdKey(pg.K_F4, evt.mod.ALT)
+            ).cb(self.quit),
+            evt.Button(
+                evt.bmode.DOWN, evt.KbdKey(pg.K_F10)
+            ).cb(self.minimise),
+            evt.Button(
+                evt.bmode.DOWN, evt.KbdKey(pg.K_F11),
+                evt.KbdKey(pg.K_RETURN, evt.mod.ALT),
+                evt.KbdKey(pg.K_KP_ENTER, evt.mod.ALT)
+            ).cb(self.toggle_fullscreen)
         )
         # instantiate class
         world = cls(scheduler, evthandler, *args)
@@ -288,7 +294,7 @@ If this quits the last (root) world, exit the game.
 
 img(filename[, size], cache = True) -> surface
 
-:arg filename: a filename to load.
+:arg filename: a filename to load, under :data:`conf.IMG_DIR`.
 :arg size: scale the image.  Can be an ``(x, y)`` size, a rect (in which case
            its dimensions are used), or a number to scale by.  If ``(x, y)``,
            either ``x`` or ``y`` can be ``None`` to scale to the other with

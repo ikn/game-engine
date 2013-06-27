@@ -2,6 +2,7 @@
 
 import pygame as pg
 
+from ..conf import conf
 from . import inputs
 from .evts import Event
 from . import conffile
@@ -81,10 +82,10 @@ and has the functions as callbacks.
         # extract domain from keyword args
         if 'domain' in named_evts:
             domain = named_evts['domain']
-            if isinstance(domain, basestring):
-                del named_evts['domain']
-            else:
-                domain = None
+            if domain is not None and not isinstance(domain, basestring):
+                raise ValueError('invalid domain (or, \'domain\' is an '
+                                 'invalid event name')
+            del named_evts['domain']
         else:
             domain = None
         if domain not in by_domain:
@@ -323,12 +324,46 @@ Raises ``KeyError`` if any arguments are missing.
                         evt._changed = False
                         evt.respond(changed)
 
-    def load (self, filename, domain = None):
-        """Not implemented."""
-        # doesn't add events used in schemes - they _only_ go in the scheme
-        pass
+    def domains (self, *domains):
+        """Get all events in the given domains.
 
-    def save (self, filename, *domains):
+domains(*domains) -> evts
+
+:return: ``(unnamed, named)``---a list of unnamed events and ``{name: event}``
+         for named events.
+
+"""
+        unnamed = []
+        named = {}
+        for domain in domains:
+            if domain is None:
+                raise KeyError(domain)
+            items.extend(self._evts_by_domain[domain]) # raises KeyError
+        return (unnamed, named)
+
+    def load (self, filename, domain = None):
+        """Load events from a configuration file (see
+:mod:`conffile <engine.evt.conffile>`).
+
+load(filename, domain = None) -> evts
+
+:arg filename: a filename to load as the configuration file, under
+              :data:`conf.EVT_DIR`.
+:arg domain: domain to place loaded events in.
+
+:return: ``{name: event}`` for loaded events.
+
+"""
+        # NOTE: doesn't add events used in schemes - they _only_ go in the scheme
+        with open(conf.EVT_DIR + filename) as f:
+            evts = conffile.parse(f)
+        if 'domain' in evts:
+            raise ValueError('\'domain\' may not be used as an event name')
+        evts['domain'] = domain
+        self.add(**evts)
+        return evts
+
+    def save (self, name, *domains):
         """Not implemented."""
         # save everything in the domains to file
         pass
@@ -340,20 +375,17 @@ Raises ``KeyError`` if any arguments are missing.
 
 unload(*domains) -> evts
 
-:return: list of all removed events.
+:return: all removed events as ``(unnamed, named)``, like :meth:`domains`.
 
 Raises ``KeyError`` if a domain is missing.
 
 """
-        items = []
-        for domain in domains:
-            if domain is None:
-                raise KeyError(domain)
-            items.extend(self._evts_by_domain[domain]) # raises KeyError
+        unnamed, named = self.domains(*domains) # raises KeyError
         # now all domains exist so we can safely make changes
         # this removes empty domains
-        self.rm(*items)
-        return items
+        self.rm(*unnamed)
+        self.rm(*named)
+        return (unnamed, named)
 
     def disable (self, *domains):
         """Disable event handling in all of the given domains.

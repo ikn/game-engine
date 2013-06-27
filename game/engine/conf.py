@@ -8,7 +8,6 @@ from collections import defaultdict
 import pygame as pg
 
 from . import settings
-from .evt import KbdKey as Key, mod
 from .util import dd
 
 
@@ -43,6 +42,7 @@ class Conf (object):
     DATA_DIR = os.path.dirname(sys.argv[0])
     if DATA_DIR:
         DATA_DIR += sep
+    EVT_DIR = DATA_DIR + 'evt' + sep
     IMG_DIR = DATA_DIR + 'img' + sep
     SOUND_DIR = DATA_DIR + 'sound' + sep
     MUSIC_DIR = DATA_DIR + 'music' + sep
@@ -59,19 +59,6 @@ class Conf (object):
     RES_F = None
     MIN_RES_W = (320, 180)
     ASPECT_RATIO = None
-
-    # input
-    KEYS_QUIT = (Key(pg.K_F4, mod.ALT),)
-    KEYS_MINIMISE = (Key(pg.K_F10),)
-    KEYS_FULLSCREEN = (Key(pg.K_F11), Key(pg.K_RETURN, mod.ALT),
-                       Key(pg.K_KP_ENTER, mod.ALT))
-    KEYS_NEXT = (Key(pg.K_RETURN), Key(pg.K_SPACE), Key(pg.K_KP_ENTER))
-    KEYS_BACK = (Key(pg.K_ESCAPE), Key(pg.K_BACKSPACE))
-    KEYS_LEFT = (Key(pg.K_LEFT), Key(pg.K_a), Key(pg.K_q))
-    KEYS_RIGHT = (Key(pg.K_RIGHT), Key(pg.K_d), Key(pg.K_e))
-    KEYS_UP = (Key(pg.K_UP), Key(pg.K_w), Key(pg.K_z), Key(pg.K_COMMA))
-    KEYS_DOWN = (Key(pg.K_DOWN), Key(pg.K_s), Key(pg.K_o))
-    KEYS_DIRN = (KEYS_LEFT, KEYS_UP, KEYS_RIGHT, KEYS_DOWN)
 
     # audio
     MUSIC_AUTOPLAY = False # just pauses music

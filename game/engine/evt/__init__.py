@@ -20,6 +20,7 @@ TODO:
  - eh.{load, save}
  - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
  - mods like '[CTRL] [ALT] kbd a' - device omitted in modifier when same as main button - device IDs omitted since must be the same
+    - and then put :mod:`game` keys in a config string
  - deadzones aren't per-input - can do per-device/axis or overall?
  - can omit axis-as-button thresholds and deadzones (global definitions in config file?)
     [FUTURE]
