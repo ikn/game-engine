@@ -101,6 +101,10 @@ class SettingsManager (DummySettingsManager):
 :arg save: a list containing the names of the settings to save to ``fn``
           (others are stored in memory only).
 
+All settings registered through :meth:`save` will be saved to the given file
+whenever they are set.  If you change settings internally without setting them
+(append to a list, for example), use :meth:`dump`.
+
 """
 
     def __init__ (self, settings, fn, save = (), types = {}):
@@ -126,8 +130,7 @@ class SettingsManager (DummySettingsManager):
     def save (self, *save):
         """Register more settings for saving to disk.
 
-Takes any number of strings corresponding to setting names.  Does not save
-existing settings, only those changed later.
+Takes any number of strings corresponding to setting names.
 
 """
         if save:

@@ -1,0 +1,29 @@
+button quit DOWN
+    kbd ESCAPE
+    kbd BACKSPACE
+
+button4 move DOWN
+    # arrow keys
+    left kbd LEFT
+    right kbd RIGHT
+    up kbd UP
+    down kbd DOWN
+    # WASD
+    left kbd a
+    left kbd q
+    right kbd d
+    right kbd e
+    up kbd w
+    up kbd z
+    up kbd COMMA
+    down kbd s
+    down kbd o
+    # gamepad analogue sticks
+    left right pad axis 0 .6 .4
+    up down pad axis 1 .6 .4
+    left right pad axis 3 .6 .4
+    up down pad axis 4 .6 .4
+
+button click DOWN
+    mouse button LEFT
+    mouse button RIGHT

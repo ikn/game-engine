@@ -402,12 +402,12 @@ if either repeat rate is greater than the current framerate.
         self._repeating = False
 
     def down (self, i, component):
-        """:meth:`Event.down`."""
+        """:meth:`BaseEvent.down`."""
         if component in self.inputs[i][1]:
             self._downevts += 1
 
     def up (self, i, component):
-        """:meth:`Event.up`."""
+        """:meth:`BaseEvent.up`."""
         if component in self.inputs[i][1]:
             self._upevts += 1
             # stop repeating if let go of all buttons at any point
