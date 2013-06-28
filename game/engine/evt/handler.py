@@ -85,7 +85,7 @@ Pygame events and has the functions as callbacks.
             domain = named_evts['domain']
             if domain is not None and not isinstance(domain, basestring):
                 raise ValueError('invalid domain (or, \'domain\' is an '
-                                 'invalid event name')
+                                 'invalid event name)')
             del named_evts['domain']
         else:
             domain = None
@@ -371,8 +371,6 @@ load(filename, domain = None) -> evts
         """Not implemented."""
         # save everything in the domains to file
         pass
-
-    # TODO: also load_s() and save_s()
 
     def unload (self, *domains):
         """Remove all events in the given domains.

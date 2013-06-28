@@ -419,7 +419,7 @@ if either repeat rate is greater than the current framerate.
         """:meth:`Event.gen_cb_args`."""
         modes = self.modes
         if modes & (bmode.HELD | bmode.REPEAT):
-            held = any(i.held[0] for i in self.inputs)
+            held = any(i.held(self)[0] for i in self.inputs)
         else:
             held = False
         if not changed and not held:
@@ -583,7 +583,7 @@ registered with this event.
     def add (self, *inps):
         """:meth:`Event.add`.
 
-Inputs are ``(scale, input[, evt_components][, input_components])``, where
+Inputs are ``(scale = 1, input[, evt_components][, input_components])``, where
 ``scale`` is a positive number to scale the relative axis's position by before
 calling callbacks.
 
@@ -592,6 +592,10 @@ calling callbacks.
         real_inputs = []
         scale = self.input_scales
         for i in inps:
+            if isinstance(i, inputs.Input):
+                i = (i,)
+            if isinstance(i[0], inputs.Input):
+                i = (1,) + tuple(i)
             if i[0] < 0:
                 raise ValueError("input scaling must be non-negative.")
             scale[i[1]] = i[0]
@@ -623,7 +627,7 @@ calling callbacks.
                 for ec, ic in zip(evt_components, input_components):
                     this_rel += (2 * ec - 1) * i.pos[ic]
             else: # i is ButtonInput
-                used_components = i.used_components
+                used_components = i.used_components[self]
                 # use 1 for each held component
                 for j, held in enumerate(i.held(self)):
                     c = used_components[j]
