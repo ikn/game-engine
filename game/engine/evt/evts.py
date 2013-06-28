@@ -18,7 +18,7 @@ evt_component_names = {
     0: (),
     1: ('button',),
     2: ('neg', 'pos'),
-    4: ('left', 'up', 'right', 'down')
+    4: ('left', 'right', 'up', 'down')
 }
 
 
@@ -205,14 +205,12 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
         for i in inps:
             i, evt_components, input_components = parse_input(i)
             # add if not already added
-            if i.evt is not self:
-                if i.evt is not None:
-                    # remove from current event
-                    i.evt.rm(i)
+            if self not in i.evts:
                 self_add(i, (evt_components, input_components))
                 new_inputs.append(i)
-                i.evt = self
-                i.used_components = input_components
+                i.evts.add(self)
+                if hasattr(i, 'used_components'):
+                    i.used_components[self] = input_components
                 if eh_add is not None:
                     eh_add(i)
         return new_inputs
@@ -227,12 +225,12 @@ ignores missing items.
         self_rm = self.inputs.__delitem__
         eh_rm = None if self.eh is None else self.eh._rm_inputs
         for i in inps:
-            if i.evt is self:
-                # not necessary since we may raise KeyError, but a good sanity
-                # check
+            if self in i.evts:
                 assert i in self.inputs
                 self_rm(i)
-                i.evt = None
+                i.evts.remove(self)
+                if hasattr(i, 'used_components'):
+                    del i.used_components[self]
                 if eh_rm is not None:
                     eh_rm(i)
 
@@ -319,6 +317,8 @@ possibly rewriting or wrapping it.
                     # moving on to a new event
                     if ecs:
                         arglists[current_evt_i].append((i, ecs, ics))
+                        ecs = []
+                        ics = []
                     current_evt_i = evt_i
                 ecs.append(ec % cs_per_evt)
                 ics.append(ic)
@@ -503,7 +503,8 @@ as being (left, up, right, down).  ``axis`` corresponds to the x or y axis
     def gen_cb_args (self, changed):
         for args in Button2.gen_cb_args(self, changed):
             btn = args[0]
-            yield (btn % 2, 1 if btn >= 2 else -1) + tuple(args[1:])
+            yield ((1 if btn >= 2 else 0, 1 if btn % 2 else -1) +
+                   tuple(args[1:]))
 
 
 class Axis (Event):
@@ -537,11 +538,13 @@ over each registered input and restricting to ``-1 <= x <= 1``).
                     for ec, ic in zip(evt_components, input_components):
                         pos += (2 * ec - 1) * i.pos[ic]
                 else: # i is ButtonInput
-                    used_components = i.used_components
+                    used_components = i.used_components[self]
                     # add 1 for each held component
-                    for ec, ic in zip(evt_components, input_components):
+                    for j, held in enumerate(i.held(self)):
+                        c = used_components[j]
+                        ic = input_components[c]
                         if ic in used_components and i._held[ic]:
-                            pos += 2 * ec - 1
+                            pos += 2 * evt_components[c] - 1
             # clamp to [-1, 1]
             self._pos = pos = min(1, max(-1, pos))
         else:
@@ -621,10 +624,12 @@ calling callbacks.
                     this_rel += (2 * ec - 1) * i.pos[ic]
             else: # i is ButtonInput
                 used_components = i.used_components
-                for ec, ic in zip(evt_components, input_components):
-                    # use 1 for each held component
+                # use 1 for each held component
+                for j, held in enumerate(i.held(self)):
+                    c = used_components[j]
+                    ic = input_components[c]
                     if ic in used_components and i._held[ic]:
-                        this_rel += 2 * ec - 1
+                        this_rel += 2 * evt_components[c] - 1
             rel += this_rel * scale[i]
         if rel:
             yield (rel,)

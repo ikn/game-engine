@@ -645,9 +645,10 @@ interp_simple(obj, attr, target, t[, end_cb], round_val = False) -> timeout_id
                 details).
 
 :return: an identifier that can be passed to :meth:`rm_timeout` to remove the
-        callback that continues the interpolation.  In this case ``end`` is not
-        respected.
+        callback that continues the interpolation.  In this case ``end_cb`` is
+        not called.
 
 """
         get_val = interp_linear(getattr(obj, attr), (target, t))
-        self.interp(get_val, (obj, attr), end = end_cb, round_val = round_val)
+        return self.interp(get_val, (obj, attr), end = end_cb,
+                           round_val = round_val)

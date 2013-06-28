@@ -296,7 +296,6 @@ Raises ``KeyError`` if any arguments are missing.
                         # mods have no mods, so always match
                         args = (True,)
                     else:
-                        assert ids
                         this_mods = i.mods
 
                         def check_mods ():
@@ -306,15 +305,19 @@ Raises ``KeyError`` if any arguments are missing.
                                     # mod matches if it's the same button as
                                     # the input itself or is held iff a mod of
                                     # the input
-                                    yield (m.held[0] == (m in this_mods) or
-                                           m == i)
+                                    yield (
+                                        i not in m.used_components or
+                                        m.held(i)[0] == (m in this_mods) or
+                                        m == i
+                                    )
 
                         args = (all(check_mods()),)
                 else:
                     is_mod = False
                 # careful: mods have no event
                 if i.handle(pgevt, *args) and not is_mod:
-                    i.evt._changed = True
+                    for evt in i.evts:
+                        evt._changed = True
         # call callbacks
         by_domain = self._evts_by_domain
         for domains in ((None,), self.active_domains):

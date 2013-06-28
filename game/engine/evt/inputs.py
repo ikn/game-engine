@@ -55,9 +55,9 @@ types may be equal).
         #: variable name, or ``None`` (see :meth:`EventHandler.assign_devices
         #: <engine.evt.handler.EventHandler.assign_devices>` for details).
         self.device_var = None
-        #: The :class:`Event <engine.evt.evts.Event>` instance that contains
-        #: this input, or ``None``.
-        self.evt = None
+        #: A set of :class:`Event <engine.evt.evts.Event>` instances that
+        #: contain this input, or ``None``.
+        self.evts = set()
         pgevts = set(pgevts)
         if hasattr(self, 'pgevts'):
             pgevts.update(self.pgevts)
@@ -101,6 +101,14 @@ The passed event matches :attr:`filters`.
 """
         return False
 
+    def _ehs (self):
+        # get all handlers that contain this event
+        ehs = set()
+        for evt in self.evts:
+            if evt.eh is not None:
+                ehs.add(evt.eh)
+        return ehs
+
     def filter (self, attr, *vals, **kw):
         """Filter events passed to this input.
 
@@ -122,9 +130,8 @@ for: :data:`UNFILTERABLE`.
                 self.unfilter(attr)
             # else nothing to do
             return self
-        eh = None if self.evt is None or self.evt.eh is None else self.evt.eh
         # wrap with removal from/readdition to handler
-        if eh is not None:
+        for eh in self._ehs():
             eh._rm_inputs(self)
         if UNFILTERABLE in vals:
             raise ValueError('cannot filter for {0}'.format(UNFILTERABLE))
@@ -132,7 +139,7 @@ for: :data:`UNFILTERABLE`.
             self.filters[attr] = set(vals)
         else:
             self.filters.setdefault(attr, set()).update(vals)
-        if eh is not None:
+        for eh in self._ehs():
             eh._add_inputs(self)
         return self
 
@@ -146,9 +153,8 @@ for: :data:`UNFILTERABLE`.
 """
         if attr not in self.filters:
             return self
-        eh = None if self.evt is None or self.evt.eh is None else self.evt.eh
         # wrap with removal from/readdition to handler
-        if eh is not None:
+        for eh in self._ehs():
             eh._rm_inputs(self)
         got = self.filters[attr]
         if vals:
@@ -160,7 +166,7 @@ for: :data:`UNFILTERABLE`.
         else:
             # remove all
             del self.filters[attr]
-        if eh is not None:
+        for eh in self._ehs():
             eh._add_inputs(self)
         return self
 
@@ -258,11 +264,11 @@ which restricts allowed devices of modifiers.
         self._held = [False] * self.components
         #: Whether this input is acting as a modifier.
         self.is_mod = False
-        #: A sequence of the components of this input that are being used.
-        #: This is set by a container when the input is registered with one
-        #: (such as an :class:`Event <engine.evt.evts.Event>`, or another
-        #: :class:`ButtonInput` as a modifier).
-        self.used_components = ()
+        #: ``{container: components}`` for each container (such as an
+        #: :class:`Event <engine.evt.evts.Event>`, or another
+        #: :class:`ButtonInput` as a modifier).  ``components`` is a sequence
+        #: of the components of this input that the container uses.
+        self.used_components = {}
         Input.__init__(self)
         if hasattr(self, 'button_attr'):
             if button is None:
@@ -301,8 +307,8 @@ which restricts allowed devices of modifiers.
             if c < 0 or c >= m.components:
                 raise ValueError('{0} has no component {1}'.format(m, c))
             # we're now the mod's container
-            m.is_mod = self
-            m.used_components = (c,)
+            m.is_mod = True
+            m.used_components[self] = (c,)
             mods.append(m)
 
     def __str__ (self):
@@ -321,24 +327,23 @@ which restricts allowed devices of modifiers.
         else:
             return Input.__str__(self)
 
-    @property
-    def held (self):
-        """A list of the held state of this button for used component.
+    def held (self, container):
+        """A list of the held state of this button for each component.
 
-Each item is a bool corresponds to the component in the same position in
-:attr:`used_components`.
+Each item is a bool that corresponds to the component in the same position in
+:attr:`used_components` for the given container.
 
 """
-        return [self._held[c] for c in self.used_components]
+        return [self._held[c] for c in self.used_components[container]]
 
     def down (self, component = 0):
         """Set the given component's button state to down."""
         self._held[component] = True
         # mods don't have events
         if not self.is_mod:
-            if component in self.used_components:
-                assert self.evt is not None
-                self.evt.down(self, component)
+            for evt in self.evts:
+                if component in self.used_components[evt]:
+                    evt.down(self, component)
             return True
         return False
 
@@ -349,9 +354,9 @@ Each item is a bool corresponds to the component in the same position in
             self._held[component] = False
             # mods don't have events
             if not self.is_mod:
-                if component in self.used_components:
-                    assert self.evt is not None
-                    self.evt.up(self, component)
+                for evt in self.evts:
+                    if component in self.used_components[evt]:
+                        evt.up(self, component)
                 return True
         return False
 
@@ -770,13 +775,14 @@ than its absolute position.  Subclasses must have an even number of components.
                 rtn |= any(rpos)
         return rtn
 
-    def reset (self):
-        """Reset values in :attr:`rel` to ``0``.
+    def reset (self, *components):
+        """Reset values in :attr:`rel` to ``0`` for the given components.
 
 Called by the owning :class:`Event <engine.evt.evts.Event>`.
 
 """
-        self.rel = [0, 0] * (self.components // 2)
+        for c in components:
+            self.rel[c] = 0
 
 
 class MouseAxis (RelAxisInput):

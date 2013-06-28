@@ -27,7 +27,8 @@ class _JSONEncoder (json.JSONEncoder):
 class DummySettingsManager (object):
     """An object for handling settings.
 
-:arg settings: a dict used to store the settings.
+:arg settings: a dict used to store the settings, or a (new-style) class with
+               settings as attributes.
 :arg types: the types of settings are preserved when changes are made by
             casting to their initial types.  For types for which this will not
             work, this argument can be passed as a ``{from_type: to_type}``
@@ -47,7 +48,10 @@ setting to its default (initial) value, delete it.
         self.add(settings)
 
     def add (self, settings):
-        """Add more settings; takes a dict like the constructor."""
+        """Add more settings; takes ``settings`` like the constructor."""
+        if isinstance(settings, type):
+            settings = dict((k, v) for k, v in settings.__dict__.iteritems()
+                                   if not k.startswith('_'))
         for k, v in settings.iteritems():
             setattr(self, k, v)
 
@@ -137,6 +141,7 @@ existing settings, only those changed later.
                                          '\'{0}\''.format(d)
             settings = self._settings
             self._save.update((k, settings.get(k)) for k in save)
+            self.dump()
 
     def __setattr__ (self, k, v):
         done, v = DummySettingsManager.__setattr__(self, k, v)
