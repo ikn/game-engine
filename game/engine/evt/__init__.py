@@ -6,7 +6,6 @@ TODO:
     [FIRST]
  - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these
     [ESSENTIAL]
- - axis/relaxis MultiEvents
  - autocapture/centre mouse?
  - some eh method to detect and set current held state of all attached [%%] ButtonInputs - keys use pg.key.get_pressed() (works for mods/locks)
     - careful of _SneakyMultiKbdKey and MultiEvent

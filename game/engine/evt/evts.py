@@ -263,7 +263,7 @@ MultiEvent(inps, *args, **kw)
 Subclasses must define a ``child`` attribute giving the class that this is to
 be a multiple of, and a ``multiple`` attribute giving the number of sub-events
 to wrap.  They should take note of the behaviour of :meth:`gen_cb_args`,
-possibly rewriting or wrapping it.
+possibly wrapping it.
 
 """
 
@@ -296,6 +296,10 @@ possibly rewriting or wrapping it.
         for evt in self.evts:
             evt.eh = eh
 
+    def _parse_input (self, i):
+        i, ecs, ics = BaseEvent._parse_input(self, i)
+        return ((i,), ecs, ics)
+
     def add (self, *inps):
         """:meth:`Event.add`"""
         parse_input = self._parse_input
@@ -316,14 +320,14 @@ possibly rewriting or wrapping it.
                 if evt_i != current_evt_i:
                     # moving on to a new event
                     if ecs:
-                        arglists[current_evt_i].append((i, ecs, ics))
+                        arglists[current_evt_i].append(i + (ecs, ics))
                         ecs = []
                         ics = []
                     current_evt_i = evt_i
                 ecs.append(ec % cs_per_evt)
                 ics.append(ic)
             if ecs:
-                arglists[current_evt_i].append((i, ecs, ics))
+                arglists[current_evt_i].append(i + (ecs, ics))
         # add to events
         new_inputs = set()
         for evt, args in zip(self.evts, arglists):
@@ -554,9 +558,25 @@ over each registered input and restricting to ``-1 <= x <= 1``).
 
 
 class Axis2 (MultiEvent):
-    """Not implemented."""
+    """A double :class:`Axis`.
+
+Callbacks are called every frame with a list of axis positions for each of the
+two axes.
+
+"""
+    name = 'axis2'
     child = Axis
     multiple = 2
+
+    def __init__ (self, *inps):
+        MultiEvent.__init__(self, inps)
+
+    def gen_cb_args (self, changed):
+        """:meth:`Event.gen_cb_args`."""
+        pos = [0] * self.multiple
+        for evt_i, this_pos in MultiEvent.gen_cb_args(self, changed):
+            pos[evt_i] += this_pos
+        yield (pos,)
 
 
 class RelAxis (Event):
@@ -600,7 +620,7 @@ calling callbacks.
                 raise ValueError("input scaling must be non-negative.")
             scale[i[1]] = i[0]
             real_inputs.append(i[1:])
-        Event.add(self, *real_inputs)
+        return Event.add(self, *real_inputs)
 
     def rm (self, *inps):
         """:meth:`Event.rm`."""
@@ -621,7 +641,7 @@ calling callbacks.
             if isinstance(i, inputs.RelAxisInput):
                 for ec, ic in zip(evt_components, input_components):
                     this_rel += (2 * ec - 1) * i.rel[ic]
-                i.reset()
+                i.reset(*input_components)
             elif isinstance(i, inputs.AxisInput):
                 # use axis position
                 for ec, ic in zip(evt_components, input_components):
@@ -640,6 +660,32 @@ calling callbacks.
 
 
 class RelAxis2 (MultiEvent):
-    """Not implemented."""
+    """A double :class:`RelAxis`.
+
+Callbacks are called every frame with a list of positions for each of the two
+relative axes.
+
+"""
+    name = 'relaxis2'
     child = RelAxis
     multiple = 2
+
+    def __init__ (self, *inps):
+        MultiEvent.__init__(self, inps)
+
+    def _parse_input (self, i):
+        if isinstance(i, inputs.Input):
+            i = (i,)
+        if isinstance(i[0], inputs.Input):
+            return MultiEvent._parse_input(self, i)
+        else:
+            scale = i[0]
+            i, ecs, ics = MultiEvent._parse_input(self, i[1:])
+            return ((scale,) + i, ecs, ics)
+
+    def gen_cb_args (self, changed):
+        """:meth:`Event.gen_cb_args`."""
+        rel = [0] * self.multiple
+        for evt_i, this_rel in MultiEvent.gen_cb_args(self, changed):
+            rel[evt_i] += this_rel
+        yield (rel,)

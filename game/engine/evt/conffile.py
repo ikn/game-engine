@@ -5,6 +5,8 @@ supported in configuration strings.
 
 """
 
+# NOTE that using the same input axis on the same input for different events (or for a multievent) is not supported, and behaviour is undefined
+
 import sys
 import shlex
 from StringIO import StringIO
@@ -188,7 +190,7 @@ def _parse_evthead (lnum, words):
     words = words[2:]
     # parse args according to event type
     args = []
-    if evt_type in ('axis', 'relaxis'):
+    if evt_type in ('axis', 'axis2', 'relaxis', 'relaxis2'):
         if words:
             raise ValueError('line {0}: axis and relaxis events take no '
                              'arguments'.format(lnum))
