@@ -603,7 +603,8 @@ registered with this event.
     def add (self, *inps):
         """:meth:`Event.add`.
 
-Inputs are ``(scale = 1, input[, evt_components][, input_components])``, where
+Inputs are
+``(scale = 1, input, evt_components = None, input_components = None)``, where
 ``scale`` is a positive number to scale the relative axis's position by before
 calling callbacks.
 

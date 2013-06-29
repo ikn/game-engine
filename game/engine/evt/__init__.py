@@ -14,7 +14,6 @@ TODO:
  - eh.set_deadzones
  - auto joy(/other?) initialisation
     [CONFIG]
- - how to do relaxis scale? (maybe, eg. 'pad 2*axis')
  - mods like '[CTRL] [ALT] kbd a' - device omitted in modifier when same as main button - device IDs omitted since must be the same
     - and then put :mod:`game` keys in a config string
  - document config format

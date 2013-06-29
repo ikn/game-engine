@@ -40,12 +40,14 @@ _input_identifiers = {
 }
 
 
-def _parse_input (lnum, n_components, words):
+def _parse_input (lnum, n_components, words, scalable):
     # parse an input declaration line; words is non-empty; returns input
     # TODO: mods (remember _SneakyMultiKbdKey)
     # find the device
     device_i = None
     for i, w in enumerate(words):
+        if scalable and '*' in w:
+            w = w[w.find('*') + 1:]
         if w in inputs_by_name:
             device_i = i
             break
@@ -53,6 +55,18 @@ def _parse_input (lnum, n_components, words):
         raise ValueError('line {0}: input declaration contains no '
                          'device'.format(lnum))
     device = words[device_i]
+    # parse relaxis scale
+    scale = None
+    if scalable and '*' in device:
+        i = device.find('*')
+        scale_s = device[:i]
+        device = device[i + 1:]
+        if i:
+            try:
+                scale = float(scale_s)
+            except ValueError:
+                raise ValueError('line {0}: invalid scaling value'
+                                 .format(lnum))
     # everything before device is a component
     evt_components = words[:device_i]
     if evt_components:
@@ -69,33 +83,29 @@ def _parse_input (lnum, n_components, words):
     names = inputs_by_name[device]
     name_i = None
     for i, w in enumerate(words):
-        if w in names or (':' in w and
-                          (w[:w.find(':')] in names or w[0] == ':')):
+        if ':' in w:
+            w = w[:w.find(':')]
+        if w in names:
             name_i = i
             break
+    input_components = None
     if name_i is None:
         name = None
-        input_components = None
     else:
         name = words[name_i]
         # parse input components
         if ':' in name:
             i = name.find(':')
-            input_components = name[i + 1:]
+            ics_s = name[i + 1:]
             name = name[:i]
-            if input_components:
+            if ics_s:
                 # comma-separated ints
                 try:
                     # int() handles whitespace fine
-                    input_components = [int(ic)
-                                        for ic in input_components.split(',')]
+                    input_components = [int(ic) for ic in ics_s.split(',')]
                 except ValueError:
                     raise ValueError('line {0}: invalid input components'
                                      .format(lnum))
-            else:
-                input_components = None
-        else:
-            input_components = None
     if not name:
         # name empty or entire argument omitted
         if len(names) == 1:
@@ -173,7 +183,8 @@ def _parse_input (lnum, n_components, words):
                                      .format(lnum))
         if thresholds:
             args.append(thresholds)
-    return (cls(*args), evt_components, input_components)
+    return ((() if scale is None else (scale,)) +
+            (cls(*args), evt_components, input_components))
 
 
 def _parse_evthead (lnum, words):
@@ -245,7 +256,8 @@ parse(config) -> parsed
                 evt_cls, evt_name, args = _parse_evthead(lnum, words)
                 if evt_name in parsed:
                     raise ValueError('line {0}: duplicate event name'
-                                    .format(lnum))
+                                     .format(lnum))
+                scalable = evt_cls.name in ('relaxis', 'relaxis2')
             else:
                 if evt_cls is None:
                     raise ValueError('line {0}: expected event'.format(lnum))
@@ -254,7 +266,7 @@ parse(config) -> parsed
                     n_cs = evt_cls.multiple * evt_cls.child.components
                 else:
                     n_cs = evt_cls.components
-                args.append(_parse_input(lnum, n_cs, words))
+                args.append(_parse_input(lnum, n_cs, words, scalable))
         # else blank line
         lnum += 1
     if evt_cls is not None:
