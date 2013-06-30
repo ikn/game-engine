@@ -302,14 +302,18 @@ Raises ``KeyError`` if any arguments are missing.
                             for device in inputs.mod_devices[i.device]:
                                 for m in mods.get(device, {}).get(i.device_id,
                                                                   ()):
-                                    # mod matches if it's the same button as
-                                    # the input itself or is held iff a mod of
-                                    # the input
-                                    yield (
-                                        i not in m.used_components or
-                                        m.held(i)[0] == (m in this_mods) or
-                                        m == i
-                                    )
+                                    # mod motches if it's the same button as
+                                    # the input itself
+                                    if m == i:
+                                        yield True
+                                    # or if it's held in exactly this input's
+                                    # components
+                                    if m in this_mods:
+                                        # only have one component
+                                        yield (m.held(i)[0] and
+                                               m._held.count(True) == 1)
+                                    else:
+                                        yield not any(m._held)
 
                         args = (all(check_mods()),)
                 else:
