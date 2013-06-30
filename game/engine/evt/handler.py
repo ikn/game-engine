@@ -238,9 +238,9 @@ Raises ``KeyError`` if any arguments are missing.
                 # add mods, sorted by device and device ID
                 for m in i.mods:
                     added = False
-                    for device in inputs.mod_devices[i.device]:
-                        this_mods = mods.setdefault(device, {}) \
-                                        .setdefault(i._device_id, {})
+                    if m.device in inputs.mod_devices[i.device]:
+                        this_mods = (mods.setdefault(m.device, {})
+                                         .setdefault(i._device_id, {}))
                         if m in this_mods:
                             this_mods[m].add(i)
                             # already added as an input
@@ -257,8 +257,8 @@ Raises ``KeyError`` if any arguments are missing.
             if isinstance(i, inputs.ButtonInput):
                 for m in i.mods:
                     rmd = False
-                    for device in inputs.mod_devices[i.device]:
-                        d1 = mods[device]
+                    if m.device in inputs.mod_devices[i.device]:
+                        d1 = mods[m.device]
                         d2 = d1[i._device_id]
                         d3 = d2[m]
                         assert i in d3
@@ -271,7 +271,7 @@ Raises ``KeyError`` if any arguments are missing.
                             if not d2:
                                 del d1[i._device_id]
                                 if not d1:
-                                    del mods[device]
+                                    del mods[m.device]
             self._unprefilter(self._filtered_inputs, i.filters, i)
 
     def update (self):
@@ -300,20 +300,22 @@ Raises ``KeyError`` if any arguments are missing.
 
                         def check_mods ():
                             for device in inputs.mod_devices[i.device]:
-                                for m in mods.get(device, {}).get(i.device_id,
-                                                                  ()):
-                                    # mod motches if it's the same button as
-                                    # the input itself
-                                    if m == i:
-                                        yield True
-                                    # or if it's held in exactly this input's
-                                    # components
-                                    if m in this_mods:
-                                        # only have one component
-                                        yield (m.held(i)[0] and
-                                               m._held.count(True) == 1)
-                                    else:
-                                        yield not any(m._held)
+                                for device_id in set((i.device_id, True)):
+                                    for m in (mods.get(device, {})
+                                              .get(device_id, ())):
+                                        # mod matches if it's the same button
+                                        # as the input itself
+                                        if m == i:
+                                            yield True
+                                            continue
+                                        # or if it's held in exactly this
+                                        # input's components
+                                        if m in this_mods:
+                                            # only have one component
+                                            yield (m.held(i)[0] and
+                                                   m._held.count(True) == 1)
+                                        else:
+                                            yield not any(m._held)
 
                         args = (all(check_mods()),)
                 else:

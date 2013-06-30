@@ -28,7 +28,7 @@ TODO:
  - eh.*monitor_deadzones
  - a way to register new input/event types (consider module data structures)
     - document using __str__ backends
-    - working with config [^^]
+    - working with config
  - joy ball (seems like RelAxisInput, but need a pad with a ball to test)
 
 ---NODOC---

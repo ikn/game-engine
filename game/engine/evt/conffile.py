@@ -40,7 +40,8 @@ _input_identifiers = {
 }
 
 
-def _parse_input (lnum, n_components, words, scalable):
+def _parse_input (lnum, n_components, words, scalable, device = None,
+                  device_id = None):
     # parse an input declaration line; words is non-empty; returns input
     # find the device
     device_i = None
@@ -51,9 +52,15 @@ def _parse_input (lnum, n_components, words, scalable):
             device_i = i
             break
     if device_i is None:
-        raise ValueError('line {0}: input declaration contains no '
-                         'device'.format(lnum))
-    device = words[device_i]
+        if device is None:
+            raise ValueError('line {0}: input declaration contains no '
+                             'device'.format(lnum))
+        # else device was given, so may omit it
+        pre_dev = []
+    else:
+        device = words[device_i]
+        pre_dev = words[:device_i]
+        words = words[device_i + 1:]
     # parse relaxis scale
     scale = None
     if scalable and '*' in device:
@@ -67,8 +74,6 @@ def _parse_input (lnum, n_components, words, scalable):
                 raise ValueError('line {0}: invalid scaling value'
                                  .format(lnum))
     # everything before device and before the first '[' is a component
-    pre_dev = words[:device_i]
-    words = words[device_i + 1:]
     for w_i, w in enumerate(pre_dev):
         if w.startswith('['):
             # found a modifier
@@ -79,15 +84,15 @@ def _parse_input (lnum, n_components, words, scalable):
     if not evt_components:
         # use all components: let the event check for mismatches
         evt_components = None
-    # separate and parse modifiers
-    mods = []
-    mod_words = []
+    # separate modifiers
+    all_mod_words = []
     in_mod = False
     for w in pre_dev[w_i:]:
         if not in_mod:
             if w.startswith('['):
                 # start of mod
                 in_mod = True
+                mod_words = []
                 w = w[1:]
             else:
                 raise ValueError('line {0}: expected a modifier, got \'{1}\''
@@ -97,26 +102,7 @@ def _parse_input (lnum, n_components, words, scalable):
                 # end of mod
                 if w[:-1]:
                     mod_words.append(w[:-1])
-                # TODO: assumed device/device ID (can omit if same as main input)
-                if len(mod_words) == 1 and hasattr(inputs.mod, mod_words[0]):
-                    # got a multi-modifier
-                    mod_i = getattr(inputs.mod, mod_words[0])
-                    mod_ics = (0,)
-                else:
-                    # parse the mod's words like any other input
-                    mod_i, mod_ecs, mod_ics = _parse_input(lnum, 1, mod_words,
-                                                           False)
-                    if (mod_ecs not in (None, (0,)) or
-                        (mod_i.components > 1 and mod_ics is None) or
-                        (mod_ics is not None and len(mod_ics) > 1)):
-                        raise ValueError('line {0}: modifier cannot use more '
-                                         'than one component'.format(lnum))
-                    if mod_ics is None:
-                        # mod_i has 1 component, so use that
-                        mod_ics = (0,)
-                # now mod_ics is a length-1 sequence (can never be length-0)
-                mods.append((mod_i, mod_ics[0]))
-                mod_words = []
+                all_mod_words.append(mod_words)
                 in_mod = False
             else:
                 # continuation
@@ -164,19 +150,22 @@ def _parse_input (lnum, n_components, words, scalable):
     if name_i is None or name_i == 0:
         device_id = True
     elif name_i == 1:
-        # ^^
-        print >> sys.stderr, 'warning: got device ID for input that ' \
-                             'doesn\'t support it; ignoring'
-        device_id = words[0]
-        if device_id and device_id[0] == '<' and device_id[-1] == '>':
-            device_id = device_id[1:-1]
+        if device_id is not None:
+            print >> sys.stderr, 'warning: got device ID for modifier; ' \
+                                 'ignoring'
         else:
-            # ^^
-            try:
-                device_id = int(device_id)
-            except ValueError:
-                raise ValueError('line {0}: invalid device ID: \'{1}\''
-                                 .format(lnum, device_id))
+            if cls not in (inputs.PadButton, inputs.PadAxis, inputs.PadHat):
+                print >> sys.stderr, 'warning: got device ID for input ' \
+                                     'that doesn\'t support it; ignoring'
+            device_id = words[0]
+            if device_id and device_id[0] == '<' and device_id[-1] == '>':
+                device_id = device_id[1:-1]
+            else:
+                try:
+                    device_id = int(device_id)
+                except ValueError:
+                    raise ValueError('line {0}: invalid device ID: \'{1}\''
+                                     .format(lnum, device_id))
     else:
         raise ValueError('line {0}: too many arguments between device and name'
                          .format(lnum))
@@ -188,7 +177,7 @@ def _parse_input (lnum, n_components, words, scalable):
         args = [device_id]
     else:
         args = []
-    if cls in _input_identifiers: # [^^]
+    if cls in _input_identifiers:
         # first is an identifier
         src = _input_identifiers[cls]
         if not words:
@@ -233,7 +222,32 @@ def _parse_input (lnum, n_components, words, scalable):
         if not thresholds:
             thresholds = None
         args.append(thresholds)
-    args.extend(mods)
+
+    # parse modifiers and add to args
+    mod_num = 1
+    for mod_words in all_mod_words:
+        if len(mod_words) == 1 and hasattr(inputs.mod, mod_words[0]):
+            # got a multi-modifier
+            mod_i = getattr(inputs.mod, mod_words[0])
+            mod_ics = (0,)
+        else:
+            # parse the mod's words like any other input
+            mod_i, mod_ecs, mod_ics = _parse_input(
+                '{0}[mod {1}]'.format(lnum, mod_num), 1, mod_words, False,
+                device, device_id
+            )
+            mod_num += 1
+            if (mod_ecs not in (None, (0,)) or
+                (mod_ics is None and mod_i.components > 1) or
+                (mod_ics is not None and len(mod_ics) > 1)):
+                raise ValueError('line {0}: modifier cannot use more '
+                                 'than one component'.format(lnum))
+            if mod_ics is None:
+                # mod_i has 1 component, so use that
+                mod_ics = (0,)
+        # now mod_ics is a length-1 sequence (can never be length-0)
+        args.append((mod_i, mod_ics[0]))
+
     return ((() if scale is None else (scale,)) +
             (cls(*args), evt_components, input_components))
 
@@ -273,7 +287,7 @@ def _parse_evthead (lnum, words):
                         raise ValueError('line {0}: invalid event arguments'
                                          .format(lnum))
                 break
-    else: # ^^
+    else:
         raise ValueError('line {0}: unknown event type \'{1}\''
                          .format(lnum, evt_type))
     return (evts_by_name[evt_type], name, args)
