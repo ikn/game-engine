@@ -150,6 +150,13 @@ Audio
    ``<sound_id><number>.ogg`` for integer numbers starting from ``0`` with no
    gaps.
 
+Other
+-----
+
+.. data:: GAME_EVENTS
+
+   An event configuration string loaded into each world's event handler.
+
 .. data:: REQUIRED_FONTS
 
    Fonts to automatically load as a

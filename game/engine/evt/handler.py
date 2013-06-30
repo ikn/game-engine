@@ -351,6 +351,15 @@ domains(*domains) -> evts
             items.extend(self._evts_by_domain[domain]) # raises KeyError
         return (unnamed, named)
 
+    def _load_evts (self, evts, domain):
+        # load events as parsed from config file
+        # NOTE: doesn't add events used in schemes - they _only_ go in the scheme
+        if 'domain' in evts:
+            raise ValueError('\'domain\' may not be used as an event name')
+        evts['domain'] = domain
+        self.add(**evts)
+        return evts
+
     def load (self, filename, domain = None):
         """Load events from a configuration file (see
 :mod:`conffile <engine.evt.conffile>`).
@@ -364,22 +373,27 @@ load(filename, domain = None) -> evts
 :return: ``{name: event}`` for loaded events.
 
 """
-        # NOTE: doesn't add events used in schemes - they _only_ go in the scheme
         with open(conf.EVT_DIR + filename) as f:
             evts = conffile.parse(f)
-        if 'domain' in evts:
-            raise ValueError('\'domain\' may not be used as an event name')
-        evts['domain'] = domain
-        self.add(**evts)
-        return evts
+        return self._load_evts(evts, domain)
+
+    def load_s (self, s, domain = None):
+        """Load events from a configuration string (see 
+:mod:`conffile <engine.evt.conffile>`).
+
+load_s(s, domain = None) -> evts
+
+:arg s: string to parse as an event configuration.
+:arg domain: domain to place loaded events in.
+
+:return: ``{name: event}`` for loaded events.
+
+"""
+        return self._load_evts(conffile.parse_s(s), domain)
 
     def save (self, name, *domains):
         """Not implemented."""
         # save everything in the domains to file
-        pass
-
-    def load_s (self, s, *domains):
-        """Not implemented."""
         pass
 
     def save_s (self, *domains):

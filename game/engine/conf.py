@@ -48,6 +48,20 @@ class Conf (object):
     MUSIC_DIR = DATA_DIR + 'music' + sep
     FONT_DIR = DATA_DIR + 'font' + sep
 
+    # input
+    GAME_EVENTS = '''
+button _game_quit DOWN
+    [ALT] kbd F4
+
+button _game_minimise DOWN
+    kbd F10
+
+button _game_fullscreen DOWN
+    kbd F11
+    [ALT] kbd RETURN
+    [ALT] kbd KP_ENTER
+'''
+
     # display
     WINDOW_ICON = None
     WINDOW_TITLE = ''
