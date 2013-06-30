@@ -440,7 +440,6 @@ much time has passed, without sending a
 :data:`DOWN <engine.evt.evts.bmode.DOWN>`.
 
 """
-        # %% refer to it here
         active = self.active_domains
         inactive = self.inactive_domains
         for domain in domains:

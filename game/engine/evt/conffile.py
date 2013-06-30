@@ -1,11 +1,169 @@
 """Parse configuration strings to events and vice versa.
 
-If an input or event class has a ``name`` attribute, it is 'named' and is
-supported in configuration strings.
+A configuration string defines events, which contain inputs.  If an input or
+event class has a ``name`` attribute, it is 'named' and is supported in
+configuration strings (these can be found in :data:`inputs_by_name` and
+:data:`evts_by_name`).
+
+Commenting is shell syntax: the ``#`` character indicates that the rest of the
+line is a comment, unless it is quoted.  Whitespace outside of quotes
+(including blank lines) is ignored.
+
+Events
+------
+
+Each event line is followed by zero or more input lines which are added to that
+event.  Lines are made up of words, and shell-like quoting is supported.  An
+event line follows the form
+
+.. code-block:: none
+
+    <type> <name> [args...]
+
+where ``<type>`` is the class's ``name`` attribute (a key in
+:data:`evts_by_name`) and ``<name>`` is the name to give to the event
+(see :meth:`EventHandler.add <engine.evt.handler.EventHandler.add>`).  ``args``
+depends on ``type``:
+
+- ``button*`` events take any number of button modes from
+  :class:`evts.bmode <engine.evt.evts.bmode>` (``DOWN``, ``HELD``, etc.).
+  If ``REPEAT`` is included, the final two arguments must be the initial and
+  repeat delays, in seconds.
+- other event types take no extra arguments.
+
+Inputs
+------
+
+Input lines follow the form
+
+.. code-block:: none
+
+    [event components...] [modifiers...] [scale*]<device> [device ID] \
+[type[:input components]] [args...]
+
+where:
+
+- ``event components`` are named components of the event this input is inside
+  to attach the input to (see
+  :data:`evts.evt_component_names <engine.evt.evts.evt_component_names>`).  If
+  none are given, all components of the event are used in order.
+- ``modifiers`` is zero or more whitespace-separated modifier definitions.
+  Each is within square ``[]`` brackets and is an input definition.  The device
+  must match the input (see
+  :data:`inputs.mod_devices <engine.evt.inputs.mod_devices>`), and may be
+  omitted if it is the same.  The device ID should be omitted, as it must be
+  the same as the input's.  A modifier may also be one of the names in
+  :class:`inputs.mod <engine.evt.inputs.mod>`.
+- ``scale`` is required for events of type ``'relaxis*'`` (see
+  :class:`RelAxis <engine.evt.evts.RelAxis>`) and no others (the ``*`` in this
+  argument is a literal character).
+- ``device`` is the ``device`` attribute of the input class, found in
+  :data:`inputs_by_name`.
+- ``device ID`` determines which device to listen for input from, and defaults
+  to ``True`` (see
+  :attr:`Input.device_id <engine.evt.inputs.Input.device_id>`).  This is only
+  allowed for inputs with ``device`` ``'pad'``.
+- ``type`` is the ``name`` attribute of the input class, found in
+  :data:`inputs_by_name`.  It may be omitted if the given ``device`` has only
+  one possible ``type``.
+- ``input components`` defines the components of the input to use as a
+  comma-separated string of indices.  The number given must match up with
+  ``event components``, and the default is all components of the input, in
+  order.
+- ``args`` depends on ``device`` and ``type``:
+
+    - ``kbd key``, ``mouse button`` and ``pad *`` take a key/button ID.  As
+      well as number identifiers, keys may be Pygame names (without the ``K_``
+      prefix) and mouse buttons may be names in
+      :class:`inputs.mbtn <engine.evt.inputs.mbtn>`.
+    - if the event is an axis or a button,
+      :class:`RelAxisInput <engine.evt.inputs.RelAxisInput>` subclasses take a
+      ``boundary`` argument giving the maximum displacement of the axis from
+      ``0``.
+    - if the event is a button,
+      :class:`AxisInput <engine.evt.inputs.AxisInput>` and
+      :class:`RelAxisInput <engine.evt.inputs.RelAxisInput>` subclasses take
+      thresholds arguments ``down`` and ``up``, giving the point at which the
+      button is triggered and released.
+
+  These are taken by the input classes, so see their documentation for more
+  details.
+
+Examples
+--------
+
+This defines a number of input methods for a ``'walk'`` event:
+
+.. code-block:: sh
+
+    axis walk
+       neg kbd LEFT
+       pos kbd RIGHT
+       # WASD
+       neg kbd a
+       pos kbd d
+       neg pos pad axis 0
+       # axis value depends on mouse position
+       neg pos mouse axis:0,1 100
+
+The following defines tile-like movement (also useful for menus).
+
+.. code-block:: sh
+
+    button4 move DOWN REPEAT .3 .2
+        left kbd LEFT
+        right kbd RIGHT
+        up kbd UP
+        down kbd DOWN
+        # recall that .6 .4 are axis toggle thresholds
+        left right pad axis 0 .6 .4
+        up down pad axis 1 .6 .4
+
+    # hold a button to speed up
+    button4 move_fast DOWN REPEAT .2 .1
+        left [CTRL] kbd LEFT
+        right [CTRL] kbd RIGHT
+        up [CTRL] kbd UP
+        down [CTRL] kbd DOWN
+        # modifier might be a shoulder button or something
+        left right [button 4] pad axis 0 .6 .4
+        up down [button 4] pad axis 1 .6 .4
+
+This might be useful for moving a cursor (note that the mouse is treated
+differently than for the ``axis`` event above):
+
+.. code-block:: sh
+
+    relaxis2 move
+        left 5*kbd LEFT
+        right 5*kbd RIGHT
+        up 5*kbd UP
+        down 5*kbd DOWN
+        left right 5*pad axis 0
+        up down 5*pad axis 1
+        left right mouse axis:0,1
+        up down mouse axis:2,3
+
+RTS-like unit selection:
+
+.. code-block:: sh
+
+    # drag out a box to select units
+    button select DOWN UP
+        mouse button LEFT
+
+    # hold ctrl to drag out another box and add to the selection
+    button add DOWN UP
+        [CTRL] mouse button LEFT
+
+    # order selected units to do something
+    button action DOWN
+        mouse button RIGHT
+
+Reference
+---------
 
 """
-
-# NOTE that using the same input axis on the same input for different events (or for a multievent) is not supported, and behaviour is undefined
 
 import sys
 import shlex
@@ -84,7 +242,7 @@ def _parse_input (lnum, n_components, words, scalable, device = None,
     if not evt_components:
         # use all components: let the event check for mismatches
         evt_components = None
-    # separate modifiers
+    # separate out modifiers
     all_mod_words = []
     in_mod = False
     for w in pre_dev[w_i:]:

@@ -725,6 +725,11 @@ RelAxisInput([relaxis][, bdy][, thresholds][, mods])
 A relative axis is one where events convey a change in the axis's value, rather
 than its absolute position.  Subclasses must have an even number of components.
 
+Note that using the same component of an instance of a subclass for two
+different events (or using the same component twice for a single
+:class:`MultiEvent <engine.evt.evts.MultiEvent>`) is not supported, and
+behaviour in this case is undefined.
+
 """
 
     components = 2
