@@ -84,24 +84,36 @@ def _parse_input (lnum, n_components, words, scalable):
     mod_words = []
     in_mod = False
     for w in pre_dev[w_i:]:
+        if not in_mod:
+            if w.startswith('['):
+                # start of mod
+                in_mod = True
+                w = w[1:]
+            else:
+                raise ValueError('line {0}: expected a modifier, got \'{1}\''
+                                 .format(lnum, w))
         if in_mod:
             if w.endswith(']'):
                 # end of mod
                 if w[:-1]:
                     mod_words.append(w[:-1])
-                # parse the mod's words like any other input
                 # TODO: assumed device/device ID (can omit if same as main input)
-                # TODO: _SneakyMultiKbdKey mods
-                mod_i, mod_ecs, mod_ics = _parse_input(lnum, 1, mod_words,
-                                                       False)
-                if (mod_ecs not in (None, (0,)) or
-                    (mod_i.components > 1 and mod_ics is None) or
-                    (mod_ics is not None and len(mod_ics) > 1)):
-                    raise ValueError('line {0}: modifier cannot use more than '
-                                     'one component'.format(lnum))
-                if mod_ics is None:
-                    # mod_i has 1 component, so use that
+                if len(mod_words) == 1 and hasattr(inputs.mod, mod_words[0]):
+                    # got a multi-modifier
+                    mod_i = getattr(inputs.mod, mod_words[0])
                     mod_ics = (0,)
+                else:
+                    # parse the mod's words like any other input
+                    mod_i, mod_ecs, mod_ics = _parse_input(lnum, 1, mod_words,
+                                                           False)
+                    if (mod_ecs not in (None, (0,)) or
+                        (mod_i.components > 1 and mod_ics is None) or
+                        (mod_ics is not None and len(mod_ics) > 1)):
+                        raise ValueError('line {0}: modifier cannot use more '
+                                         'than one component'.format(lnum))
+                    if mod_ics is None:
+                        # mod_i has 1 component, so use that
+                        mod_ics = (0,)
                 # now mod_ics is a length-1 sequence (can never be length-0)
                 mods.append((mod_i, mod_ics[0]))
                 mod_words = []
@@ -109,14 +121,6 @@ def _parse_input (lnum, n_components, words, scalable):
             else:
                 # continuation
                 mod_words.append(w)
-        elif w.startswith('['):
-            # start of mod
-            in_mod = True
-            if w[1:]:
-                mod_words.append(w[1:])
-        else:
-            raise ValueError('line {0}: expected a modifier, got \'{1}\''
-                             .format(lnum, w))
     if in_mod:
         raise ValueError('line {0}: mod not closed'.format(lnum))
 
