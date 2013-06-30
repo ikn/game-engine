@@ -295,11 +295,13 @@ which restricts allowed devices of modifiers.
         if any(m.mods for m, c in mods_parsed):
             raise ValueError('modifiers cannot have modifiers')
         ds = mod_devices[self.device]
-        if any(m.device not in ds for m, c in mods_parsed):
-            raise TypeError(
-                'the modifier {0} is for device {1}, which is not compatible '
-                'with {2} instances'.format(m, m.device, type(self).__name__)
-            )
+        for m, c in mods_parsed:
+            if m.device not in ds:
+                raise TypeError(
+                    'the modifier {0} is for device {1}, which is not '
+                    'compatible with {2} instances'
+                    .format(m, m.device, type(self).__name__)
+                )
         #: List of modifiers (:class:`ButtonInput` instances) that affect this
         #: input.
         self.mods = mods = []

@@ -14,8 +14,8 @@ TODO:
  - eh.set_deadzones
  - auto joy(/other?) initialisation
     [CONFIG]
- - mods like '[CTRL] [ALT] kbd a' - device omitted in modifier when same as main button - device IDs omitted since must be the same
-    - and then put :mod:`game` keys in a config string
+ - eh.load_s
+ - put :mod:`game` keys in a config string
  - document config format
  - deadzones aren't per-input - can do per-device/axis or overall?
  - can omit axis-as-button thresholds and deadzones (global definitions in config file?)

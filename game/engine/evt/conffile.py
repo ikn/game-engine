@@ -42,7 +42,6 @@ _input_identifiers = {
 
 def _parse_input (lnum, n_components, words, scalable):
     # parse an input declaration line; words is non-empty; returns input
-    # TODO: mods (remember _SneakyMultiKbdKey)
     # find the device
     device_i = None
     for i, w in enumerate(words):
@@ -67,18 +66,60 @@ def _parse_input (lnum, n_components, words, scalable):
             except ValueError:
                 raise ValueError('line {0}: invalid scaling value'
                                  .format(lnum))
-    # everything before device is a component
-    evt_components = words[:device_i]
-    if evt_components:
-        cnames = evts.evt_component_names[n_components]
-        for c in evt_components:
-            if c not in cnames:
-                raise ValueError('line {0}: invalid event component: \'{1}\''
-                                .format(lnum, c))
+    # everything before device and before the first '[' is a component
+    pre_dev = words[:device_i]
+    words = words[device_i + 1:]
+    for w_i, w in enumerate(pre_dev):
+        if w.startswith('['):
+            # found a modifier
+            break
     else:
+        w_i = len(pre_dev) # else will be (len - 1)
+    evt_components = pre_dev[:w_i]
+    if not evt_components:
         # use all components: let the event check for mismatches
         evt_components = None
-    words = words[device_i + 1:]
+    # separate and parse modifiers
+    mods = []
+    mod_words = []
+    in_mod = False
+    for w in pre_dev[w_i:]:
+        if in_mod:
+            if w.endswith(']'):
+                # end of mod
+                if w[:-1]:
+                    mod_words.append(w[:-1])
+                # parse the mod's words like any other input
+                # TODO: assumed device/device ID (can omit if same as main input)
+                # TODO: _SneakyMultiKbdKey mods
+                mod_i, mod_ecs, mod_ics = _parse_input(lnum, 1, mod_words,
+                                                       False)
+                if (mod_ecs not in (None, (0,)) or
+                    (mod_i.components > 1 and mod_ics is None) or
+                    (mod_ics is not None and len(mod_ics) > 1)):
+                    raise ValueError('line {0}: modifier cannot use more than '
+                                     'one component'.format(lnum))
+                if mod_ics is None:
+                    # mod_i has 1 component, so use that
+                    mod_ics = (0,)
+                # now mod_ics is a length-1 sequence (can never be length-0)
+                mods.append((mod_i, mod_ics[0]))
+                mod_words = []
+                in_mod = False
+            else:
+                # continuation
+                mod_words.append(w)
+        elif w.startswith('['):
+            # start of mod
+            in_mod = True
+            if w[1:]:
+                mod_words.append(w[1:])
+        else:
+            raise ValueError('line {0}: expected a modifier, got \'{1}\''
+                             .format(lnum, w))
+    if in_mod:
+        raise ValueError('line {0}: mod not closed'.format(lnum))
+
     # find the name
     names = inputs_by_name[device]
     name_i = None
@@ -137,6 +178,7 @@ def _parse_input (lnum, n_components, words, scalable):
                          .format(lnum))
     if name_i is not None:
         words = words[name_i + 1:]
+
     # now just arguments remain
     if cls in (inputs.PadButton, inputs.PadAxis, inputs.PadHat):
         args = [device_id]
@@ -166,11 +208,14 @@ def _parse_input (lnum, n_components, words, scalable):
             # next arg is optional boundary
             if words:
                 try:
-                    args.append(float(words[0]))
+                    bdy = float(words[0])
                 except ValueError:
                     raise ValueError('line {0}: invalid \'boundary\' argument'
                                      .format(lnum))
                 words = words[1:]
+            else:
+                bdy = None
+            args.append(bdy)
         # next args are optional thresholds
         thresholds = []
         if words:
@@ -181,8 +226,10 @@ def _parse_input (lnum, n_components, words, scalable):
                 except ValueError:
                     raise ValueError('line {0}: invalid \'threshold\' argument'
                                      .format(lnum))
-        if thresholds:
-            args.append(thresholds)
+        if not thresholds:
+            thresholds = None
+        args.append(thresholds)
+    args.extend(mods)
     return ((() if scale is None else (scale,)) +
             (cls(*args), evt_components, input_components))
 

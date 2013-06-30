@@ -372,6 +372,14 @@ load(filename, domain = None) -> evts
         # save everything in the domains to file
         pass
 
+    def load_s (self, s, *domains):
+        """Not implemented."""
+        pass
+
+    def save_s (self, *domains):
+        """Not implemented."""
+        pass
+
     def unload (self, *domains):
         """Remove all events in the given domains.
 
