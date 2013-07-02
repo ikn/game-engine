@@ -45,6 +45,10 @@ Some notes:
         self._filtered_inputs = ('type', {inputs.UNFILTERABLE: set()})
         # all registered modifiers
         self._mods = {}
+        #: Whether to capture the mouse cursor by centring it on the window
+        #: every frame.  You might also want to grab all input
+        #: (``pygame.event.set_grab``).
+        self.autocentre_mouse = False
 
     def __str__ (self):
         return '<EventHandler object at {0}>'.format(hex(id(self)))
@@ -333,6 +337,11 @@ Raises ``KeyError`` if any arguments are missing.
                         changed = evt._changed
                         evt._changed = False
                         evt.respond(changed)
+        # centre mouse
+        if self.autocentre_mouse:
+            sfc = pg.display.get_surface()
+            if sfc is not None:
+                pg.mouse.set_pos(sfc.get_rect().center)
 
     def domains (self, *domains):
         """Get all events in the given domains.

@@ -6,7 +6,6 @@ TODO:
     [FIRST]
  - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these
     [ESSENTIAL]
- - autocapture/centre mouse?
  - eh.normalise_buttons() to detect and set current held state of all attached ButtonInputs
     - takes an arg to send through btn.down()s
     - keys use pg.key.get_pressed()
@@ -14,10 +13,10 @@ TODO:
     - careful of _SneakyMultiKbdKey and MultiEvent
  - eh.assign_devices
  - eh.grab (and maybe have grab toggle for getting all input for a while)
- - eh.set_deadzones
+ - eh.set_deadzones (can set by device var; can pass a default for other devices/ids)
  - auto joy(/other?) initialisation
     [CONFIG]
- - can do per-device/axis or overall deadzones/thresholds (uses eh.set_deadzones)
+ - can do per-device/input name or global thresholds/bdy - and make them setters, and provide eh.set_{thresholds,bdys}
  - conffile.generate{,_s}, eh.save{,_s}
  - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
     [FUTURE]
