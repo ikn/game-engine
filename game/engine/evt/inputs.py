@@ -763,9 +763,9 @@ behaviour in this case is undefined.
             # split relative axis motion into magnitudes in each direction
             for i in xrange(self.components // 2):
                 if rpos[i] > 0:
-                    rel[2 * i + 1] = rpos[i]
+                    rel[2 * i + 1] += rpos[i]
                 else:
-                    rel[2 * i] = -rpos[i]
+                    rel[2 * i] -= rpos[i]
             if self.bdy is not None:
                 # act as axis (add relative pos to current pos)
                 for i, (bdy, rpos) in enumerate(zip(self.bdy, rpos)):
