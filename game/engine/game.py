@@ -20,20 +20,6 @@ from .txt import Fonts
 from .util import ir, convert_sfc
 
 
-def get_world_id (world):
-    """Return the computed identifier of the given world (or world type).
-
-See :attr:`World.id` for details.
-
-"""
-    if world.id is not None:
-        return world.id
-    else:
-        if not isinstance(world, type):
-            world = type(world)
-        return world.__name__.lower()
-
-
 def run (*args, **kwargs):
     """Run the game.
 
@@ -49,6 +35,11 @@ argument ``t`` to run for this many seconds.
         Game(*args, **kwargs).run(t)
 
 
+class _ClassProperty (property):
+    def __get__(self, cls, owner):
+        return self.fget.__get__(None, owner)()
+
+
 class World (object):
     """A world base class; to be subclassed.
 
@@ -62,10 +53,6 @@ World(scheduler, evthandler)
 
 """
 
-    #: A unique identifier used for some settings in :mod:`conf`; if ``None``,
-    #: ``type(world).__name__.lower()`` will be used.
-    id = None
-
     def __init__ (self, scheduler, evthandler, *args):
         #: :class:`sched.Scheduler <engine.sched.Scheduler>` instance taken by
         #: the constructor.
@@ -78,6 +65,22 @@ World(scheduler, evthandler)
         self.graphics = gfx.GraphicsManager(scheduler)
         self._extra_args = args
         self._initialised = False
+
+    @_ClassProperty
+    @classmethod
+    def id (cls):
+        """A unique identifier used for some settings in :mod:`conf`.
+
+This is a class method.
+
+A subclass may define an ``_id`` class attribute (not instance attribute).  If
+so, that is returned; if not, ``world_class.__name__.lower()`` is returned.
+
+"""
+        if hasattr(cls, '_id'):
+            return cls._id
+        else:
+            return cls.__name__.lower()
 
     def _select (self):
         if not self._initialised:
@@ -192,7 +195,7 @@ should be passed to that base class).
         eh['_game_fullscreen'].cb(self.toggle_fullscreen)
         # instantiate class
         world = cls(scheduler, eh, *args)
-        scheduler.fps = conf.FPS[get_world_id(world)]
+        scheduler.fps = conf.FPS[world.id]
         return world
 
     def _select_world (self, world):
@@ -203,7 +206,7 @@ should be passed to that base class).
         self.world = world
         world.graphics.orig_sfc = self.screen
         world.graphics.dirty()
-        i = get_world_id(world)
+        i = world.id
         # set some per-world things
         fonts = self.fonts
         for k, v in conf.REQUIRED_FONTS[i].iteritems():
@@ -256,7 +259,7 @@ get_worlds(ident, current = True) -> worlds
         current = [{'world': self.world}] if current else []
         for data in self.worlds + current:
             world = data['world']
-            if get_world_id(world) == ident:
+            if world.id == ident:
                 worlds.append(world)
         return worlds
 
