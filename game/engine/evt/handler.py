@@ -282,7 +282,16 @@ Raises ``KeyError`` if any arguments are missing.
         """Process Pygame events and call callbacks."""
         all_inputs = self._filtered_inputs
         mods = self._mods
-        for pgevt in pg.event.get():
+        pgevts = pg.event.get()
+        # centre mouse
+        if self.autocentre_mouse:
+            sfc = pg.display.get_surface()
+            if sfc is not None:
+                pg.mouse.set_pos(sfc.get_rect().center)
+                # remove the Pygame event this sends
+                pg.event.clear(pg.MOUSEMOTION)
+
+        for pgevt in pgevts:
             # find matching inputs
             inps = all_inputs
             while isinstance(inps, tuple):
@@ -337,11 +346,6 @@ Raises ``KeyError`` if any arguments are missing.
                         changed = evt._changed
                         evt._changed = False
                         evt.respond(changed)
-        # centre mouse
-        if self.autocentre_mouse:
-            sfc = pg.display.get_surface()
-            if sfc is not None:
-                pg.mouse.set_pos(sfc.get_rect().center)
 
     def domains (self, *domains):
         """Get all events in the given domains.
