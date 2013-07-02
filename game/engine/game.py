@@ -51,6 +51,16 @@ World(scheduler, evthandler)
                  :class:`evt.EventHandler <engine.evt.handler.EventHandler>`
                  instance this world should use for input.
 
+.. attribute:: id
+
+   A unique identifier used for some settings in :mod:`conf`.
+
+   This is a class property---it is independent of the instance.
+
+   A subclass may define an ``_id`` class attribute (not instance attribute).
+   If so, that is returned; if not, ``world_class.__name__.lower()`` is
+   returned.
+
 """
 
     def __init__ (self, scheduler, evthandler, *args):
@@ -69,14 +79,7 @@ World(scheduler, evthandler)
     @_ClassProperty
     @classmethod
     def id (cls):
-        """A unique identifier used for some settings in :mod:`conf`.
-
-This is a class method.
-
-A subclass may define an ``_id`` class attribute (not instance attribute).  If
-so, that is returned; if not, ``world_class.__name__.lower()`` is returned.
-
-"""
+        # doc is in the class(!)
         if hasattr(cls, '_id'):
             return cls._id
         else:

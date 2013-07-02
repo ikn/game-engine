@@ -150,7 +150,7 @@ if __name__ == '__main__':
     conf.RES_W = (conf.IMG_SIZE[0] + conf.TILE_GAP[0],
                   conf.IMG_SIZE[1] + conf.TILE_GAP[1])
     # make the mouse visible
-    conf.MOUSE_VISIBLE[engine.game.get_world_id(Puzzle)] = True
+    conf.MOUSE_VISIBLE[Puzzle.id] = True
     # initialise the engine
     engine.init()
     # run with a Puzzle as the world

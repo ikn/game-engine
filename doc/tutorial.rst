@@ -369,7 +369,7 @@ and what we want can be achieved by the following::
 
     if __name__ == '__main__':
         # make the mouse visible
-        conf.MOUSE_VISIBLE[engine.game.get_world_id(Puzzle)] = True
+        conf.MOUSE_VISIBLE[Puzzle.id] = True
         # ...
 
 Try :doc:`the game in its current state <tut-code/input>`.
