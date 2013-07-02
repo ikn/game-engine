@@ -49,6 +49,7 @@ class Conf (object):
     FONT_DIR = DATA_DIR + 'font' + sep
 
     # input
+    GRAB_EVENTS = dd(False)
     GAME_EVENTS = '''
 button _game_quit DOWN
     [ALT] kbd F4

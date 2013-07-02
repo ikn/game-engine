@@ -153,6 +153,13 @@ Audio
 Other
 -----
 
+.. data:: GRAB_EVENTS
+
+   Whether to grab all input events (in which case operating system and window
+   manager shortcuts like alt-tab will not work).  This is a
+   ``{`` :attr:`game.World.id <engine.game.World.id>` ``: grab}`` defaultdict,
+   defaulting to ``False``.
+
 .. data:: GAME_EVENTS
 
    An event configuration string loaded into each world's event handler.

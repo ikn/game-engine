@@ -208,6 +208,7 @@ should be passed to that base class).
         fonts = self.fonts
         for k, v in conf.REQUIRED_FONTS[i].iteritems():
             fonts[k] = v
+        pg.event.set_grab(conf.GRAB_EVENTS[i])
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
         world._select()
