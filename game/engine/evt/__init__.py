@@ -3,8 +3,6 @@
 ---NODOC---
 
 TODO:
-    [FIRST]
- - rather than checking requirements for is_mod in places, have .provides['button'], etc. (axis, mod), and Event/EventHandler checks for these
     [ESSENTIAL]
  - eh.normalise_buttons() to detect and set current held state of all attached ButtonInputs
     - takes an arg to send through btn.down()s

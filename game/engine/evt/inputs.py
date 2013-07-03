@@ -51,6 +51,9 @@ types may be equal).
     invalid_device_id = -1
 
     def __init__ (self, *pgevts):
+        #: An ``{id: provided}`` dict of 'interfaces' this input provides, with
+        #: keys ``'button'``, ``'axis'``, ``'relaxis'``.
+        self.provides = {'button': False, 'axis': False, 'relaxis': False}
         #: Variable representing the current device ID; may be a string as a
         #: variable name, or ``None`` (see :meth:`EventHandler.assign_devices
         #: <engine.evt.handler.EventHandler.assign_devices>` for details).
@@ -270,6 +273,7 @@ which restricts allowed devices of modifiers.
         #: of the components of this input that the container uses.
         self.used_components = {}
         Input.__init__(self)
+        self.provides['button'] = True
         if hasattr(self, 'button_attr'):
             if button is None:
                 raise TypeError('expected button argument')
@@ -308,6 +312,8 @@ which restricts allowed devices of modifiers.
         for m, c in mods_parsed:
             if c < 0 or c >= m.components:
                 raise ValueError('{0} has no component {1}'.format(m, c))
+            if not m.provides['button']:
+                raise TypeError('input {0} cannot be a modifier'.format(m))
             # we're now the mod's container
             m.is_mod = True
             m.used_components[self] = (c,)
@@ -524,6 +530,7 @@ Subclasses must have an even number of components.
             raise TypeError('an AxisInput must have thresholds defined to '
                             'have modifiers')
         ButtonInput.__init__(self, None, *mods)
+        self.provides['axis'] = True
         if hasattr(self, 'axis_attr'):
             if axis is None:
                 raise TypeError('expected axis argument')
@@ -536,6 +543,9 @@ Subclasses must have an even number of components.
                 thresholds *= (self.components // 2)
             if len(thresholds) != self.components:
                 raise ValueError('invalid number of threshold arguments')
+        else:
+            # ButtonInput sets this to True
+            self.provides['button'] = False
         #: As passed to the constructor.
         self.thresholds = thresholds
         self.deadzone = 0
@@ -586,7 +596,7 @@ Above this value, the mapped value increases linearly from ``0``.
         imx = 2 * (axis + 1)
         old_pos = self.pos
         if pos != old_pos[imn:imx]:
-            if self.thresholds is not None:
+            if self.provides['button']:
                 # act as button
                 down, up = self.thresholds[imn:imx]
                 l = list(zip(xrange(imn, imx), old_pos[imn:imx], pos))
@@ -599,10 +609,6 @@ Above this value, the mapped value increases linearly from ``0``.
                     for i, old, new in l:
                         if old < down and new >= down:
                             self.down(i)
-            elif self.is_mod:
-                # mod, but can't act as a button
-                raise TypeError('an AxisInput must have thresholds denfined '
-                                'to be a modifier')
             for i, j in enumerate(xrange(imn, imx)):
                 old_pos[j] = pos[i]
             return True
@@ -738,6 +744,7 @@ behaviour in this case is undefined.
         #: The change in each component since last :meth:`reset`.
         self.rel = [0, 0] * (self.components // 2)
         AxisInput.__init__(self, None, thresholds, *mods)
+        self.provides['relaxis'] = True
         if hasattr(self, 'relaxis_attr'):
             if relaxis is None:
                 raise TypeError('expected relaxis argument')
@@ -751,6 +758,9 @@ behaviour in this case is undefined.
                 raise ValueError('invalid number of bdy arguments')
             if any(b <= 0 for b in bdy):
                 raise ValueError('all bdy elements must be greater than zero')
+        else:
+            # AxisInput sets this to True
+            self.provides['axis'] = False
         #: As taken by the constructor.
         self.bdy = bdy
 
@@ -766,7 +776,7 @@ behaviour in this case is undefined.
                     rel[2 * i + 1] += rpos[i]
                 else:
                     rel[2 * i] -= rpos[i]
-            if self.bdy is not None:
+            if self.provides['axis']:
                 # act as axis (add relative pos to current pos)
                 for i, (bdy, rpos) in enumerate(zip(self.bdy, rpos)):
                     # normalise and restrict magnitude to 1
@@ -775,9 +785,6 @@ behaviour in this case is undefined.
                     sgn = 1 if apos > 0 else -1
                     apos = sgn * min(sgn * apos, 1)
                     rtn |= self.axis_motion(mods_match, i, apos)
-            elif self.is_mod:
-                raise TypeError('a RelAxisInput must have bdy defined to be a '
-                                'modifier')
             else:
                 rtn |= any(rpos)
         return rtn

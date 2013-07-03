@@ -30,9 +30,6 @@ either :meth:`Event.gen_cb_args` or :meth:`respond`.
 
 """
 
-    #: A sequence of classes or a single class giving the input types accepted
-    #: by this event type.
-    input_types = None
     #: Like :attr:`Input.components <engine.evt.inputs.Input.components>`---the
     #: number of components the event can handle.
     components = 0
@@ -65,12 +62,6 @@ either :meth:`Event.gen_cb_args` or :meth:`respond`.
         if i[2] is None:
             i = (i[0], i[1], range(i[0].components))
         i, orig_evt_components, input_components = i
-        if not isinstance(i, self.input_types):
-            raise TypeError(
-                '{0} events only accept inputs of type {1}'
-                .format(type(self).__name__,
-                        tuple(t.__name__ for t in self.input_types))
-            )
         if isinstance(orig_evt_components, (int, basestring)):
             orig_evt_components = (orig_evt_components,)
         if isinstance(input_components, int):
@@ -169,8 +160,6 @@ once for each event gathered by the inputs.
 
 """
 
-    input_types = inputs.BasicInput
-
     def __init__ (self, *inps):
         BaseEvent.__init__(self)
         #: ``{input: (evt_components, input_components)}`` (see :meth:`add`).
@@ -184,8 +173,8 @@ add(*inps) -> new_inputs
 
 :return: a list of inputs that weren't already registered with this event.
 
-Takes any number of inputs matching :attr:`input_types`, or
-``(input, evt_components = None, input_components = None)`` tuples.
+Takes any number of inputs or ``(input, evt_components = None,
+input_components = None)`` tuples.
 
  - ``evt_components`` is a sequence of the component indices (or a single
    component index) of this event that this input provides data for.  Defaults
@@ -204,6 +193,9 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
         new_inputs = []
         for i in inps:
             i, evt_components, input_components = parse_input(i)
+            if not self.input_valid(i):
+                raise TypeError('input passed to {0} is invalid'
+                                .format(type(self).__name__))
             # add if not already added
             if self not in i.evts:
                 self_add(i, (evt_components, input_components))
@@ -233,6 +225,10 @@ ignores missing items.
                     del i.used_components[self]
                 if eh_rm is not None:
                     eh_rm(i)
+
+    def input_valid (self, i):
+        """Check if the given input is valid for this event type."""
+        return isinstance(i, inputs.BasicInput)
 
     def gen_cb_args (self, changed):
         """Generate sets of arguments to call callbacks with.
@@ -268,7 +264,6 @@ possibly wrapping it.
 """
 
     def __init__ (self, inps, *args, **kw):
-        self.input_types = self.child.input_types
         self.components = self.multiple * self.child.components
         #: A list of sub-events, in order of the components they map to.
         self.evts = [self.child(*args, **kw) for i in xrange(self.multiple)]
@@ -380,7 +375,6 @@ if either repeat rate is greater than the current framerate.
 
     name = 'button'
     components = 1
-    input_types = inputs.ButtonInput
 
     def __init__ (self, *items, **kw):
         modes = 0
@@ -404,6 +398,10 @@ if either repeat rate is greater than the current framerate.
                             'required if given the REPEAT mode')
         # whether currently repeating
         self._repeating = False
+
+    def input_valid (self, i):
+        """:meth:`Event.input_valid`."""
+        return i.provides['button']
 
     def down (self, i, component):
         """:meth:`BaseEvent.down`."""
@@ -524,11 +522,14 @@ over each registered input and restricting to ``-1 <= x <= 1``).
 
     name = 'axis'
     components = 2
-    input_types = (inputs.AxisInput, inputs.ButtonInput)
 
     def __init__ (self, *inps):
         Event.__init__(self, *inps)
         self._pos = 0
+
+    def input_valid (self, i):
+        """:meth:`Event.input_valid`."""
+        return i.provides['axis'] or i.provides['button']
 
     def gen_cb_args (self, changed):
         """:meth:`Event.gen_cb_args`."""
@@ -537,11 +538,11 @@ over each registered input and restricting to ``-1 <= x <= 1``).
             pos = 0
             for i, (evt_components, input_components) \
                 in self.inputs.iteritems():
-                if isinstance(i, inputs.AxisInput):
+                if i.provides['axis']:
                     # add current axis position for each component
                     for ec, ic in zip(evt_components, input_components):
                         pos += (2 * ec - 1) * i.pos[ic]
-                else: # i is ButtonInput
+                else: # i.provides['button']
                     used_components = i.used_components[self]
                     # add 1 for each held component
                     for j, held in enumerate(i.held(self)):
@@ -593,7 +594,6 @@ registered with this event.
 """
     name = 'relaxis'
     components = 2
-    input_types = (inputs.RelAxisInput, inputs.AxisInput, inputs.ButtonInput)
 
     def __init__ (self, *inps):
         #: ``{scale: input}`` (see :meth:`add`).
@@ -631,6 +631,11 @@ calling callbacks.
         for i in inps:
             del scale[i]
 
+    def input_valid (self, i):
+        """:meth:`Event.input_valid`."""
+        return (i.provides['relaxis'] or i.provides['axis'] or
+                i.provides['button'])
+
     def gen_cb_args (self, changed):
         """:meth:`Event.gen_cb_args`."""
         rel = 0
@@ -639,15 +644,15 @@ calling callbacks.
         for i, (evt_components, input_components) \
             in self.inputs.iteritems():
             this_rel = 0
-            if isinstance(i, inputs.RelAxisInput):
+            if i.provides['relaxis']:
                 for ec, ic in zip(evt_components, input_components):
                     this_rel += (2 * ec - 1) * i.rel[ic]
                 i.reset(*input_components)
-            elif isinstance(i, inputs.AxisInput):
+            elif i.provides['axis']:
                 # use axis position
                 for ec, ic in zip(evt_components, input_components):
                     this_rel += (2 * ec - 1) * i.pos[ic]
-            else: # i is ButtonInput
+            else: # i.provides['button']
                 used_components = i.used_components[self]
                 # use 1 for each held component
                 for j, held in enumerate(i.held(self)):
