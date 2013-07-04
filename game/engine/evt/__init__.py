@@ -4,11 +4,10 @@
 
 TODO:
     [ESSENTIAL]
- - eh.normalise_buttons() to detect and set current held state of all attached ButtonInputs
     - takes an arg to send through btn.down()s
     - keys use pg.key.get_pressed()
     - refer to it in eh.add(), eh.load(), eh.enable()
-    - careful of _SneakyMultiKbdKey and MultiEvent
+    - careful of _SneakyMultiKbdKey
  - eh.assign_devices
  - eh.grab (and maybe have grab toggle for getting all input for a while)
  - eh.set_deadzones (can set by device var; can pass a default for other devices/ids)

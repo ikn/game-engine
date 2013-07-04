@@ -1,5 +1,7 @@
 """Input classes, representing filtered subsets of Pygame events."""
 
+import sys
+
 import pygame as pg
 
 #: A value that an :class:`Input` cannot filter for.  If you want to filter for
@@ -207,6 +209,18 @@ value as the attribute value to filter by.  If a subclass does not provide
         else:
             raise TypeError('this Input type doesn\'t support device IDs')
 
+    def normalise (self, down_evt):
+        """Determine and set the button's current state.
+
+:arg down_evt: whether to trigger a button down event if the button is found to
+               be held and it was not already set as held.
+
+This should be implemented by any input that :attr:`provides` a button
+interface (this implementation does nothing), if possible.
+
+"""
+        pass
+
 
 class BasicInput (Input):
     """An input that handles Pygame events of a single type.
@@ -344,29 +358,50 @@ Each item is a bool that corresponds to the component in the same position in
 """
         return [self._held[c] for c in self.used_components[container]]
 
-    def down (self, component = 0):
-        """Set the given component's button state to down."""
+    def down (self, component = 0, evt = True):
+        """Set the given component's button state to down.
+
+:arg evt: whether to let the containing event know about this.
+
+"""
         self._held[component] = True
         # mods don't have events
-        if not self.is_mod:
+        if evt and not self.is_mod:
             for evt in self.evts:
                 if component in self.used_components[evt]:
                     evt.down(self, component)
             return True
         return False
 
-    def up (self, component = 0):
-        """Set the given component's button state to up."""
+    def up (self, component = 0, evt = True):
+        """Set the given component's button state to up.
+
+:arg evt: whether to let the containing event know about this.
+
+"""
         # don't allow an up without a down
         if self._held[component]:
             self._held[component] = False
             # mods don't have events
-            if not self.is_mod:
+            if evt and not self.is_mod:
                 for evt in self.evts:
                     if component in self.used_components[evt]:
                         evt.up(self, component)
                 return True
         return False
+
+    def set_held (self, held, down_evt = False, component = 0):
+        """Set the held state of the button on the given component.
+
+:arg down_evt: whether to trigger a button down event if the button is found to
+               be held and it was not already set as held.
+
+"""
+        if held != self._held[0]:
+            if held and down_evt:
+                self.down()
+            else:
+                self._held[0] = bool(held)
 
     def handle (self, pgevt, mods_match):
         """:meth:`Input.handle`.
@@ -410,6 +445,10 @@ The ``button`` argument is required, and is the key code.
 
     _mod_btn_name = _btn_name
 
+    def normalise (self, down_evt):
+        """:meth:`Input.normalise`."""
+        ButtonInput.set_held(self, pg.key.get_pressed()[self.button], down_evt)
+
 
 class _SneakyMultiKbdKey (KbdKey):
     # KbdKey wrapper to handle multiple keys, for use as a modifier (held if
@@ -419,6 +458,7 @@ class _SneakyMultiKbdKey (KbdKey):
         KbdKey.__init__(self, buttons[0])
         self.filter(self.button_attr, *buttons[1:])
         self.button = button
+        self._keys = buttons
         # track each key's held state
         self._held_multi = dict.fromkeys(buttons, False)
 
@@ -430,10 +470,20 @@ class _SneakyMultiKbdKey (KbdKey):
 
     _mod_btn_name = _btn_name
 
+    def _update_held (self):
+        self._held[0] = any(self._held_multi.itervalues())
+
     def handle (self, pgevt, mods_match):
         self._held_multi[pgevt.key] = pgevt.type in self.down_pgevts
-        self._held[0] = any(self._held_multi.itervalues())
+        self._update_held()
         return False
+
+    def normalise (self, down_evt):
+        """:meth:`Input.normalise`."""
+        held = pg.key.get_pressed()
+        for k in self._keys:
+            self._held_multi[k] = held[k]
+        self._update_held()
 
 
 class MouseButton (ButtonInput):
@@ -457,6 +507,14 @@ The ``button`` argument is required, and is the mouse button ID.
 
     def _mod_btn_name (self):
         return 'mouse button {0}'.format(self.button)
+
+    def normalise (self, down_evt):
+        """:meth:`Input.normalise`."""
+        held = pg.mouse.get_pressed()
+        if self.button >= len(held):
+            print >> sys.stderr, 'warning: cannot determine held state of ' \
+                                 '{0}'.format(self)
+        ButtonInput.set_held(self, held[self.button], down_evt)
 
 
 class PadButton (ButtonInput):
@@ -491,6 +549,22 @@ PadButton(device_id, button, *mods)
 
     def _mod_btn_name (self):
         return 'pad {0} button {1}'.format(self._str_dev_id(), self.button)
+
+    def normalise (self, down_evt):
+        """:meth:`Input.normalise`."""
+        if self._device_id in (None, True):
+            print >> sys.stderr, 'warning: cannot determine held state of ' \
+                                 '{0} (no device set)'.format(self)
+            return
+        j = pg.joystick.Joystick(self._device_id)
+        try:
+            held = j.get_button(self.button)
+        except pg.error:
+            print >> sys.stderr, 'warning: cannot determine held state of ' \
+                                 '{0} (gamepad not initialised or no such ' \
+                                 'button)'.format(self)
+        else:
+            ButtonInput.set_held(self, held, down_evt)
 
 
 class AxisInput (ButtonInput):
@@ -573,13 +647,14 @@ Above this value, the mapped value increases linearly from ``0``.
             raise ValueError('require 0 <= deadzone < 1')
         self._deadzone = dz
 
-    def axis_motion (self, mods_match, axis, apos):
+    def axis_motion (self, mods_match, axis, apos, btn_evts = True):
         """Signal a change in axis position.
 
 :arg mods_match: as taken by :meth:`handle`.
 :arg axis: the index of the axis to modify (a 2-component :class:`AxisInput`
            has one axis, with index ``0``).
 :arg apos: the new axis position (``-1 <= apos <= 1``).
+:arg btn_evts: whether to trigger button events (if possible).
 
 """
         # get magnitude in each direction
@@ -604,11 +679,11 @@ Above this value, the mapped value increases linearly from ``0``.
                 # held if move down
                 for i, old, new in l:
                     if self._held[i] and old > up and new <= up:
-                        self.up(i)
+                        self.up(i, btn_evts)
                 if mods_match:
                     for i, old, new in l:
                         if old < down and new >= down:
-                            self.down(i)
+                            self.down(i, btn_evts)
             for i, j in enumerate(xrange(imn, imx)):
                 old_pos[j] = pos[i]
             return True
@@ -637,6 +712,22 @@ number).  Otherwise, this method does nothing.
             for i, apos in enumerate(apos):
                 rtn |= self.axis_motion(mods_match, i, apos)
         return rtn
+
+    def normalise_val (self, pos, down_evt):
+        """Like :meth:`Input.normalise`, but takes a value.
+
+:arg pos: a sequence of new positions for each axis.
+:arg down_evt: whether to trigger a button down event if this axis is acting as
+               a button, and the button is found to be held and it was not
+               already set as held.
+
+"""
+        if not self.provides['button']:
+            raise TypeError('{0} does not provide a button interface'
+                            .format(self))
+        for axis, apos in enumerate(pos):
+            self.pos[2 * axis] = self.pos[2 * axis + 1] = 0
+            self.axis_motion(True, axis, apos, down_evt)
 
 
 class PadAxis (AxisInput):
@@ -673,6 +764,22 @@ PadAxis(device_id, axis[, thresholds], *mods)
     def __str__ (self):
         return self._str('{0}, {1}'.format(self._str_dev_id(), self.axis))
 
+    def normalise (self, down_evt):
+        """:meth:`Input.normalise`."""
+        if self._device_id in (None, True):
+            print >> sys.stderr, 'warning: cannot determine held state of ' \
+                                 '{0} (no device set)'.format(self)
+            return
+        j = pg.joystick.Joystick(self.device_id)
+        try:
+            apos = j.get_axis(self.axis)
+        except pg.error:
+            print >> sys.stderr, 'warning: cannot determine held state of ' \
+                                 '{0} (gamepad not initialised or no such ' \
+                                 'axis)'.format(self)
+        else:
+            self.normalise_val([apos], down_evt)
+
 
 class PadHat (AxisInput):
     """:class:`AxisInput` subclass representing a gamepad axis.
@@ -708,6 +815,22 @@ PadHat(device_id, axis[, thresholds], *mods)
 
     def __str__ (self):
         return self._str('{0}, {1}'.format(self._str_dev_id(), self.axis))
+
+    def normalise (self, down_evt):
+        """:meth:`Input.normalise`."""
+        if self._device_id in (None, True):
+            print >> sys.stderr, 'warning: cannot determine held state of ' \
+                                 '{0} (no device set)'.format(self)
+            return
+        j = pg.joystick.Joystick(self.device_id)
+        try:
+            apos = j.get_hat(self.axis)
+        except pg.error:
+            print >> sys.stderr, 'warning: cannot determine held state of ' \
+                                 '{0} (gamepad not initialised or no such ' \
+                                 'hat)'.format(self)
+        else:
+            self.normalise_val([apos], down_evt)
 
 
 class RelAxisInput (AxisInput):
@@ -794,9 +917,18 @@ behaviour in this case is undefined.
 
 Called by the owning :class:`Event <engine.evt.evts.Event>`.
 
+If no components are given, reset in all components.
+
 """
+        if not components:
+            components = xrange(self.components)
         for c in components:
             self.rel[c] = 0
+
+    def normalise (self, down_evt):
+        """:meth:`Input.normalise`."""
+        self.reset()
+        self._held = [False] * self.components
 
 
 class MouseAxis (RelAxisInput):

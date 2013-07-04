@@ -41,7 +41,9 @@ Some notes:
         self._evts_by_domain = {}
         #: A ``set`` of all registered unnamed events.
         self.evts = set()
-        # all inputs registered with events, prefiltered by Input.filters
+        # all inputs registered with events
+        self._inputs = set()
+        # inputs prefiltered by Input.filters
         self._filtered_inputs = ('type', {inputs.UNFILTERABLE: set()})
         # all registered modifiers
         self._mods = {}
@@ -253,6 +255,7 @@ Raises ``KeyError`` if any arguments are missing.
                             if not added:
                                 added = True
                                 self._add_inputs(m)
+            self._inputs.add(i)
             self._prefilter(self._filtered_inputs, i.filters, i)
 
     def _rm_inputs (self, *inps):
@@ -276,6 +279,7 @@ Raises ``KeyError`` if any arguments are missing.
                                 del d1[i._device_id]
                                 if not d1:
                                     del mods[m.device]
+            self._inputs.remove(i)
             self._unprefilter(self._filtered_inputs, i.filters, i)
 
     def update (self):
@@ -470,6 +474,21 @@ much time has passed, without sending a
         # grabs next 'on'-type event from given devices/types and passes it to cb
         # types are device name or (device, type_name)
         pass
+
+    def normalise_buttons (self, down_evt = False):
+        """Determine and set held states of all buttons.
+
+:arg down_evt: cause button :data:`DOWN <engine.evt.evts.bmode.DOWN>` events if
+               appropriate.
+
+You should generally call this whenever you start using this event handler,
+either for the first time, or after a period of letting something else handle
+events.
+
+"""
+        for i in self._inputs:
+            if i.provides['button']:
+                i.normalise(down_evt)
 
     def monitor_deadzones (self, *deadzones):
         """Not implemented."""

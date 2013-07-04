@@ -194,8 +194,8 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
         for i in inps:
             i, evt_components, input_components = parse_input(i)
             if not self.input_valid(i):
-                raise TypeError('input passed to {0} is invalid'
-                                .format(type(self).__name__))
+                raise TypeError('input {0} passed to {1} is invalid'
+                                .format(i, type(self).__name__))
             # add if not already added
             if self not in i.evts:
                 self_add(i, (evt_components, input_components))
