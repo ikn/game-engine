@@ -414,7 +414,7 @@ if either repeat rate is greater than the current framerate.
             self._upevts += 1
             # stop repeating if let go of all buttons at any point
             if (self.modes & bmode.REPEAT and
-                not any(i.held[0] for i in self.inputs)):
+                not any(i.held(self)[0] for i in self.inputs)):
                 self._repeating = False
 
     def gen_cb_args (self, changed):

@@ -16,8 +16,8 @@ EventHandler(scheduler)
 :arg scheduler: :class:`sched.Scheduler <engine.sched.Scheduler>` instance to
                 use for determining the current framerate.
 
-Call :meth:`update` every frame to process and progagate Pygame events and call
-callbacks.
+You probably want to call :meth:`normalise_buttons`, then call :meth:`update`
+every frame to process and progagate Pygame events and call callbacks.
 
 Some notes:
 
@@ -240,6 +240,9 @@ Raises ``KeyError`` if any arguments are missing.
     def _add_inputs (self, *inps):
         mods = self._mods
         for i in inps:
+            if i in self._inputs:
+                # already added (might happen if events share an input)
+                continue
             if isinstance(i, inputs.ButtonInput):
                 # add mods, sorted by device and device ID
                 for m in i.mods:
@@ -261,6 +264,9 @@ Raises ``KeyError`` if any arguments are missing.
     def _rm_inputs (self, *inps):
         mods = self._mods
         for i in inps:
+            if i not in self._inputs:
+                # already removed (might happen if events share an input)
+                continue
             if isinstance(i, inputs.ButtonInput):
                 for m in i.mods:
                     rmd = False
