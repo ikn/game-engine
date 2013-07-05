@@ -4,7 +4,6 @@
 
 TODO:
     [ESSENTIAL]
- - eh.assign_devices
  - eh.grab (and maybe have grab toggle for getting all input for a while)
  - eh.set_deadzones (can set by device var; can pass a default for other devices/ids)
  - auto joy(/other?) initialisation

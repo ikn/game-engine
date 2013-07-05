@@ -8,7 +8,7 @@ from .evts import BaseEvent, Event
 from . import conffile
 
 
-class EventHandler (dict):
+class EventHandler (object):
     """Handles events.
 
 EventHandler(scheduler)
@@ -22,8 +22,8 @@ every frame to process and progagate Pygame events and call callbacks.
 Some notes:
 
  - An event may be placed in a 'domain', which is represented by a string name.
- - Events are named or unnamed, and an :class:`EventHandler` is a ``dict`` of
-   named events.
+ - Events are named or unnamed, and an :class:`EventHandler` acts like a
+   ``dict`` of named events (only supports setting and getting items).
  - The ``'domain'`` name is reserved.
  - The ``__contains__`` method (``event in event_handler``) works for
    :class:`BaseEvent <engine.evt.evts.BaseEvent>` instances as well as names.
@@ -41,6 +41,8 @@ Some notes:
         self._evts_by_domain = {}
         #: A ``set`` of all registered unnamed events.
         self.evts = set()
+        # {name: event} for named events; wrapped by this class like a dict
+        self._named_evts = {}
         # all inputs registered with events
         self._inputs = set()
         # inputs prefiltered by Input.filters
@@ -56,8 +58,11 @@ Some notes:
         return '<EventHandler object at {0}>'.format(hex(id(self)))
 
     def __contains__ (self, item):
-        return (dict.__contains__(self, item) or item in self.itervalues() or
-                item in self.evts)
+        return (item in self._named_evts or item in self.evts or
+                item in self._named_evts.itervalues())
+
+    def __getitem__ (self, item):
+        return self._named_evts[item]
 
     def __setitem__ (self, item, val):
         self.add(**{item: val})
@@ -85,6 +90,7 @@ Pygame events and has the functions as callbacks.
         # NOTE: can call with existing event to change domain
         new_unnamed = []
         unnamed = self.evts
+        all_named = self._named_evts
         by_domain = self._evts_by_domain
         # extract domain from keyword args
         if 'domain' in named_evts:
@@ -127,12 +133,12 @@ Pygame events and has the functions as callbacks.
                             if prev_name is None:
                                 unnamed.remove(evt)
                             else:
-                                dict.__delitem__(self, prev_name)
+                                del all_named[prev_name]
                             evt._regname = name
                             if name is None:
                                 unnamed.add(evt)
                             else:
-                                dict.__setitem__(self, name, evt)
+                                all_named[name] = evt
                     else:
                         # owned by another handler
                         raise RuntimeError('an event should not be added to '
@@ -148,7 +154,7 @@ Pygame events and has the functions as callbacks.
                         unnamed.add(evt)
                         new_unnamed.append(evt)
                     else:
-                        dict.__setitem__(self, name, evt)
+                        all_named[name] = evt
                     self._add_inputs(*evt.inputs)
         return new_unnamed
 
@@ -159,13 +165,14 @@ Raises ``KeyError`` if any arguments are missing.
 
 """
         unnamed = self.evts
+        named = self._named_evts
         by_domain = self._evts_by_domain
         active = self.active_domains
         inactive = self.inactive_domains
         for evt in evts:
             if isinstance(evt, basestring):
                 # got name
-                evt = self[evt] # raises KeyError
+                evt = named[evt] # raises KeyError
             if evt.eh is self:
                 evt.eh = None
                 domain = evt._domain
@@ -180,7 +187,7 @@ Raises ``KeyError`` if any arguments are missing.
                 if evt._regname is None:
                     unnamed.remove(evt)
                 else:
-                    dict.__delitem__(self, evt._regname)
+                    del named[evt._regname]
                 evt._regname = None
                 self._rm_inputs(*evt.inputs)
             else:
@@ -470,10 +477,20 @@ much time has passed, without sending a
                 inactive.remove(domain)
                 active.add(domain)
 
-    def assign_devices (**devices):
-        """Not implemented."""
-        # takes {varname: device_ids}, device_ids False for none, True for all, id or list of ids
-        pass
+    def assign_devices (self, **devices):
+        """Assign device IDs to inputs by device variable.
+
+:arg devices: keyword-arguments with the argument name the variable and the
+              value the new device ID for each input with this device variable.
+
+See :attr:`Input.device_var <engine.evt.inputs.Input.device_var>` and
+:attr:`Input.device_id <engine.evt.inputs.Input.device_id>` for details
+(including possible device ID values).
+
+"""
+        for i in self._inputs:
+            if i.device_var is not None and i.device_var in devices:
+                i.device_id = devices[i.device_var]
 
     def grab (self, cb, *types):
         """Not implemented."""

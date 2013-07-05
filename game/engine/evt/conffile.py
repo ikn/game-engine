@@ -62,7 +62,9 @@ where:
 - ``device ID`` determines which device to listen for input from, and defaults
   to ``True`` (see
   :attr:`Input.device_id <engine.evt.inputs.Input.device_id>`).  This is only
-  allowed for inputs with ``device`` ``'pad'``.
+  allowed for inputs with ``device`` ``'pad'``.  This may also be a device
+  variable (:attr:`Input.device_var <engine.evt.inputs.Input.device_var>`) in
+  ``<>``, eg. ``'<x>'`` for variable ``'x'``.
 - ``type`` is the ``name`` attribute of the input class, found in
   :data:`inputs_by_name`.  It may be omitted if the given ``device`` has only
   one possible ``type``.
