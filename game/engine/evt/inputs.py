@@ -95,6 +95,10 @@ types may be equal).
     def __eq__ (self, other):
         return isinstance(other, Input) and other.filters == self.filters
 
+    def __hash__ (self):
+        # required in Python 3 since have __eq__
+        return id(self)
+
     def handle (self, pgevt):
         """Called by :class:`EventHandler <engine.evt.handler.EventHandler>`
 with a ``pygame.event.Event``.
