@@ -13,6 +13,7 @@ TODO:
         - in first loop, for each graphic, offset _rect by -offset
         - when using, offset old graphic dirty rects by -last_offset, current by -offset
         - after drawing, for each graphic, offset _rect by offset
+ - do something with/like dispman
 
 ---NODOC---
 

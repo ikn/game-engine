@@ -3,6 +3,9 @@
 ---NODOC---
 
 TODO:
+ - GraphicView to wrap any Graphic with a different position
+    - so can use a graphic for multiple entities
+    - pass __getattr__, __setattr__ on to graphic, but _postrot_rect exists in outer class (the view)
  - update .opaque on transform
  - in graphics, store n (5?) last # frames between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
