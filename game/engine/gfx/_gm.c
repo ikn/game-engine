@@ -169,7 +169,7 @@ PyObject* mk_disjoint (PyObject* add, PyObject* rm) {
 PyObject* fastdraw (PyObject* self, PyObject* args) {
     // don't do much error checking because the point of this is performance
     // and we own the class calling this; guaranteed to get
-    // [obj], pygame.Surface, {obj: set(BaseGraphic)}, [pygame.Rect]
+    // [obj], pygame.Surface, {obj: set(Graphic)}, [pygame.Rect]
     // and layers is sorted
     PyObject* layers_in, * sfc, * graphics_in, * dirty;
     PyObject** layers, *** graphics, ** gs, * g, * g_dirty, * g_rect, * r_o,

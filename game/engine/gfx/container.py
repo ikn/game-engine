@@ -8,7 +8,7 @@ TODO:
  - ignore off-screen things
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
-    - supports parallax: set to {layer: ratio} or (function(layer) -> ratio)
+    - supports parallax: set to {layer: ratio} or (function(layer) -> ratio) or set a Graphic property (make GraphicView have its own copy)
     - implementation:
         - in first loop, for each graphic, offset _rect by -offset
         - when using, offset old graphic dirty rects by -last_offset, current by -offset
@@ -29,26 +29,26 @@ try:
 except ImportError:
     print >> sys.stderr, 'error: couldn\'t import _gm; did you remember to `make\'?'
     sys.exit(1)
-from .graphic import Graphic, BaseGraphic
+from .graphic import Graphic
 
 
 class GraphicsGroup (list):
     """Convenience wrapper for grouping a number of graphics in a simple way.
 
-Takes any number of :class:`Graphic <engine.gfx.graphic.BaseGraphic>` instances
-or lists of arguments to pass to :class:`Graphic <engine.gfx.graphic.Graphic>`
-to create one.  This is a ``list`` subclass, containing graphics, so add and
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` instances or
+lists of arguments to pass to :class:`Graphic <engine.gfx.graphic.Graphic>` to
+create one.  This is a ``list`` subclass, containing graphics, so add and
 remove graphics using list methods.
 
 Has ``scale_fn``, ``manager``, ``layer``, ``blit_flags`` and ``visible``
-properties as for :class:`Graphic <engine.gfx.graphic.BaseGraphic>`.  These
-give a list of values for each contained graphic; set them to a single value to
-apply to all contained graphics.
+properties as for :class:`Graphic <engine.gfx.graphic.Graphic>`.  These give a
+list of values for each contained graphic; set them to a single value to apply
+to all contained graphics.
 
 """
 
     def __init__ (self, *graphics):
-        list.__init__(self, (g if isinstance(g, BaseGraphic) else Graphic(*g)
+        list.__init__(self, (g if isinstance(g, Graphic) else Graphic(*g)
                              for g in graphics))
 
     def __getattr__ (self, attr):
@@ -101,7 +101,7 @@ Since this is a :class:`Graphic <engine.gfx.graphic.Graphic>` subclass, it can
 be added to other :class:`GraphicsManager` instances and supports
 transformations.  None of this can be done until the manager has a surface,
 however, and transformations are only applied in
-:attr:`BaseGraphic.surface <engine.gfx.graphic.BaseGraphic.surface>`, not in
+:attr:`Graphic.surface <engine.gfx.graphic.Graphic.surface>`, not in
 :attr:`orig_sfc`.
 
 """
@@ -125,8 +125,7 @@ however, and transformations are only applied in
 
     @property
     def orig_sfc (self):
-        """Like
-:attr:`BaseGraphic.orig_sfc <engine.gfx.graphic.BaseGraphic.orig_sfc>`.
+        """Like :attr:`Graphic.orig_sfc <engine.gfx.graphic.Graphic.orig_sfc>`.
 
 This is the ``sfc`` argument passed to the constructor.  Retrieving this causes
 all graphics to be drawn/updated first.
@@ -156,8 +155,8 @@ all graphics to be drawn/updated first.
 
     @property
     def overlay (self):
-        """A :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>` which is
-always drawn on top, or ``None``.
+        """A :class:`Graphic <engine.gfx.graphic.Graphic>` which is always
+drawn on top, or ``None``.
 
 There may only ever be one overlay; changing this attribute removes any
 previous overlay from the :class:`GraphicsManager`.
@@ -183,7 +182,7 @@ previous overlay from the :class:`GraphicsManager`.
     def add (self, *graphics):
         """Add graphics.
 
-Takes any number of :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>` or
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
 :class:`GraphicsGroup` instances.
 
 """
@@ -191,7 +190,7 @@ Takes any number of :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>` or
         ls = set(self.layers)
         graphics = list(graphics)
         for g in graphics:
-            if isinstance(g, BaseGraphic):
+            if isinstance(g, Graphic):
                 # add to graphics
                 l = g.layer
                 if l is None and g is not self._overlay:
@@ -211,7 +210,7 @@ Takes any number of :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>` or
     def rm (self, *graphics):
         """Remove graphics.
 
-Takes any number of :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>` or
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
 :class:`GraphicsGroup` instances.
 
 """
@@ -219,7 +218,7 @@ Takes any number of :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>` or
         ls = set(self.layers)
         graphics = list(graphics)
         for g in graphics:
-            if isinstance(g, BaseGraphic):
+            if isinstance(g, Graphic):
                 l = g.layer
                 if l in ls:
                     all_gs = all_graphics[l]
@@ -269,7 +268,7 @@ the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
             self.overlay = None
 
     def dirty (self, *rects):
-        """:meth:`BaseGraphic.dirty <engine.gfx.graphic.BaseGraphic.dirty>`"""
+        """:meth:`Graphic.dirty <engine.gfx.graphic.Graphic.dirty>`"""
         if self._surface is None:
             # nothing to mark as dirty
             return
@@ -282,7 +281,7 @@ the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
 
 :arg handle_dirty: whether to propagate changed areas to the transformation
                    pipeline implemented by
-                   :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>`.  Pass
+                   :class:`Graphic <engine.gfx.graphic.Graphic>`.  Pass
                    ``False`` if you don't intend to use this manager as a
                    graphic.
 
@@ -311,7 +310,6 @@ changed parts of the surface, or ``False`` if nothing changed.
         return dirty
 
     def render (self):
-        """
-:meth:`BaseGraphic.render <engine.gfx.graphic.BaseGraphic.render>`"""
+        """:meth:`Graphic.render <engine.gfx.graphic.Graphic.render>`"""
         self.draw()
         Graphic.render(self)

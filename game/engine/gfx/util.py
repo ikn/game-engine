@@ -4,7 +4,7 @@ import pygame as pg
 from pygame import Rect
 
 from ..util import align_rect
-from .graphic import BaseGraphic
+from .graphic import Graphic
 
 
 class Grid (object):
@@ -141,11 +141,10 @@ align(self, graphic, col, row, alignment = 0, pad = 0, offset = 0)
 ``alignment``, ``pad`` and ``offset`` are as taken by
 :func:`engine.util.align_rect`.
 
-:arg graphic: a :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>` instance
-              or a Pygame surface.  In the former case, the
-              :meth:`BaseGraphic.align <engine.gfx.graphic.BaseGraphic.align>`
-              method is called (but the graphic is not cropped to fit in the
-              tile).
+:arg graphic: a :class:`Graphic <engine.gfx.graphic.Graphic>` instance or a
+              Pygame surface.  In the former case, the
+              :meth:`Graphic.align <engine.gfx.graphic.Graphic.align>` method
+              is called (but the graphic is not cropped to fit in the tile).
 :arg col: column of the tile.
 :arg row: row of the tile.
 
@@ -153,13 +152,13 @@ align(self, graphic, col, row, alignment = 0, pad = 0, offset = 0)
          should be put in, relative to the grid's top-left corner.
 
 """
-        if isinstance(graphic, BaseGraphic):
+        if isinstance(graphic, Graphic):
             rect = graphic.rect
         else:
             rect = graphic.get_rect()
         pos = align_rect(rect, self.tile_rect(col, row), alignment, pad,
                          offset)
-        if isinstance(graphic, BaseGraphic):
+        if isinstance(graphic, Graphic):
             graphic.pos = pos
         return Rect(pos, rect.size)
 

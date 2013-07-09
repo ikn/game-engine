@@ -117,8 +117,8 @@ Converting the tile surfaces is necessary if the loaded image has transparency
 For positioning the tiles easily, I'll create a
 :class:`Grid <engine.gfx.util.Grid>`.  You can set the position of a graphic
 using a number of attributes and methods; here, I use
-:attr:`BaseGraphic.pos <engine.gfx.graphic.BaseGraphic.pos>`.  Again, the rest
-of this code should contain nothing unfamiliar:
+:attr:`Graphic.pos <engine.gfx.graphic.Graphic.pos>`.  Again, the rest of this
+code should contain nothing unfamiliar:
 
 .. code-block:: python
    :linenos:
