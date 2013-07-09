@@ -73,6 +73,9 @@ World(scheduler, evthandler)
         #: :class:`gfx.GraphicsManager <engine.gfx.container.GraphicsManager>`
         #: instance used for drawing by default.
         self.graphics = gfx.GraphicsManager(scheduler)
+        #: ``set`` of :class:`Entity <engine.entity.Entity>` instances in this
+        #: world.
+        self.entities = set()
         self._extra_args = args
         self._initialised = False
 
@@ -105,12 +108,42 @@ This receives the extra arguments passed in constructing the world through the
         """Called whenever this becomes the active world."""
         pass
 
-    def pause (self):
-        """Called to pause the game when the window loses focus."""
-        pass
+    def add (self, *entities):
+        """Add any number of :class:`Entity <engine.entity.Entity> instances to
+the world.
+
+An entity may be in only one world at a time.  If a given entity is already in
+another world, it is removed from that world.
+
+"""
+        all_entities = self.entities
+        for e in entities:
+            all_entities.add(e)
+            if e.world is not None:
+                e.world.rm(e)
+            elif e.gm is not None:
+                # has no world, so gm was explicitly set, so don't change it
+                continue
+            e.gm = self.graphics
+
+    def rm (self, *entities):
+        """Remove any number of entities from the world.
+
+Raises ``KeyError`` for missing entities.
+
+"""
+        all_entities = self.entities
+        for e in entities:
+            all_entities.remove(e)
+            # unset gm even if it's not this world's main manager
+            e.gm = None
 
     def update (self):
         """Called every frame to makes any necessary changes."""
+        pass
+
+    def pause (self):
+        """Called to pause the game when the window loses focus."""
         pass
 
     def draw (self):

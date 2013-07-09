@@ -1,5 +1,9 @@
 """World entities: multi-graphic positioning."""
 
+# TODO:
+# - .graphics a GraphicsGroup, so user adds graphics directly to that, it handles relative positions, can set layer for all, etc.
+#   - in fact, all of the entity implementation as it stands (except .world) should be the new GraphicsGroup
+
 from .gfx.graphic import GraphicView
 from .util import ir
 
@@ -18,11 +22,15 @@ Currently, an entity is just a container of graphics.
 
     def __init__ (self, x=0, y=0):
         self._pos = [x, y]
+        #: The :class:`World <engine.game.World>` this entity is in.  This is
+        #: set by the world when the entity is added or removed.
+        self.world = None
         #: ``{graphic: rel}``, where ``graphic`` is a
         #: :class:`GraphicView <engine.gfx.graphic.GraphicView>` instance and
         #: ``rel`` is the graphic's ``(x, y)`` position relative to this
         #: entity.
         self.graphics = {}
+        self._gm = None
 
     @property
     def x (self):
@@ -30,7 +38,7 @@ Currently, an entity is just a container of graphics.
         return self._pos[0]
 
     @x.setter
-    def x (self):
+    def x (self, x):
         self.pos = (x, self._pos[1])
 
     @property
@@ -39,7 +47,7 @@ Currently, an entity is just a container of graphics.
         return self._pos[1]
 
     @x.setter
-    def y (self):
+    def y (self, y):
         self.pos = (self._pos[0], y)
 
     @property
@@ -80,11 +88,16 @@ relative position is changed.
 
 """
         if graphic not in self.graphics:
+            # new graphic: create wrapper and add to graphics manager
             if isinstance(graphic, GraphicView):
                 graphic = graphic.graphic
             graphic = GraphicView(graphic)
-        # else already in graphics, so change rel
-        self.graphics[graphic] = (ir(dx), ir(dy))
+            if self._gm is not None:
+                self._gm.add(graphic)
+        # else already in graphics, in which case we still want to change its
+        # relative position
+        self.graphics[graphic] = rel = (ir(dx), ir(dy))
+        graphic.pos = (ir(self._pos[0]) + rel[0], ir(self._pos[1]) + rel[1])
         return graphic
 
     def rm (self, *graphics):
@@ -93,5 +106,24 @@ relative position is changed.
 Raises ``KeyError`` for missing graphics.
 
 """
+        gm = self._gm
         for g in graphics:
             del self.graphics[g]
+            if gm is not None:
+                gm.rm(g)
+
+    @property
+    def gm (self):
+        """The :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`
+to put graphics in."""
+        return self._gm
+
+    @gm.setter
+    def gm (self, gm):
+        if gm is self._gm:
+            return
+        if self._gm is not None:
+            self._gm.rm(*self.graphics)
+        if gm is not None:
+            gm.add(*self.graphics)
+        self._gm = gm
