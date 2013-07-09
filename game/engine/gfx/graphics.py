@@ -19,7 +19,7 @@ from pygame import Rect
 
 from ..conf import conf
 from ..util import normalise_colour, align_rect, blank_sfc
-from .graphic import Graphic
+from .graphic import BaseGraphic, Graphic
 from .util import Grid
 
 
@@ -139,10 +139,10 @@ Tilemap(grid, tile_data, tile_types, pos = (0, 0), layer = 0[, translate_type], 
           may not contain whitespace);
         - ``(filename, col_delim, row_delim)`` for a custom-delimited string in
           a file;
-        - a :class:`Graphic <engine.gfx.graphic.Graphic>`, Pygame surface or
-          filename (may not contain whitespace) to load an image from, and use
-          the ``(r, g, b[, a])`` colour tuples of the pixels in the surface as
-          IDs;
+        - a :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>`, Pygame
+          surface or filename (may not contain whitespace) to load an image
+          from, and use the ``(r, g, b[, a])`` colour tuples of the pixels in
+          the surface as IDs;
         - if ``grid`` is a :class:`util.Grid <engine.gfx.util.Grid>`: a
           function that takes ``col`` and ``row`` arguments as column and row
           indices in the grid, and returns the corresponding tile type ID; or
@@ -159,8 +159,8 @@ Tilemap(grid, tile_data, tile_types, pos = (0, 0), layer = 0[, translate_type], 
         - ``None`` for an an empty (transparent) tile;
         - a colour (as taken by :func:`engine.util.normalise_colour`) to fill
           with;
-        - a :class:`Graphic <engine.gfx.graphic.Graphic>` or Pygame surface to
-          copy aligned to the centre of the tile, clipped to fit; or
+        - a :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>` or Pygame
+          surface to copy aligned to the centre of the tile, clipped to fit; or
         - ``(graphic[, alignment][, rect])`` with ``alignment`` or ``rect`` in
           any order or omitted, and ``graphic`` as in the above form.
           ``alignment`` is as taken by :func:`engine.util.align_rect`, and
@@ -222,7 +222,7 @@ each tile type never changes.
             else:
                 # string/text file
                 tile_data = (tile_data, None, None)
-        if isinstance(tile_data, Graphic):
+        if isinstance(tile_data, BaseGraphic):
             tile_data = tile_data.surface
         if isinstance(tile_data, pg.Surface):
             tile_data = [[tuple(c) for c in col]
@@ -277,11 +277,11 @@ each tile type never changes.
             g = self._type_to_graphic(tile_type_id)
         dest = self._orig_sfc
         tile_rect = self.grid.tile_rect(col, row)
-        if isinstance(g, (Graphic, pg.Surface)):
+        if isinstance(g, (BaseGraphic, pg.Surface)):
             g = (g,)
-        if isinstance(g[0], (Graphic, pg.Surface)):
+        if isinstance(g[0], (BaseGraphic, pg.Surface)):
             sfc = g[0]
-            if isinstance(sfc, Graphic):
+            if isinstance(sfc, BaseGraphic):
                 sfc = sfc.surface
             if len(g) == 1:
                 alignment = rect = None

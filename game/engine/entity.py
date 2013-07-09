@@ -67,8 +67,7 @@ Currently, an entity is just a container of graphics.
 
 add(graphic, x=0, y=0) -> graphic_view
 
-:arg graphic: :class:`Graphic <engine.gfx.graphic.Graphic>` or
-              :class:`GraphicView <engine.gfx.graphic.GraphicView>` to add.
+:arg graphic: :class:`BaseGraphic <engine.gfx.graphic.BaseGraphic>` to add.
 :arg dx: ``x`` co-ordinate relative to the entity.
 :arg dy: ``y`` co-ordinate relative to the entity.
 

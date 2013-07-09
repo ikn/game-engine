@@ -39,6 +39,37 @@ transformation.
 :meth:`resize`, :meth:`crop`, :meth:`flip`, :meth:`fade` and :meth:`rotate`
 correspond to builtin transforms (see :meth:`transform`).
 
+.. attribute:: fn
+
+   Filename of the loaded image, or ``None`` if a surface was given.
+
+.. attribute:: last_rect
+
+   :attr:`rect` at the time of the last draw.
+
+.. attribute:: transforms
+
+   A list of transformations applied to the graphic.  Always contains the
+   builtin transforms as strings (though they do nothing by default); other
+   transforms are added through :meth:`transform`, and are functions.
+
+.. attribute:: opaque
+
+   Whether the graphic is completely opaque; do not change.
+
+.. attribute:: blit_flags
+
+   As taken by :class:`Graphic`.
+
+.. attribute:: visible
+
+   Whether currently (supposed to be) visible on-screen.
+
+.. attribute:: was_visible
+
+   Whether this graphic was visible at the time of the last draw; do not
+   change.
+
 """
 
     def __getitem__ (self, i):
@@ -347,7 +378,7 @@ May be ``None``.  This may be changed directly.  (A graphic should only be used 
 
     @property
     def layer (self):
-        """As taken by the constructor."""
+        """As taken by :class:`Graphic`."""
         return self._layer
 
     @layer.setter
@@ -1259,7 +1290,7 @@ Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
 :arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.  If a
           surface, it should be already converted for blitting.
 :arg pos: initial ``(x, y)`` position.  The existence of a default is because
-          you might use :meth:`align` immediately on adding to a
+          you might use :meth:`BaseGraphic.align` immediately on adding to a
           :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`.
 :arg layer: the layer to draw in, lower being closer to the 'front'. This can
             actually be any hashable object except ``None``, as long as all
@@ -1275,23 +1306,16 @@ Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
 
     def __init__ (self, img, pos = (0, 0), layer = 0, blit_flags = 0):
         if isinstance(img, basestring):
-            #: Filename of the loaded image, or ``None`` if a surface was
-            #: given.
             self.fn = img
             img = conf.GAME.img(img)
         else:
             self.fn = None
         self._orig_sfc = self._surface = img
         # postrot is the rect drawn in
-        #: :attr:`BaseGraphic.rect` at the time of the last draw.
         self.last_rect = self._last_postrot_rect = self._rect = \
             self._postrot_rect = Rect(pos, img.get_size())
         self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
         self._must_apply_rot = False
-        #: A list of transformations applied to the graphic.  Always contains
-        #: the builtin transforms as strings (though they do nothing
-        #: by default); other transforms are added through
-        #: :meth:`BaseGraphic.transform`, and are functions.
         self.transforms = list(self._builtin_transforms)
         self._last_transforms = list(self.transforms)
         # {function: (args, previous_surface, resulting_surface, apply_fn,
@@ -1301,16 +1325,11 @@ Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
         # {function: (args, previous_size, resulting_size, apply_fn, undo_fn)}
         # last 4 None for non-builtins
         self._queued_transforms = {}
-        #: Whether the graphic is completely opaque; do not change.
         self.opaque = not has_alpha(img)
         self._manager = None
         self._layer = layer
-        #: As taken by the constructor.
         self._last_blit_flags = self.blit_flags = blit_flags
-        #: Whether currently (supposed to be) visible on-screen.
         self.visible = True
-        #: Whether this graphic was visible at the time of the last draw; do
-        #: not change.
         self.was_visible = False
         self._scale = (1, 1)
         self._cropped_rect = None
@@ -1346,7 +1365,7 @@ affect both instances.
                     '_last_postrot_rect', 'visible', 'was_visible', '_layer')
 
     def __init__ (self, graphic):
-        #: As passed to the constructor.
+        #: As taken by the constructor.
         self.graphic = graphic
         for attr in self._faked_attrs:
             setattr(self, attr, getattr(graphic, attr))
