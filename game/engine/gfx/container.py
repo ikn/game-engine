@@ -29,16 +29,17 @@ try:
 except ImportError:
     print >> sys.stderr, 'error: couldn\'t import _gm; did you remember to `make\'?'
     sys.exit(1)
-from .graphic import Graphic
+from .graphic import Graphic, GraphicView
 
 
 class GraphicsGroup (list):
     """Convenience wrapper for grouping a number of graphics in a simple way.
 
-Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` instances or
-lists of arguments to pass to :class:`Graphic <engine.gfx.graphic.Graphic>` to
-create one.  This is a ``list`` subclass, containing graphics, so add and
-remove graphics using list methods.
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` (or
+:class:`GraphicView <engine.gfx.graphic.GraphicView>`) instances or lists of
+arguments to pass to :class:`Graphic <engine.gfx.graphic.Graphic>` to create
+one.  This is a ``list`` subclass, containing graphics, so add and remove
+graphics using list methods.
 
 Has ``scale_fn``, ``manager``, ``layer``, ``blit_flags`` and ``visible``
 properties as for :class:`Graphic <engine.gfx.graphic.Graphic>`.  These give a
@@ -48,7 +49,8 @@ to all contained graphics.
 """
 
     def __init__ (self, *graphics):
-        list.__init__(self, (g if isinstance(g, Graphic) else Graphic(*g)
+        list.__init__(self, (g if isinstance(g, (Graphic, GraphicView))
+                               else Graphic(*g)
                              for g in graphics))
 
     def __getattr__ (self, attr):
@@ -182,7 +184,8 @@ previous overlay from the :class:`GraphicsManager`.
     def add (self, *graphics):
         """Add graphics.
 
-Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>`,
+:class:`GraphicView <engine.gfx.graphic.GraphicView>` or
 :class:`GraphicsGroup` instances.
 
 """
@@ -190,7 +193,7 @@ Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
         ls = set(self.layers)
         graphics = list(graphics)
         for g in graphics:
-            if isinstance(g, Graphic):
+            if isinstance(g, (Graphic, GraphicView)):
                 # add to graphics
                 l = g.layer
                 if l is None and g is not self._overlay:
@@ -210,7 +213,8 @@ Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
     def rm (self, *graphics):
         """Remove graphics.
 
-Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>`,
+:class:`GraphicView <engine.gfx.graphic.GraphicView>` or
 :class:`GraphicsGroup` instances.
 
 """
@@ -218,7 +222,7 @@ Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
         ls = set(self.layers)
         graphics = list(graphics)
         for g in graphics:
-            if isinstance(g, Graphic):
+            if isinstance(g, (Graphic, GraphicView)):
                 l = g.layer
                 if l in ls:
                     all_gs = all_graphics[l]

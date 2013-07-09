@@ -3,11 +3,8 @@
 ---NODOC---
 
 TODO:
- - GraphicView to wrap any Graphic with a different position
-    - so can use a graphic for multiple entities
-    - pass __getattr__, __setattr__ on to graphic, but _postrot_rect exists in outer class (the view)
  - update .opaque on transform
- - in graphics, store n (5?) last # frames between changes to the surface (by transform or altering the original)
+ - in graphics, store n (5?) last # draws between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
@@ -26,23 +23,8 @@ from ..conf import conf
 from ..util import ir, align_rect, has_alpha, blank_sfc, combine_drawn
 
 
-class Graphic (object):
-    """Something that can be drawn to the screen.
-
-Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
-
-:arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.  If a
-          surface, it should be already converted for blitting.
-:arg pos: initial ``(x, y)`` position.  The existence of a default is because
-          you might use :meth:`align` immediately on adding to a
-          :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`.
-:arg layer: the layer to draw in, lower being closer to the 'front'. This can
-            actually be any hashable object except ``None``, as long as all
-            layers used in the same
-            :class:`GraphicsManager <engine.gfx.container.GraphicsManager>` can
-            be ordered with respect to each other.
-:arg blit_flags: when blitting the surface to the screen, this is passed as the
-                 ``special_flags`` argument.
+class BaseGraphic (object):
+    """Something that can be drawn to the screen (abstract base class).
 
 Many properties of a graphic, such as :attr:`pos` and :attr:`size`, can be
 changed in two main ways: by setting the attribute directly, or by calling the
@@ -58,61 +40,6 @@ transformation.
 correspond to builtin transforms (see :meth:`transform`).
 
 """
-
-    _builtin_transforms = ('crop', 'flip', 'fade', 'resize', 'rotate')
-
-    def __init__ (self, img, pos = (0, 0), layer = 0, blit_flags = 0):
-        if isinstance(img, basestring):
-            #: Filename of the loaded image, or ``None`` if a surface was
-            #: given.
-            self.fn = img
-            img = conf.GAME.img(img)
-        else:
-            self.fn = None
-        self._orig_sfc = self._surface = img
-        # postrot is the rect drawn in
-        self._postrot_rect = self._rect = Rect(pos, img.get_size())
-        self._last_postrot_rect = Rect(self._postrot_rect)
-        #: :attr:`rect` at the time of the last draw.
-        self.last_rect = Rect(self._rect)
-        self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
-        self._must_apply_rot = False
-        #: A list of transformations applied to the graphic.  Always contains
-        #: the builtin transforms as strings (though they do nothing
-        #: by default); other transforms are added through :meth:`transform`,
-        #: and are functions.
-        self.transforms = list(self._builtin_transforms)
-        self._last_transforms = list(self.transforms)
-        # {function: (args, previous_surface, resulting_surface, apply_fn,
-        #             undo_fn)}
-        # last 2 None for non-builtins
-        self._transforms = {}
-        # {function: (args, previous_size, resulting_size, apply_fn, undo_fn)}
-        # last 4 None for non-builtins
-        self._queued_transforms = {}
-        #: Whether the graphic is completely opaque; do not change.
-        self.opaque = not has_alpha(img)
-        self._manager = None
-        self._layer = layer
-        #: As taken by the constructor.
-        self._last_blit_flags = self.blit_flags = blit_flags
-        #: Whether currently (supposed to be) visible on-screen.
-        self.visible = True
-        #: Whether this graphic was visible at the time of the last draw; do
-        #: not change.
-        self.was_visible = False
-        self._scale = (1, 1)
-        self._cropped_rect = None
-        self._flipped = (False, False)
-        self._opacity = 1
-        self._angle = 0
-        self._scale_fn = pg.transform.smoothscale
-        self._rotate_fn = lambda sfc, angle: \
-            pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
-        self._rotate_threshold = 2 * pi / 500
-        self._orig_dirty = False # where original surface is changed
-        # where final surface is changed; gets used (and reset) by manager
-        self._dirty = []
 
     def __getitem__ (self, i):
         if isinstance(i, slice):
@@ -180,6 +107,8 @@ really.  To get the real rect, use :attr:`postrot_rect`.
         # need to set dirty in old and new rects (if changed)
         rect = Rect(rect)
         self._rect = Rect(rect.topleft, self._rect.size)
+        self._postrot_rect = Rect(rect.move(self._rot_offset).topleft,
+                                  self._postrot_rect.size)
         if rect.size != self.last_rect.size:
             self.resize(*rect.size)
 
@@ -431,8 +360,6 @@ May be ``None``.  This may be changed directly.  (A graphic should only be used 
             self._layer = layer
             if m is not None:
                 m.add(self)
-
-    # movement
 
     def move_to (self, x = None, y = None):
         """Move to the given position.
@@ -1273,8 +1200,9 @@ surface.
             self._surface = sfc
             self.opaque = not has_alpha(sfc)
             self._rect = r = Rect(self._rect.topleft, before_rot.get_size())
-            self._postrot_rect = pr = r.move(self._rot_offset)
+            pr = r.move(self._rot_offset)
             pr.size = sfc.get_size()
+            self._postrot_rect = pr
 
     def _pre_draw (self):
         """Called by GraphicsManager before drawing."""
@@ -1283,7 +1211,7 @@ surface.
         if self._rect != self.last_rect:
             dirty = True
             self._postrot_rect = Rect(
-                self._rect.move(self._rot_offset).topleft, 
+                self._rect.move(self._rot_offset).topleft,
                 self._postrot_rect.size
             )
         if self.blit_flags != self._last_blit_flags:
@@ -1321,3 +1249,115 @@ Should never alter any state that is not internal to the graphic.
             blit(sfc, r, r.move(offset), self.blit_flags)
         self._last_postrot_rect = pr
         self.last_rect = self._rect
+
+
+class Graphic (BaseGraphic):
+    """:class:`BaseGraphic` subclass representing an image.
+
+Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
+
+:arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.  If a
+          surface, it should be already converted for blitting.
+:arg pos: initial ``(x, y)`` position.  The existence of a default is because
+          you might use :meth:`align` immediately on adding to a
+          :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`.
+:arg layer: the layer to draw in, lower being closer to the 'front'. This can
+            actually be any hashable object except ``None``, as long as all
+            layers used in the same
+            :class:`GraphicsManager <engine.gfx.container.GraphicsManager>` can
+            be ordered with respect to each other.
+:arg blit_flags: when blitting the surface to the screen, this is passed as the
+                 ``special_flags`` argument.
+
+"""
+
+    _builtin_transforms = ('crop', 'flip', 'fade', 'resize', 'rotate')
+
+    def __init__ (self, img, pos = (0, 0), layer = 0, blit_flags = 0):
+        if isinstance(img, basestring):
+            #: Filename of the loaded image, or ``None`` if a surface was
+            #: given.
+            self.fn = img
+            img = conf.GAME.img(img)
+        else:
+            self.fn = None
+        self._orig_sfc = self._surface = img
+        # postrot is the rect drawn in
+        #: :attr:`BaseGraphic.rect` at the time of the last draw.
+        self.last_rect = self._last_postrot_rect = self._rect = \
+            self._postrot_rect = Rect(pos, img.get_size())
+        self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
+        self._must_apply_rot = False
+        #: A list of transformations applied to the graphic.  Always contains
+        #: the builtin transforms as strings (though they do nothing
+        #: by default); other transforms are added through
+        #: :meth:`BaseGraphic.transform`, and are functions.
+        self.transforms = list(self._builtin_transforms)
+        self._last_transforms = list(self.transforms)
+        # {function: (args, previous_surface, resulting_surface, apply_fn,
+        #             undo_fn)}
+        # last 2 None for non-builtins
+        self._transforms = {}
+        # {function: (args, previous_size, resulting_size, apply_fn, undo_fn)}
+        # last 4 None for non-builtins
+        self._queued_transforms = {}
+        #: Whether the graphic is completely opaque; do not change.
+        self.opaque = not has_alpha(img)
+        self._manager = None
+        self._layer = layer
+        #: As taken by the constructor.
+        self._last_blit_flags = self.blit_flags = blit_flags
+        #: Whether currently (supposed to be) visible on-screen.
+        self.visible = True
+        #: Whether this graphic was visible at the time of the last draw; do
+        #: not change.
+        self.was_visible = False
+        self._scale = (1, 1)
+        self._cropped_rect = None
+        self._flipped = (False, False)
+        self._opacity = 1
+        self._angle = 0
+        self._scale_fn = pg.transform.smoothscale
+        self._rotate_fn = lambda sfc, angle: \
+            pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
+        self._rotate_threshold = 2 * pi / 500
+        self._orig_dirty = False # where original surface is changed
+        # where final surface is changed; gets used (and reset) by manager
+        self._dirty = []
+
+
+class GraphicView (BaseGraphic):
+    """'View' to a :class:`Graphic`.
+
+GraphicView(graphic)
+
+:arg graphic: the :class:`Graphic` to provide a wrapper for.
+
+This is a wrapper around a graphic that allows assigning a different position
+and visibility (:attr:`BaseGraphic.visible`, :attr:`BaseGraphic.layer`) without
+affecting the original graphic (or any other wrappers).
+
+Changes to the image represented by either the wrapper or the original graphic
+affect both instances.
+
+"""
+
+    _faked_attrs = ('_rect', 'last_rect', '_postrot_rect',
+                    '_last_postrot_rect', 'visible', 'was_visible', '_layer')
+
+    def __init__ (self, graphic):
+        #: As passed to the constructor.
+        self.graphic = graphic
+        for attr in self._faked_attrs:
+            setattr(self, attr, getattr(graphic, attr))
+
+    def __getattr__ (self, attr):
+        # existing attributes are returned without a call here
+        return getattr(self.graphic, attr)
+
+    def __setattr__ (self, attr, val):
+        if (attr == 'graphic' or attr in self._faked_attrs or
+            attr in dir(BaseGraphic)):
+            BaseGraphic.__setattr__(self, attr, val)
+        else:
+            setattr(self.graphic, attr, val)
