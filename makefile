@@ -1,6 +1,6 @@
 PYTHON_VERSION := 2
 
-.PHONY: all doc clean distclean
+.PHONY: all doc clean doc-clean distclean
 
 all:
 	echo $(PYTHON_VERSION) > py_ver
@@ -17,10 +17,12 @@ endif
 doc:
 	$(MAKE) -C doc/ html
 
-clean:
+clean: doc-clean
 	./3to2
 	$(RM) -r build/ py_ver bak/
 	find -regex 'game/engine/.*\.so' -delete
+
+doc-clean:
 	$(MAKE) -C doc/ clean
 
 distclean: clean

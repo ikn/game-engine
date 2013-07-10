@@ -409,7 +409,7 @@ May be ``None``.  This may be changed directly.  (A graphic should only be used 
         if self._manager is not None:
             self._manager.rm(self)
         if manager is not None:
-            manager.add(self) # changes value in _manager
+            manager.add(self) # sets ._manager
         else:
             self._manager = None
 
@@ -1337,19 +1337,23 @@ affect both instances.
 """
 
     _faked_attrs = ('_rect', 'last_rect', '_postrot_rect',
-                    '_last_postrot_rect', 'visible', 'was_visible', '_layer')
+                    '_last_postrot_rect', '_manager', 'visible', 'was_visible',
+                    '_layer')
 
     def __init__ (self, graphic):
         #: As taken by the constructor.
         self.graphic = graphic
         for attr in self._faked_attrs:
             setattr(self, attr, getattr(graphic, attr))
+        self._manager = None
 
     def __getattr__ (self, attr):
         # existing attributes are returned without a call here
         return getattr(self.graphic, attr)
 
     def __setattr__ (self, attr, val):
+        # set on this instance if this is an outer attribute or a property,
+        # else set on the contained graphic
         if (attr == 'graphic' or attr in self._faked_attrs or
             hasattr(Graphic, attr)):
             Graphic.__setattr__(self, attr, val)

@@ -121,10 +121,10 @@ another world, it is removed from that world.
             all_entities.add(e)
             if e.world is not None:
                 e.world.rm(e)
-            elif e.gm is not None:
+            elif e.graphics.manager is not None:
                 # has no world, so gm was explicitly set, so don't change it
                 continue
-            e.gm = self.graphics
+            e.graphics.manager = self.graphics
 
     def rm (self, *entities):
         """Remove any number of entities from the world.
@@ -136,7 +136,7 @@ Raises ``KeyError`` for missing entities.
         for e in entities:
             all_entities.remove(e)
             # unset gm even if it's not this world's main manager
-            e.gm = None
+            e.graphics.manager = None
 
     def update (self):
         """Called every frame to makes any necessary changes."""

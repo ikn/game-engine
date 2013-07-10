@@ -61,7 +61,7 @@ setting to its default (initial) value, delete it.
     def __setattr__ (self, k, v):
         # set if private
         if k[0] == '_':
-            self.__dict__[k] = v
+            object.__setattr__(self, k, v)
             return (True, None)
         # ensure type
         t = self._types.get(k)

@@ -4,7 +4,9 @@
 
 TODO:
  - make it possible for GM to have transparent BG (only if orig_sfc has alpha)
- - make GG force same layer/manager/etc., and allow for transforms and movement of the graphics in the same way
+ - GG:
+    - allow for transforms
+    - internal layers
  - ignore off-screen things
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
@@ -23,64 +25,241 @@ import sys
 
 import pygame as pg
 
-from ..util import normalise_colour, blank_sfc, combine_drawn
+from ..util import ir, normalise_colour, blank_sfc, combine_drawn
 try:
     from _gm import fastdraw
 except ImportError:
     print >> sys.stderr, 'error: couldn\'t import _gm; did you remember to `make\'?'
     sys.exit(1)
-from .graphic import Graphic
+from .graphic import Graphic, GraphicView
 
 
-class GraphicsGroup (list):
+class GraphicsGroup (object):
     """Convenience wrapper for grouping a number of graphics in a simple way.
 
-Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` instances or
-lists of arguments to pass to :class:`Graphic <engine.gfx.graphic.Graphic>` to
-create one.  This is a ``list`` subclass, containing graphics, so add and
-remove graphics using list methods.
+GraphicsGroup(x=0, y=0)
 
-Has ``scale_fn``, ``manager``, ``layer``, ``blit_flags`` and ``visible``
-properties as for :class:`Graphic <engine.gfx.graphic.Graphic>`.  These give a
-list of values for each contained graphic; set them to a single value to apply
-to all contained graphics.
+Arguments determine the group's position (:attr:`pos`); unlike for graphics,
+this may be floating-point.
+
+This is a ``{graphic: rel}`` mapping, where ``graphic`` is a
+:class:`GraphicView <engine.gfx.graphic.GraphicView>` instance and ``rel`` is
+the graphic's ``(x, y)`` position relative to this group.  Adding graphics is
+possible with something like ``group[graphic] = rel`` (instead of using
+:meth:`add`).
+
+:attr:`graphic_attrs` contains some properties of this :class:`GraphicsGroup` which correspond to those of :class:`Graphic <engine.gfx.graphic.Graphic>`.
+These can be set to apply to all contained graphics.
 
 """
 
-    def __init__ (self, *graphics):
-        list.__init__(self, (g if isinstance(g, Graphic) else Graphic(*g)
-                             for g in graphics))
+    #: Attributes which are mapped to
+    #: :class:`Graphic <engine.gfx.graphic.Graphic>` attributes.
+    graphic_attrs = ('layer', 'visible', 'blit_flags', 'scale_fn', 'rotate_fn',
+                     'rotate_threshold')
 
-    def __getattr__ (self, attr):
-        if attr in ('scale_fn', 'manager', 'layer', 'blit_flags', 'visible'):
-            return [getattr(g, attr) for g in self]
-        else:
-            return list.__getattr__(self, attr)
+    def __init__ (self, x=0, y=0):
+        self._pos = [x, y]
+        #: {graphic: rel}
+        self._graphics = {}
+        self._manager = None
+
+    def __nonzero__ (self):
+        return bool(self._graphics)
+
+    def __contains__ (self, graphic):
+        return graphic in self._graphics
+
+    def __iter__ (self):
+        return iter(self._graphics)
+
+    def __len__ (self):
+        return len(self._graphics)
+
+    def __getitem__ (self, graphic):
+        return self._graphics[graphic]
+
+    def __setitem__ (self, graphic, rel):
+        self.add(graphic, *rel)
+
+    def __delitem__ (self, graphic):
+        self.rm(graphic)
 
     def __setattr__ (self, attr, val):
-        if attr in ('scale_fn', 'manager', 'layer', 'blit_flags', 'visible'):
+        if attr in self.graphic_attrs:
             for g in self:
                 setattr(g, attr, val)
         else:
-            return list.__setattr__(self, attr, val)
+            object.__setattr__(self, attr, val)
 
-    def opaque_in (self, rect):
-        """Whether the contained graphics are opaque in the given rect.
+    @property
+    def rect (self):
+        """The ``pygame.Rect`` covered by graphics in this group.
 
-Returns ``True`` if any graphic draws opaque pixels in the whole of the given
-rect.
-
-"""
-        return any(g.opaque_in(rect) for g in self)
-
-    def move_by (self, *args, **kwargs):
-        """Move each contained graphic by the given number of pixels.
-
-move_by(dx = 0, dy = 0)
+The top-left of this is not necessarily the same as :attr:`pos`.
 
 """
-        for g in self:
-            g.move_by(*args, **kwargs)
+        graphics = dict.keys()
+        if graphics:
+            if len(graphics) == 1:
+                return graphics[0]._rect
+            else:
+                return graphics[0]._rect.unionall(
+                    [g._rect for g in graphics[1:]]
+                )
+        else:
+            return pygame.Rect(0, 0, 0, 0)
+
+    @property
+    def x (self):
+        """``x`` co-ordinate of the entity's top-left corner."""
+        return self._pos[0]
+
+    @x.setter
+    def x (self, x):
+        self.pos = (x, self._pos[1])
+
+    @property
+    def y (self):
+        """``y`` co-ordinate of the entity's top-left corner."""
+        return self._pos[1]
+
+    @x.setter
+    def y (self, y):
+        self.pos = (self._pos[0], y)
+
+    @property
+    def pos (self):
+        """``[``:attr:`x` ``,`` :attr:`y` ``]``."""
+        return self._pos
+
+    @pos.setter
+    def pos (self, pos):
+        x, y = pos
+        self._pos = [x, y]
+        # move graphics
+        x = ir(x)
+        y = ir(y)
+        for g, (rel_x, rel_y) in self._graphics.iteritems():
+            # rel_{x,y} are ints
+            g.pos = (x + rel_x, y + rel_y)
+
+    @property
+    def w (self):
+        """Width of :attr:`rect`."""
+        return self.rect.width
+
+    @property
+    def h (self):
+        """Height of :attr:`rect`."""
+        return self.rect.height
+
+    @property
+    def size (self):
+        """``(``:attr:`w` ``,`` :attr:`h` ``)``."""
+        return self.rect.size
+
+    def move_by (self, dx=0, dy=0):
+        """Move by the given number of pixels."""
+        self.pos = (self._pos[0] + dx, self._pos[1] + dy)
+
+    def add (self, *graphics):
+        """Add a graphic.
+
+Call either as ``add(graphic, dx=0, dy=0)`` for a single graphic, or pass any
+number of arguments which are ``(graphic, dx=0, dy=0)`` tuples or just
+``graphic``.  In each case:
+
+:arg graphic: :class:`Graphic <engine.gfx.graphic.Graphic>` instance or
+              the ``img`` argument to
+              :class:`Graphic <engine.gfx.graphic.Graphic>` to create one.
+:arg dx: ``x`` co-ordinate relative to the group.
+:arg dy: ``y`` co-ordinate relative to the group.
+
+:return: a list of created
+         :class:`GraphicView <engine.gfx.graphic.GraphicView>` instances that
+         point to the given ``graphic`` arguments.
+
+If any ``graphic`` was previously returned by this function, this call changes
+its relative position (and unspecified ``dx`` and ``dy`` are unchanged, rather
+that set to ``0``).
+
+Note that graphics need not be added to a :class:`GraphicsManager`---set this
+using :attr:`manager`.
+
+"""
+        if len(graphics) >= 2 and isinstance(graphics[1], (int, float)):
+            graphics = (graphics,)
+        rtn = []
+        for graphic in graphics:
+            # parse argument
+            if isinstance(graphic, (Graphic, pg.Surface, basestring)):
+                graphic = [graphic]
+            else:
+                graphic = list(graphic)
+            if len(graphic) < 2:
+                graphic.append(None)
+            if len(graphic) < 3:
+                graphic.append(None)
+            graphic, dx, dy = graphic
+            # determine new position for the graphic
+            got = graphic in self._graphics
+            if got:
+                if dx is None:
+                    dx = self._graphics[graphic][0]
+                if dy is None:
+                    dy = self._graphics[graphic][1]
+            else:
+                if dx is None:
+                    dx = 0
+                if dy is None:
+                    dy = 0
+            rel = (ir(dx), ir(dy))
+            pos = (ir(self._pos[0]) + rel[0], ir(self._pos[1]) + rel[1])
+            # create/wrap graphic
+            if not isinstance(graphic, Graphic):
+                graphic = Graphic(graphic, pos)
+            if not got:
+                # new graphic: create wrapper and add to graphics manager
+                if isinstance(graphic, GraphicView):
+                    graphic = graphic.graphic
+                graphic = GraphicView(graphic)
+                if self._manager is not None:
+                    self._manager.add(graphic)
+            # else already in graphics, in which case we still want to change its
+            # relative position
+            self._graphics[graphic] = rel
+            graphic.pos = pos
+            rtn.append(graphic)
+        return rtn
+
+    def rm (self, *graphics):
+        """Remove a graphic previously added using :meth:`add`.
+
+Raises ``KeyError`` for missing graphics.
+
+"""
+        gm = self._gm
+        for g in graphics:
+            del self._graphics[g]
+            if gm is not None:
+                gm.rm(g)
+
+    @property
+    def manager (self):
+        """The :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`
+to put graphics in."""
+        return self._manager
+
+    @manager.setter
+    def manager (self, manager):
+        if manager is self._manager:
+            return
+        if self._manager is not None:
+            self._manager.rm(*self._graphics)
+        if manager is not None:
+            manager.add(*self._graphics)
+        self._manager = manager
 
 
 class GraphicsManager (Graphic):
@@ -182,60 +361,50 @@ previous overlay from the :class:`GraphicsManager`.
     def add (self, *graphics):
         """Add graphics.
 
-Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
-:class:`GraphicsGroup` instances.
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` instances.
 
 """
         all_gs = self.graphics
         ls = set(self.layers)
-        graphics = list(graphics)
         for g in graphics:
-            if isinstance(g, Graphic):
-                # add to graphics
-                l = g.layer
-                if l is None and g is not self._overlay:
-                    raise ValueError('a graphic\'s layer must not be None')
-                if l in ls:
-                    all_gs[l].add(g)
-                else:
-                    all_gs[l] = set((g,))
-                    ls.add(l)
-                g._manager = self
-                # don't draw over any possible previous location
-                g.was_visible = False
-            else: # GraphicsGroup: add to queue
-                graphics.extend(g.contents)
+            l = g.layer
+            if l is None and g is not self._overlay:
+                raise ValueError('a graphic\'s layer must not be None')
+            if l in ls:
+                all_gs[l].add(g)
+            else:
+                all_gs[l] = set((g,))
+                ls.add(l)
+            g._manager = self
+            # don't draw over any possible previous location
+            g.was_visible = False
         self.layers = sorted(ls)
 
     def rm (self, *graphics):
         """Remove graphics.
 
-Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` or
-:class:`GraphicsGroup` instances.
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` instances.
+Missing graphics are ignored.
 
 """
         all_graphics = self.graphics
         ls = set(self.layers)
-        graphics = list(graphics)
         for g in graphics:
-            if isinstance(g, Graphic):
-                l = g.layer
-                if l in ls:
-                    all_gs = all_graphics[l]
-                    if g in all_gs:
-                        # remove from graphics
-                        all_gs.remove(g)
-                        g._manager = None
-                        # draw over previous location
-                        if g.was_visible:
-                            self.dirty(g._last_postrot_rect)
-                        # remove layer
-                        if not all_gs:
-                            del all_graphics[l]
-                            ls.remove(l)
-                # else not added: fail silently
-            else: # GraphicsGroup
-                graphics.extend(g.contents)
+            l = g.layer
+            if l in ls:
+                all_gs = all_graphics[l]
+                if g in all_gs:
+                    # remove from graphics
+                    all_gs.remove(g)
+                    g._manager = None
+                    # draw over previous location
+                    if g.was_visible:
+                        self.dirty(g._last_postrot_rect)
+                    # remove layer
+                    if not all_gs:
+                        del all_graphics[l]
+                        ls.remove(l)
+            # else not added: fail silently
         self.layers = sorted(ls)
 
     def fade_to (self, colour, t):
