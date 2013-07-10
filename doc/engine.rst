@@ -12,6 +12,7 @@ Modules:
    sched
    evt
    gfx
+   entity
    txt
    settings
    util

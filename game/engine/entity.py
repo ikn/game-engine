@@ -9,9 +9,9 @@ class Entity (object):
 
 Entity(x=0, y=0)
 
-Arguments determine the entity's position (:attr:`pos`), as for
-:class:`GraphicsGroup <engine.gfx.container.GraphicsGroup>` (unlike for
-graphics, this may be floating-point).
+Arguments are passed to
+:class:`GraphicsGroup <engine.gfx.container.GraphicsGroup>` when creating
+:attr:`graphics`.
 
 Currently, an entity is just a container of graphics.
 
