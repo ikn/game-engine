@@ -99,7 +99,7 @@ These can be set to apply to all contained graphics.
 The top-left of this is not necessarily the same as :attr:`pos`.
 
 """
-        graphics = dict.keys()
+        graphics = self._graphics.keys()
         if graphics:
             if len(graphics) == 1:
                 return graphics[0]._rect
