@@ -60,7 +60,8 @@ However, in arguments with lists, all lists must be the same length.
 """
     # Rect is a sequence but isn't recognised as collections.Sequence, so test
     # this way
-    is_list = [hasattr(arg, '__len__') and hasattr(arg, '__getitem__')
+    is_list = [(hasattr(arg, '__len__') and hasattr(arg, '__getitem__') and
+                not isinstance(arg, basestring))
                for arg in args]
     if any(is_list):
         n = len(args[is_list.index(True)])
@@ -142,7 +143,7 @@ interp_linear(*waypoints) -> f
 
     def val_gen ():
         t = yield
-        while 1:
+        while True:
             # get waypoints we're between
             i = bisect(ts, t)
             if i == 0:
@@ -153,8 +154,7 @@ interp_linear(*waypoints) -> f
                 last_val = lambda vl, v0: vl if isinstance(vl, (int, float)) \
                                              else v0
                 t = yield call_in_nest(last_val, vs[-1], vs[0])
-                yield None # to avoid StopIteration issues
-                return
+                yield None
             else:
                 v1 = vs[i - 1]
                 v2 = vs[i]
@@ -295,10 +295,10 @@ interp_round(get_val, round_val = True) -> f
     return round_get_val
 
 
-def interp_repeat (get_val, period, t_min = 0, t_start = None):
+def interp_repeat (get_val, period = None, t_min = 0, t_start = None):
     """Repeat an existing interpolation function.
 
-interp_repeat(get_val, period, t_min = 0, t_start = t_min) -> f
+interp_repeat(get_val[, period], t_min = 0, t_start = t_min) -> f
 
 :arg get_val: an existing interpolation function, as taken by
               :meth:`Scheduler.interp`.
@@ -307,19 +307,48 @@ Times passed to the returned function are looped around to fit in the range
 [``t_min``, ``t_min + period``), starting at ``t_start``, and the result is
 passed to ``get_val``.
 
+If ``period`` is not given, repeats end at the end of ``get_val``.  Note that
+this will not be entirely accurate, and you're probably better off specifying a
+value if you can easily do so.
+
 :return: the ``get_val`` wrapper that repeats ``get_val`` over the given
          period.
 
 """
     if t_start is None:
         t_start = t_min
-    return lambda t: get_val(t_min + (t_start - t_min + t) % period)
+
+    def val_gen ():
+        pd = period
+        val = None
+        t = yield
+        while True:
+            # transform time and get the corresponding value
+            t = t_min + (t_start - t_min + t)
+            if pd is not None:
+                t %= pd
+            # else still in the first period (and want the whole thing)
+            new_val = get_val(t)
+            # if we got a value, yield it
+            if new_val is not None:
+                val = new_val
+            elif pd is None:
+                # else get_val has ended: we know the period size now
+                pd = t - t_min
+            # else yield the previous value (which may be None: if get_val
+            #: returns None on the first call, we want to yield None)
+            t = yield val
+
+    # start the generator
+    g = val_gen()
+    g.next()
+    return g.send
 
 
-def interp_oscillate (get_val, t_max, t_min = 0, t_start = None):
+def interp_oscillate (get_val, t_max = None, t_min = 0, t_start = None):
     """Repeat a linear oscillation over an existing interpolation function.
 
-interp_oscillate(get_val, t_max, t_min = 0, t_start = t_min) -> f
+interp_oscillate(get_val[, t_max], t_min = 0, t_start = t_min) -> f
 
 :arg get_val: an existing interpolation function, as taken by
               :meth:`Scheduler.interp`.
@@ -329,21 +358,48 @@ range [``t_min``, ``t_max``), starting at ``t_start``.  If ``t_start`` is in
 the range [``t_max``, ``2 * t_max - t_min``), it is mapped to the 'return
 journey' of the oscillation.
 
+If ``t_max`` is not given, it is taken to be the end of ``get_val``.  Note that
+this will not be entirely accurate, and you're probably better off specifying a
+value if you can easily do so.
+
 :return: the ``get_val`` wrapper that oscillates ``get_val`` over the given
          range.
 
 """
     if t_start is None:
         t_start = t_min
-    period = t_max - t_min
+    if t_max is not None:
+        period = t_max - t_min
+    else:
+        period = None
 
-    def osc_get_val (t):
-        t = (t_start - t_min + t) % (2 * period)
-        if t >= period:
-            t = 2 * period - t
-        return get_val(t_min + t)
+    def val_gen ():
+        pd = period
+        val = None
+        t = yield
+        while True:
+            # transform time and get the corresponding value
+            t = t_start - t_min + t
+            if pd is not None:
+                t %= 2 * pd
+                if t >= pd:
+                    t = 2 * pd - t
+            # else still in the first period (and want the whole thing)
+            new_val = get_val(t)
+            # if we got a value, yield it
+            if new_val is not None:
+                val = new_val
+            elif pd is None:
+                # else get_val has ended: we know the period size now
+                pd = t - t_min
+            # else yield the previous value (which may be None: if get_val
+            #: returns None on the first call, we want to yield None)
+            t = yield val
 
-    return osc_get_val
+    # start the generator
+    g = val_gen()
+    g.next()
+    return g.send
 
 
 class Timer (object):
@@ -404,7 +460,7 @@ it does not necessarily reflect real time.
             frames = max(frames, 0)
         # main loop
         t0 = time()
-        while 1:
+        while True:
             frame = self.frame
             cb(*args)
             t = time()
@@ -601,7 +657,7 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
             dt = 0
             last_v = None
             done = False
-            while 1:
+            while True:
                 frame = self.frame
                 t += frame
                 dt += frame

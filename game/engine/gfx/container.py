@@ -25,6 +25,7 @@ import sys
 
 import pygame as pg
 
+from .. import sched
 from ..util import ir, normalise_colour, blank_sfc, combine_drawn
 try:
     from _gm import fastdraw
@@ -32,6 +33,7 @@ except ImportError:
     print >> sys.stderr, 'error: couldn\'t import _gm; did you remember to `make\'?'
     sys.exit(1)
 from .graphic import Graphic, GraphicView
+from .graphics import Colour
 
 
 class GraphicsGroup (object):
@@ -407,11 +409,15 @@ Missing graphics are ignored.
             # else not added: fail silently
         self.layers = sorted(ls)
 
-    def fade_to (self, colour, t):
+    def fade_to (self, colour, t, resolution = None):
         """Fade to a colour.
+
+fade_to(colour, t[, resolution])
 
 :arg colour: the ``(R, G, B[, A = 255])`` colour to fade to.
 :arg t: how many seconds to take to reach ``colour``.
+:arg resolution: as taken by
+                 :meth:`Scheduler.interp <engine.sched.Scheduler.interp>`.
 
 If already fading, the current colour is used as the initial colour; otherwise,
 the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
@@ -422,12 +428,30 @@ the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
         colour = normalise_colour(colour)
         if self._fade_id is None:
             # doesn't already exist
-            self.overlay = Colour(colour[:3] + (0,), ((0, 0), self._rect.size))
+            initial_colour = colour[:3] + (0,)
+        else:
+            initial_colour = self._overlay.colour
+        self.fade(sched.interp_linear(initial_colour, (colour, t)),
+                  round_val = True, resolution = resolution)
+
+    def fade (self, get_val, *args, **kw):
+        """Fade between colours.
+
+Takes arguments like :meth:`Scheduler.interp <engine.sched.Scheduler.interp>`,
+with ``set_val`` omitted.
+
+Any currently running fade will be canceled.  After fading, the overlay
+persists; set :attr:`overlay` to ``None`` to remove it.
+
+"""
+        if self._fade_id is None:
+            # doesn't already exist
+            self.overlay = Colour((0, 0, 0, 0), ((0, 0), self._rect.size))
         else:
             self.cancel_fade()
-        self._fade_id = self.scheduler.interp_simple(self._overlay, 'colour',
-                                                     colour, t,
-                                                     round_val = True)
+        self._fade_id = self.scheduler.interp(
+            get_val, (self._overlay, 'colour'), *args, **kw
+        )
 
     def cancel_fade (self):
         """Cancel any currently running fade and remove the overlay."""
