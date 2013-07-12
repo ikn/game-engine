@@ -547,11 +547,12 @@ will not be called again.
                     del cbs[i]
 
     def interp (self, get_val, set_val, t_max = None, bounds = None,
-                end = None, round_val = False, multi_arg = False):
+                end = None, round_val = False, multi_arg = False,
+                resolution = None):
         """Vary a value over time.
 
 interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
-       multi_arg = False) -> timeout_id
+       multi_arg = False[, resolution]) -> timeout_id
 
 :arg get_val: a function called with the elapsed time in seconds to obtain the
               current value.  If this function returns ``None``, the
@@ -576,6 +577,11 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
                 details).
 :arg multi_arg: whether values should be interpreted as lists of arguments to
                 pass to ``set_val`` instead of a single argument.
+:arg resolution: 'framerate' to update the value at.  If not given, the value
+                 is set every frame it changes; if given, this sets an upper
+                 limit on the number of times per second the value may updated.
+                 The current value of :attr:`frame` (which may change over the
+                 interpolation) puts an upper limit on the rate.
 
 :return: an identifier that can be passed to :meth:`rm_timeout` to remove the
         callback that continues the interpolation.  In this case ``end`` is not
@@ -589,38 +595,49 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
             set_val = lambda val: setattr(obj, attr, val)
 
         def timeout_cb ():
+            if resolution is not None:
+                update_frame = 1. / resolution
             t = 0
+            dt = 0
             last_v = None
             done = False
             while 1:
-                t += self.frame
-                v = get_val(t)
-                if v is None:
-                    done = True
-                # check bounds
-                elif t_max is not None and t > t_max:
-                    done = True
-                else:
-                    if bounds is not None:
-                        bdy = bounds(v)
-                        if bdy is not None:
-                            done = True
-                            v = bdy
-                    if v != last_v:
-                        set_val(*v) if multi_arg else set_val(v)
-                        last_v = v
-                if done:
-                    # canceling for some reason
-                    if callable(end):
-                        v = end()
+                frame = self.frame
+                t += frame
+                dt += frame
+                if resolution is None or dt >= update_frame:
+                    if resolution is not None:
+                        dt -= update_frame
+                    # perform an update
+                    v = get_val(t)
+                    if v is None:
+                        done = True
+                    # check bounds
+                    elif t_max is not None and t > t_max:
+                        done = True
                     else:
-                        v = end
-                    # set final value if want to
-                    if v is not None and v != last_v:
-                        set_val(*v) if multi_arg else set_val(v)
-                    yield False
-                    # just in case we get called again (should never happen)
-                    return
+                        if bounds is not None:
+                            bdy = bounds(v)
+                            if bdy is not None:
+                                done = True
+                                v = bdy
+                        if v != last_v:
+                            set_val(*v) if multi_arg else set_val(v)
+                            last_v = v
+                    if done:
+                        # canceling for some reason
+                        if callable(end):
+                            v = end()
+                        else:
+                            v = end
+                        # set final value if want to
+                        if v is not None and v != last_v:
+                            set_val(*v) if multi_arg else set_val(v)
+                        yield False
+                        # just in case we get called again (should never happen)
+                        return
+                    else:
+                        yield True
                 else:
                     yield True
 
