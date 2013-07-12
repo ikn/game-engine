@@ -173,11 +173,11 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
     // and layers is sorted
     PyObject* layers_in, * sfc, * graphics_in, * dirty;
     PyObject** layers, *** graphics, ** gs, * g, * g_dirty, * g_rect, * r_o,
-            ** graphics_obj, * tmp, * tmp2, * pre_draw, * clip, * dbl_tmp[2],
+            ** graphics_obj, * tmp, * tmp2, * pre_draw, * clip, * vis_tmp[2],
             * rtn, * opaque_in, * dirty_opaque, * l_dirty_opaque,
             ** dirty_by_layer, * rs, * draw_in, * draw;
-    char* dbl[4] = {"was_visible", "visible", "_last_postrot_rect",
-                    "_postrot_rect"};
+    char* attrs[4] = {"was_visible", "visible", "_last_postrot_rect",
+                      "_postrot_rect"};
     int n_layers, * n_graphics, i, j, k, l, n, n_dirty, r_new, r_good;
     PyRectObject* r, * tmp_r;
     if (!PyArg_UnpackTuple(args, "fastdraw", 4, 4, &layers_in, &sfc,
@@ -214,22 +214,23 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
             g_dirty = PyObject_GetAttrString(g, "_dirty");
             for (k = 0; k < 2; k++) // last/current
                 // NOTE: ref[+5]
-                dbl_tmp[k] = PyObject_GetAttrString(g, dbl[k]);
-            if (dbl_tmp[0] != dbl_tmp[1]) {
+                vis_tmp[k] = PyObject_GetAttrString(g, attrs[k]);
+            if (vis_tmp[0] != vis_tmp[1]) {
                 // visiblity changed since last draw: set dirty everywhere
                 Py_DECREF(g_dirty); // NOTE: ref[-4]
                 g_dirty = PyList_New(1); // NOTE: ref[+4]
                 // NOTE: ref[+6]
-                // FIXME: should get _last_postrot_rect depending on which of dbl_tmp[i] is True?
-                g_rect = PyObject_GetAttrString(g, "_postrot_rect");
+                g_rect = PyObject_GetAttrString(
+                    g, attrs[2 + (vis_tmp[1] == Py_True)]
+                );
                 PyList_SET_ITEM(g_dirty, 0, g_rect); // NOTE: ref[-6]
                 PyObject_SetAttrString(g, "_dirty", g_dirty);
             }
             n = PyList_GET_SIZE(g_dirty);
             for (k = 0; k < 2; k++) { // last/current
-                if (dbl_tmp[k] == Py_True) {
+                if (vis_tmp[k] == Py_True) {
                     // NOTE: ref[+6] (pygame.Rect)
-                    g_rect = PyObject_GetAttrString(g, dbl[k + 2]);
+                    g_rect = PyObject_GetAttrString(g, attrs[2 + k]);
                     for (l = 0; l < n; l++) { // g_dirty
                         r_o = PyList_GET_ITEM(g_dirty, l); // pygame.Rect
                         // NOTE: ref[+7]
@@ -241,8 +242,8 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                     Py_DECREF(g_rect); // NOTE: ref[-6]
                 }
             }
-            Py_DECREF(dbl_tmp[0]);
-            Py_DECREF(dbl_tmp[1]); // NOTE: ref[-5]
+            Py_DECREF(vis_tmp[0]);
+            Py_DECREF(vis_tmp[1]); // NOTE: ref[-5]
             Py_DECREF(g_dirty); // NOTE: ref[-4]
             tmp = PyObject_GetAttrString(g, "visible"); // NOTE: ref[+4]
             PyObject_SetAttrString(g, "was_visible", tmp);

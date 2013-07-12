@@ -86,8 +86,6 @@ Pygame events and has the functions as callbacks.
          created in this call).
 
 """
-        # NOTE: add(*evts, **named_evts, domain = None)
-        # NOTE: can call with existing event to change domain
         new_unnamed = []
         unnamed = self.evts
         all_named = self._named_evts
