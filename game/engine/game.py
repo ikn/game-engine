@@ -88,13 +88,6 @@ World(scheduler, evthandler)
         else:
             return cls.__name__.lower()
 
-    def _select (self):
-        if not self._initialised:
-            self.init(*self._extra_args)
-            self._initialised = True
-            del self._extra_args
-        self.select()
-
     def init (self):
         """Called when this first becomes the active world.
 
@@ -107,6 +100,13 @@ This receives the extra arguments passed in constructing the world through the
     def select (self):
         """Called whenever this becomes the active world."""
         pass
+
+    def _select (self):
+        if not self._initialised:
+            self.init(*self._extra_args)
+            self._initialised = True
+            del self._extra_args
+        self.select()
 
     def add (self, *entities):
         """Add any number of :class:`Entity <engine.entity.Entity> instances to
@@ -141,6 +141,11 @@ Raises ``KeyError`` for missing entities.
     def update (self):
         """Called every frame to makes any necessary changes."""
         pass
+
+    def _update (self):
+        for e in self.entities:
+            e.update()
+        self.update()
 
     def pause (self):
         """Called to pause the game when the window loses focus."""
@@ -532,7 +537,7 @@ minimise()
             # updating twice before drawing
             if not self._update_again:
                 self._update_again = False
-                self.world.update()
+                self.world._update()
         drawn = self.world.draw()
         # update display
         if drawn is True:

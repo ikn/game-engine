@@ -24,3 +24,7 @@ Currently, an entity is just a container of graphics.
         #: :class:`GraphicsGroup <engine.gfx.container.GraphicsGroup>`
         #: containing the entity's graphics.
         self.graphics = GraphicsGroup(x, y)
+
+    def update (self):
+        """Called every frame to makes any necessary changes."""
+        pass
