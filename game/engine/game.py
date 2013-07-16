@@ -536,7 +536,6 @@ minimise()
             # if a new world was created during the above call, we'll end up
             # updating twice before drawing
             if not self._update_again:
-                self._update_again = False
                 self.world._update()
         drawn = self.world.draw()
         # update display

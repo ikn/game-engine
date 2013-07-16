@@ -418,6 +418,10 @@ Timer(fps = 60)
         #: The amount of time in seconds that has elapsed since the start of
         #: the current call to :meth:`run`, if any.
         self.t = 0
+        #: How many seconds it took to call the ``cb`` argument to :meth:`run`
+        #: the last time it was called (or ``None`` if it has never been called
+        #: yet).
+        self.elapsed = None
 
     @property
     def fps (self):
@@ -464,7 +468,8 @@ it does not necessarily reflect real time.
             frame = self.frame
             cb(*args)
             t = time()
-            t_gone = min(t - t0, frame)
+            self.elapsed = t_gone = t - t0
+            t_gone = min(t_gone, frame)
             if self._stopped:
                 if seconds is not None:
                     return seconds - t_gone
@@ -636,8 +641,9 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
 :arg resolution: 'framerate' to update the value at.  If not given, the value
                  is set every frame it changes; if given, this sets an upper
                  limit on the number of times per second the value may updated.
-                 The current value of :attr:`frame` (which may change over the
-                 interpolation) puts an upper limit on the rate.
+                 The current value of :attr:`frame <Timer.frame>` (which may
+                 change over the interpolation) puts an upper limit on the
+                 rate.
 
 :return: an identifier that can be passed to :meth:`rm_timeout` to remove the
         callback that continues the interpolation.  In this case ``end`` is not
