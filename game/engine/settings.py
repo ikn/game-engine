@@ -71,6 +71,7 @@ setting to its default (initial) value, delete it.
             if v is not None:
                 self._types[k] = type(v)
         elif not isinstance(v, t):
+            print self._tricky_types.get(t, t)(v)
             try:
                 v = self._tricky_types.get(t, t)(v)
             except (TypeError, ValueError):

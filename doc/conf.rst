@@ -24,6 +24,24 @@ occur before the engine is initialised to take effect.
    ``{`` :attr:`game.World.id <engine.game.World.id>` ``: fps}``
    defaultdict, with a default value of ``60``.
 
+.. data:: DROP_FRAMES
+   :annotation: = True
+
+   Whether to allow dropping frames if the game cannot run at full speed.  This
+   only affects the draw rate, not the world update rate.
+
+.. data:: MIN_FPS
+
+   If :data:`DROP_FRAMES` is ``True``, this gives the minimum frames per second
+   allowed, as a ``{`` :attr:`game.World.id <engine.game.World.id>` ``: fps}``
+   defaultdict, with a default value of ``30``.
+
+.. data:: FPS_AVERAGE_FRAMES
+
+   The maximum number of frames to average over when handling slowdown, as a
+   ``{`` :attr:`game.World.id <engine.game.World.id>` ``: frames}``
+   defaultdict, with a default value of ``5``.
+
 .. data:: DEBUG
    :annotation: = False
 

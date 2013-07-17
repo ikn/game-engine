@@ -17,6 +17,9 @@ class Conf (object):
     GAME = None
     IDENT = 'game'
     FPS = dd(60) # per-backend
+    DROP_FRAMES = True
+    MIN_FPS = dd(30)
+    FPS_AVERAGE_FRAMES = dd(5) # per-backend
     DEBUG = False
 
     # paths
@@ -104,8 +107,12 @@ def _translate_dd (d):
     if isinstance(d, defaultdict):
         return defaultdict(d.default_factory, d)
     else:
-        # should be (default, dict)
-        return dd(*d)
+        try:
+            # should be (default, dict)
+            return dd(*d)
+        except TypeError:
+            # use given value as default
+            return dd(d)
 
 
 conf = dict((k, v) for k, v in Conf.__dict__.iteritems()

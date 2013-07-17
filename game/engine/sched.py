@@ -420,7 +420,7 @@ Timer(fps = 60)
         self.t = 0
         #: How many seconds it took to call the ``cb`` argument to :meth:`run`
         #: the last time it was called (or ``None`` if it has never been called
-        #: yet).
+        #: yet).  The estimation involved means this may be less than ``0``.
         self.elapsed = None
 
     @property

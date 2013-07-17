@@ -36,6 +36,8 @@ argument ``t`` to run for this many seconds.
 
 
 class _ClassProperty (property):
+    """Decorator to create a static property."""
+
     def __get__(self, cls, owner):
         return self.fget.__get__(None, owner)()
 
@@ -78,6 +80,8 @@ World(scheduler, evthandler)
         self.entities = set()
         self._extra_args = args
         self._initialised = False
+        self._elapsed = []
+        self._tot_elapsed = 0
 
     @_ClassProperty
     @classmethod
@@ -102,6 +106,7 @@ This receives the extra arguments passed in constructing the world through the
         pass
 
     def _select (self):
+        """Called by the game when becomes the active world."""
         if not self._initialised:
             self.init(*self._extra_args)
             self._initialised = True
@@ -143,9 +148,33 @@ Raises ``KeyError`` for missing entities.
         pass
 
     def _update (self):
+        """Called by the game to update."""
         for e in self.entities:
             e.update()
         self.update()
+
+    def _handle_slowdown (self):
+        """Return whether to draw this frame."""
+        s = self.scheduler
+        elapsed = self._elapsed
+        if s.elapsed is not None:
+            # already completed a frame
+            if elapsed:
+                # already tracking frame times
+                elapsed.append(s.elapsed)
+                self._tot_elapsed += s.elapsed
+                # len(elapsed) != 0
+                if float(self._tot_elapsed) / len(elapsed) <= s.frame:
+                    # not slow, so stop tracking
+                    self._elapsed = elapsed = []
+                elif len(elapsed) > conf.FPS_AVERAGE_FRAMES[self.id]:
+                    # tracking too many frames: forget the oldest one
+                    self._tot_elapsed -= elapsed.pop(0)
+            elif s.elapsed > s.frame:
+                # start tracking frame times
+                elapsed.append(s.elapsed)
+                self._tot_elapsed = s.elapsed
+        return not elapsed
 
     def pause (self):
         """Called to pause the game when the window loses focus."""
@@ -537,15 +566,16 @@ minimise()
             # updating twice before drawing
             if not self._update_again:
                 self.world._update()
-        drawn = self.world.draw()
-        # update display
-        if drawn is True:
-            update_display()
-        elif drawn:
-            if len(drawn) > 60: # empirical - faster to update everything
+        if not conf.DROP_FRAMES or self.world._handle_slowdown():
+            drawn = self.world.draw()
+            # update display
+            if drawn is True:
                 update_display()
-            else:
-                update_display(drawn)
+            elif drawn:
+                if len(drawn) > 60: # empirical - faster to update everything
+                    update_display()
+                else:
+                    update_display(drawn)
         return True
 
     # running
