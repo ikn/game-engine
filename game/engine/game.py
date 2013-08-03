@@ -93,6 +93,28 @@ World(scheduler, evthandler)
         else:
             return cls.__name__.lower()
 
+    @property
+    def fps (self):
+        """The current draw rate, an average based on
+:data:`conf.FPS_AVERAGE_RATIO`.
+
+If this is less than :data:`conf.FPS`, then we're dropping frames.
+
+"""
+        return 1 / self._avg_draw_time
+
+    @property
+    def update_fps (self):
+        """The current update rate, an average based on
+:data:`conf.FPS_AVERAGE_RATIO`.
+
+If this is less than :data:`conf.FPS`, then the game isn't running at full
+speed.  (This may mean the draw rate (:attr:`fps`) is dropping to
+:data:`conf.MIN_FPS`.)
+
+"""
+        return 1 / self._avg_frame_time
+
     def init (self):
         """Called when this first becomes the active world.
 
@@ -169,8 +191,8 @@ Raises ``KeyError`` for missing entities.
                   r * (self._since_last_draw + elapsed))
 
         target_t = self.scheduler.frame
-        if frame_t <= target_t:
-            # running at full speed, so draw
+        if frame_t <= target_t or abs(frame_t - target_t) / target_t < .1:
+            # running at (near enough (within 1% of)) full speed, so draw
             draw = True
         else:
             if draw_t >= 1. / conf.MIN_FPS[self.id]:
@@ -178,6 +200,7 @@ Raises ``KeyError`` for missing entities.
                 draw = True
             else:
                 draw = False
+        draw |= not conf.DROP_FRAMES
         if draw:
             # update rolling draw frame average
             self._avg_draw_time = draw_t
@@ -577,7 +600,7 @@ minimise()
             # updating twice before drawing
             if not self._update_again:
                 self.world._update()
-        if not conf.DROP_FRAMES or self.world._handle_slowdown():
+        if self.world._handle_slowdown():
             drawn = self.world.draw()
             # update display
             if drawn is True:

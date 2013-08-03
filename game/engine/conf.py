@@ -18,7 +18,7 @@ class Conf (object):
     IDENT = 'game'
     FPS = dd(60) # per-backend
     DROP_FRAMES = True
-    MIN_FPS = dd(30) # per-backend
+    MIN_FPS = dd(25) # per-backend
     FPS_AVERAGE_RATIO = .3
     DEBUG = False
 
