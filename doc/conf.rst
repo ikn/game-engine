@@ -34,13 +34,15 @@ occur before the engine is initialised to take effect.
 
    If :data:`DROP_FRAMES` is ``True``, this gives the minimum frames per second
    allowed, as a ``{`` :attr:`game.World.id <engine.game.World.id>` ``: fps}``
-   defaultdict, with a default value of ``30``.
+   defaultdict, with a default value of ``30``.  (That is, frames are not
+   dropped if the real draw rate would fall below this number.)
 
-.. data:: FPS_AVERAGE_FRAMES
+.. data:: FPS_AVERAGE_RATIO
 
-   The maximum number of frames to average over when handling slowdown, as a
-   ``{`` :attr:`game.World.id <engine.game.World.id>` ``: frames}``
-   defaultdict, with a default value of ``5``.
+   This determines how frames are averaged to handle slowdown and determine the
+   framerate.  It's a rolling average, so that each frame, we do::
+
+    average = (1 - FPS_AVERAGE_RATIO) * average + FPS_AVERAGE_RATIO * frame_time
 
 .. data:: DEBUG
    :annotation: = False

@@ -418,9 +418,9 @@ Timer(fps = 60)
         #: The amount of time in seconds that has elapsed since the start of
         #: the current call to :meth:`run`, if any.
         self.t = 0
-        #: How many seconds it took to call the ``cb`` argument to :meth:`run`
-        #: the last time it was called (or ``None`` if it has never been called
-        #: yet).  The estimation involved means this may be less than ``0``.
+        #: How many seconds the last frame took to run (including calling the
+        #: ``cb`` argument to :meth:`run` and any sleeping to make up a full
+        #: frame).
         self.elapsed = None
 
     @property
@@ -467,9 +467,7 @@ it does not necessarily reflect real time.
         while True:
             frame = self.frame
             cb(*args)
-            t = time()
-            self.elapsed = t_gone = t - t0
-            t_gone = min(t_gone, frame)
+            t_gone = time() - t0
             if self._stopped:
                 if seconds is not None:
                     return seconds - t_gone
@@ -481,19 +479,19 @@ it does not necessarily reflect real time.
             if seconds is not None:
                 t_left = min(seconds, t_left)
             elif frames is not None:
-                t_left = min(frames, t_left / frame)
+                t_left = min(frames * frame, t_left)
             if t_left > 0:
                 wait(int(1000 * t_left))
-                t0 = t + t_left
-            else:
-                t0 = t
+                t_gone = frame
+            t0 += t_gone
+            self.elapsed = t_gone
             self.t += frame
             if seconds is not None:
-                seconds -= t_gone + t_left
+                seconds -= t_gone
                 if seconds <= 0:
                     return seconds
             elif frames is not None:
-                frames -= (t_gone + t_left) / frame
+                frames -= t_gone / frame
                 if frames <= 0:
                     return frames
 

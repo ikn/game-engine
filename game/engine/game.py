@@ -78,10 +78,11 @@ World(scheduler, evthandler)
         #: ``set`` of :class:`Entity <engine.entity.Entity>` instances in this
         #: world.
         self.entities = set()
-        self._extra_args = args
+
         self._initialised = False
-        self._elapsed = []
-        self._tot_elapsed = 0
+        self._extra_args = args
+        self._avg_frame_time = self._avg_draw_time = scheduler.frame
+        self._since_last_draw = 0
 
     @_ClassProperty
     @classmethod
@@ -155,26 +156,36 @@ Raises ``KeyError`` for missing entities.
 
     def _handle_slowdown (self):
         """Return whether to draw this frame."""
-        s = self.scheduler
-        elapsed = self._elapsed
-        if s.elapsed is not None:
-            # already completed a frame
-            if elapsed:
-                # already tracking frame times
-                elapsed.append(s.elapsed)
-                self._tot_elapsed += s.elapsed
-                # len(elapsed) != 0
-                if float(self._tot_elapsed) / len(elapsed) <= s.frame:
-                    # not slow, so stop tracking
-                    self._elapsed = elapsed = []
-                elif len(elapsed) > conf.FPS_AVERAGE_FRAMES[self.id]:
-                    # tracking too many frames: forget the oldest one
-                    self._tot_elapsed -= elapsed.pop(0)
-            elif s.elapsed > s.frame:
-                # start tracking frame times
-                elapsed.append(s.elapsed)
-                self._tot_elapsed = s.elapsed
-        return not elapsed
+        elapsed = self.scheduler.elapsed
+        if elapsed is None:
+            # haven't completed a frame yet
+            return True
+        # update rolling frame average
+        r = conf.FPS_AVERAGE_RATIO
+        frame_t = self._avg_frame_time = ((1 - r) * self._avg_frame_time +
+                                          r * elapsed)
+        # compute for drawing too, but don't store it just yet
+        draw_t = ((1 - r) * self._avg_draw_time +
+                  r * (self._since_last_draw + elapsed))
+
+        target_t = self.scheduler.frame
+        if frame_t <= target_t:
+            # running at full speed, so draw
+            draw = True
+        else:
+            if draw_t >= 1. / conf.MIN_FPS[self.id]:
+                # not drawing would make the draw FPS too low, so draw anyway
+                draw = True
+            else:
+                draw = False
+        if draw:
+            # update rolling draw frame average
+            self._avg_draw_time = draw_t
+            self._since_last_draw = 0
+        else:
+            # remember frame time for when we next draw
+            self._since_last_draw += elapsed
+        return draw
 
     def pause (self):
         """Called to pause the game when the window loses focus."""
@@ -276,14 +287,14 @@ should be passed to that base class).
         self.world = world
         world.graphics.orig_sfc = self.screen
         world.graphics.dirty()
-        i = world.id
+        ident = world.id
         # set some per-world things
         fonts = self.fonts
-        for k, v in conf.REQUIRED_FONTS[i].iteritems():
+        for k, v in conf.REQUIRED_FONTS[ident].iteritems():
             fonts[k] = v
-        pg.event.set_grab(conf.GRAB_EVENTS[i])
-        pg.mouse.set_visible(conf.MOUSE_VISIBLE[i])
-        pg.mixer.music.set_volume(conf.MUSIC_VOLUME[i])
+        pg.event.set_grab(conf.GRAB_EVENTS[ident])
+        pg.mouse.set_visible(conf.MOUSE_VISIBLE[ident])
+        pg.mixer.music.set_volume(conf.MUSIC_VOLUME[ident])
         world._select()
         world.select()
 
