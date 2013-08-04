@@ -4,6 +4,8 @@
 
 TODO:
     [ESSENTIAL]
+ - button events should call once per event, not once per frame
+    - and multi-button events should do it in order (might interleave between components)
  - eh.grab (and maybe have grab toggle for getting all input for a while)
  - eh.set_deadzones (can set by device var; can pass a default for other devices/ids)
  - auto pad(/other?) initialisation
@@ -12,6 +14,20 @@ TODO:
  - can do per-device, per-input name or global thresholds/bdy - and make them setters, and provide eh.set_{thresholds,bdys}
  - conffile.generate{,_s}, eh.save{,_s}
  - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
+ - input groups for having the same inputs in different events, eg.
+
+    [next]
+        kbd ENTER
+        kbd KP_RETURN
+        kbd SPACE
+
+    button next DOWN REPEAT .3 .1
+        [next]
+        kbd RIGHT
+
+    button confirm DOWN
+        [next]
+
     [FUTURE]
  - Scheme [NOTE]
  - generalised clickable things - define a rect (ClickRect, ClickArea subclass), has .click(cb(event_type), events_bitmask), .hover(cb(in/out))

@@ -461,7 +461,7 @@ played.  Volume works with something like::
     conf.SOUND_VOLUMES['name'] = .3
 
 It might be worth finding an appropriate sound effect and getting it to play
-when a tile is moved.
+when a tile is moved (see :meth:`Game.play_snd <engine.game.Game.play_snd>`).
 
 Victory condition
 #################
@@ -478,9 +478,9 @@ After you've managed that, try putting together a victory message using
 High scores
 ###########
 
-Timing is fixed-framerate, so try timing a player's attempt by keeping a
-counter and adding the current frame duration (``World.scheduler.frame`` via
-:attr:`Timer.frame <engine.sched.Timer.frame>`) to it each frame
+Try timing a player's attempt by keeping a counter and adding the frame
+duration (``World.scheduler.elapsed`` via
+:attr:`Timer.elapsed <engine.sched.Timer.elapsed>`) to it each frame
 (:meth:`World.update <engine.game.World.update>`).
 
 As mentioned earlier, the ``conf`` object could easily be used to save

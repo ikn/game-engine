@@ -91,7 +91,11 @@ setting to its default (initial) value, delete it.
         setattr(self, k, self._defaults[k])
 
     def dump (self):
-        """Force saving all settings."""
+        """Force saving all settings.
+
+This class's implementation does nothing.
+
+"""
         pass
 
 

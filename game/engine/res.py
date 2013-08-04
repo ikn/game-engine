@@ -1,15 +1,19 @@
+"""Resource loading and caching."""
+
 """
-
- - game and each world has a single ResourceManager
- - graphics take optional pool and manager, use 'global'/the game's one by default
-
-ResourceManager
-    __getattr__ generates shorthands for load(): img(), text(), snd(), font(), etc.
-    text() can take a font, or font_name as registered with font(); to make this work, font()'s args are name[, file, size, is_bold], and mk_key returns name if no other args to get used as the cache key
-
-    limits: {type: amount}
-    priorities: {pool: priority} - for determining what to unload if reach limits
-    set_limits(**{type: amount}) - None for no limit
+ - add to doc/
+ - update tutorial to use this instead of conf.GAME.img
+ - .register()
+ - graphics take optional pool and manager, use 'global'/the game's one by default (search conf.GAME.resources.img)
+ - remove Game.fonts, make it load them into the resource manager
+    - and simplify mod:txt - maybe make it just a function
+ - text, font loaders
+    - text can take a font, or font_name as registered with the font loader
+    - to make this work, the font loader's args are name[, file, size, is_bold], and mk_key returns name if given no other args, to get used as the cache key
+ - limits:
+    - .limits: {type: amount}
+    - .priorities: {pool: priority} - for determining what to unload if reach limits
+    - .set_limits(**{type: amount}) - None for no limit
 
 """
 
