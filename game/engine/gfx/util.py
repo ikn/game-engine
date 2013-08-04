@@ -3,6 +3,7 @@
 import pygame as pg
 from pygame import Rect
 
+from ..conf import conf
 from ..util import align_rect
 from .graphic import Graphic
 
@@ -166,7 +167,9 @@ align(self, graphic, col, row, alignment = 0, pad = 0, offset = 0)
 class Spritemap (object):
     """A wrapper for spritesheets.
 
-Spritemap(img[, sw][, sh], pad = 0[, nsprites])
+Spritemap(img[, sw][, sh], pad = 0[, nsprites],
+          resource_pool = conf.DEFAULT_RESOURCE_POOL,
+          resource_manager = conf.GAME.resources)
 
 :arg img: a surface or filename to load from; this is a grid of sprites with
           the same size.
@@ -181,12 +184,16 @@ Spritemap(img[, sw][, sh], pad = 0[, nsprites])
                taken to be the maximum number of sprites that could fit on the
                spritesheet; if passed, and smaller than the maximum, the last
                sprites are ignored (see below for ordering).
+:arg resource_pool: :class:`ResourceManager <engine.res.ResourceManager>`
+                    resource pool name to cache any loaded images in.
+:arg resource_manager: :class:`ResourceManager <engine.res.ResourceManager>`
+                       instance to use to load any images.
 
 A spritemap provides ``__len__`` and ``__getitem__`` to obtain sprites, and so
 iterating over all sprites is also supported.  Sprites are obtained from top to
 bottom, left to right, in that order, and slices are as follows::
 
-    spritemap[sprite_index]
+    spritemap[sprite_index] -> (sfc, rect)
     spritemap[col, row] -> (sfc, rect)
 
 where ``sfc`` is a surface containing the sprite, and ``rect`` is the rect it
@@ -195,9 +202,13 @@ so ``spritemap[(col, row)]`` works as well.)
 
 """
 
-    def __init__ (self, img, sw = None, sh = None, pad = 0, nsprites = None):
+    def __init__ (self, img, sw = None, sh = None, pad = 0, nsprites = None,
+                  resource_pool = conf.DEFAULT_RESOURCE_POOL,
+                  resource_manager = None):
         if isinstance(img, basestring):
-            img = conf.GAME.resources.img(img)
+            if resource_manager is None:
+                resource_manager = conf.GAME.resources
+            img = resource_manager.img(img, pool = resource_pool)
         #: Surface containing the original spritesheet image.
         self.sfc = img
         img_sz = img.get_size()

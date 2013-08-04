@@ -120,7 +120,10 @@ class Tilemap (Graphic):
     """A :class:`Graphic <engine.gfx.graphic.Graphic>` subclass representing a
 finite, flat grid of tiles.
 
-Tilemap(grid, tile_data, tile_types, pos = (0, 0), layer = 0[, translate_type], cache_tile_data = False, blit_flags = 0)
+Tilemap(grid, tile_data, tile_types, pos = (0, 0), layer = 0[, translate_type],
+        cache_tile_data = False, blit_flags = 0,
+        resource_pool = conf.DEFAULT_RESOURCE_POOL,
+        resource_manager = conf.GAME.resources)
 
 :arg grid: a :class:`util.Grid <engine.gfx.util.Grid>` defining the size and
            shape of the tiles in the tilemap, or the ``tile_size`` argument to
@@ -183,6 +186,9 @@ Tilemap(grid, tile_data, tile_types, pos = (0, 0), layer = 0[, translate_type], 
                     If ``True``, tile type IDs must be hashable (after
                     translation),
 :arg blit_flags: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg resource_pool: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg resource_manager: as taken by
+                       :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
 This is meant to be used for static tilemaps---that is, where the appearance of
 each tile type never changes.
@@ -191,7 +197,8 @@ each tile type never changes.
 
     def __init__ (self, grid, tile_data, tile_types, pos = (0, 0), layer = 0,
                   translate_type = None, cache_graphic = False,
-                  blit_flags = 0):
+                  blit_flags = 0, resource_pool = conf.DEFAULT_RESOURCE_POOL,
+                  resource_manager = None):
         if not callable(tile_types):
             tile_types = lambda tile_type_id: tile_types[tile_type_id]
         self._type_to_graphic = tile_types
@@ -200,25 +207,27 @@ each tile type never changes.
         self._translate_type = translate_type
         self._cache_graphic = cache_graphic
         self._cache = {}
-        self._tile_data, ncols, nrows = self._parse_data(tile_data, grid, True)
+        self._tile_data, ncols, nrows = self._parse_data(tile_data, grid,
+                                                         False)
         if not isinstance(grid, Grid):
             grid = Grid(ncols * nrows, grid)
         #: The :class:`util.Grid <engine.gfx.util.Grid>` covered.
         self.grid = grid
         # apply initial data
-        Graphic.__init__(self, blank_sfc(grid.size), pos, layer, blit_flags)
+        Graphic.__init__(self, blank_sfc(grid.size), pos, layer, blit_flags,
+                         resource_pool, resource_manager)
         update = self._update
         for i, col in enumerate(self._tile_data):
             for j, tile_type_id in enumerate(col):
                 update(i, j, tile_type_id)
 
-    def _parse_data (self, tile_data, grid, cache):
+    def _parse_data (self, tile_data, grid, force_load):
         # parse tile data
         if isinstance(tile_data, basestring):
             if len(tile_data.split()) == 1 and \
                splitext(tile_data)[1][1:] in ('png', 'jpg', 'jpeg', 'gif'):
                 # image file
-                tile_data = conf.GAME.resources.img(tile_data, cache = cache)
+                tile_data = self._load_img(tile_data, force_load = force_load)
             else:
                 # string/text file
                 tile_data = (tile_data, None, None)
@@ -338,7 +347,7 @@ each tile type never changes.
                 filename.
 
 """
-        tile_data = self._parse_data(tile_data, self.grid, not from_disk)[0]
+        tile_data = self._parse_data(tile_data, self.grid, from_disk)[0]
         for i, col in enumerate(tile_data):
             for j, tile_type_id in enumerate(col):
                 self[(i, j)] = tile_type_id

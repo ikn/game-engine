@@ -18,6 +18,15 @@ occur before the engine is initialised to take effect.
 
    Game identifier, used in some filenames.
 
+.. data:: DEBUG
+   :annotation: = False
+
+   Just a debug flag to establish convention; doesn't get used by anything in
+   the engine.
+
+Timing
+------
+
 .. data:: FPS
 
    Frames per second to aim for, as a
@@ -44,12 +53,6 @@ occur before the engine is initialised to take effect.
    framerate.  It's a rolling average, so that each frame, we do::
 
     average = (1 - FPS_AVERAGE_RATIO) * average + FPS_AVERAGE_RATIO * frame_time
-
-.. data:: DEBUG
-   :annotation: = False
-
-   Just a debug flag to establish convention; doesn't get used by anything in
-   the engine.
 
 Paths
 -----
@@ -143,6 +146,20 @@ Display
 
    Floating-point aspect ratio to fix the window at, if it can be resized.
 
+Input
+-----
+
+.. data:: GRAB_EVENTS
+
+   Whether to grab all input events (in which case operating system and window
+   manager shortcuts like alt-tab will not work).  This is a
+   ``{`` :attr:`game.World.id <engine.game.World.id>` ``: grab}`` defaultdict,
+   defaulting to ``False``.
+
+.. data:: GAME_EVENTS
+
+   An event configuration string loaded into each world's event handler.
+
 Audio
 -----
 
@@ -171,19 +188,14 @@ Audio
    ``<sound_id><number>.ogg`` for integer numbers starting from ``0`` with no
    gaps.
 
-Other
------
+Resources
+---------
 
-.. data:: GRAB_EVENTS
+.. data:: DEFAULT_RESOURCE_POOL
+   :annotation: = 'global'
 
-   Whether to grab all input events (in which case operating system and window
-   manager shortcuts like alt-tab will not work).  This is a
-   ``{`` :attr:`game.World.id <engine.game.World.id>` ``: grab}`` defaultdict,
-   defaulting to ``False``.
-
-.. data:: GAME_EVENTS
-
-   An event configuration string loaded into each world's event handler.
+   Default :class:`ResourceManager <engine.res.ResourceManager>` resource pool
+   name.
 
 .. data:: REQUIRED_FONTS
 

@@ -13,14 +13,14 @@ from .util import dd
 
 class Conf (object):
 
-    # the Game instance; should only really be used to load media with caching
+    # the Game instance
     GAME = None
     IDENT = 'game'
+    DEBUG = False
     FPS = dd(60) # per-backend
     DROP_FRAMES = True
     MIN_FPS = dd(25) # per-backend
     FPS_AVERAGE_RATIO = .3
-    DEBUG = False
 
     # paths
     # need to take care to get unicode path
@@ -51,6 +51,18 @@ class Conf (object):
     MUSIC_DIR = DATA_DIR + 'music' + sep
     FONT_DIR = DATA_DIR + 'font' + sep
 
+    # display
+    WINDOW_ICON = None
+    WINDOW_TITLE = ''
+    MOUSE_VISIBLE = dd(False) # per-backend
+    FLAGS = 0
+    FULLSCREEN = False
+    RESIZABLE = False # also determines whether fullscreen togglable
+    RES_W = (960, 540)
+    RES_F = None
+    MIN_RES_W = (320, 180)
+    ASPECT_RATIO = None
+
     # input
     GRAB_EVENTS = dd(False)
     GAME_EVENTS = '''
@@ -65,18 +77,6 @@ button _game_fullscreen DOWN
     [ALT] kbd RETURN
     [ALT] kbd KP_ENTER
 '''
-
-    # display
-    WINDOW_ICON = None
-    WINDOW_TITLE = ''
-    MOUSE_VISIBLE = dd(False) # per-backend
-    FLAGS = 0
-    FULLSCREEN = False
-    RESIZABLE = False # also determines whether fullscreen togglable
-    RES_W = (960, 540)
-    RES_F = None
-    MIN_RES_W = (320, 180)
-    ASPECT_RATIO = None
 
     # audio
     MUSIC_AUTOPLAY = False # just pauses music
@@ -98,7 +98,8 @@ button _game_fullscreen DOWN
                     n = SOUNDS.get(ident, 0)
                     SOUNDS[ident] = n + 1
 
-    # text rendering
+    # resources
+    DEFAULT_RESOURCE_POOL = 'global'
     # per-backend, each a {key: value} dict to update Game.fonts with
     REQUIRED_FONTS = dd({})
 

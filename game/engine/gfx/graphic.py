@@ -26,7 +26,9 @@ from ..util import ir, align_rect, has_alpha, blank_sfc, combine_drawn
 class Graphic (object):
     """Something that can be drawn to the screen.
 
-Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
+Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0,
+        resource_pool = conf.DEFAULT_RESOURCE_POOL,
+        resource_manager = conf.GAME.resources)
 
 :arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.  If a
           surface, it should be already converted for blitting.
@@ -40,6 +42,10 @@ Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0)
             be ordered with respect to each other.
 :arg blit_flags: when blitting the surface to the screen, this is passed as the
                  ``special_flags`` argument.
+:arg resource_pool: :class:`ResourceManager <engine.res.ResourceManager>`
+                    resource pool name to cache any loaded images in.
+:arg resource_manager: :class:`ResourceManager <engine.res.ResourceManager>`
+                       instance to use to load any images.
 
 Many properties of a graphic, such as :attr:`pos` and :attr:`size`, can be
 changed in two main ways: by setting the attribute directly, or by calling the
@@ -58,12 +64,16 @@ correspond to builtin transforms (see :meth:`transform`).
 
     _builtin_transforms = ('crop', 'flip', 'fade', 'resize', 'rotate')
 
-    def __init__ (self, img, pos = (0, 0), layer = 0, blit_flags = 0):
+    def __init__ (self, img, pos = (0, 0), layer = 0, blit_flags = 0,
+                  resource_pool = conf.DEFAULT_RESOURCE_POOL,
+                  resource_manager = None):
+        self._resource_pool = resource_pool
+        self._resource_manager = resource_manager
         if isinstance(img, basestring):
             #: Filename of the loaded image, or ``None`` if a surface was
             #: given.
             self.fn = img
-            img = conf.GAME.resources.img(img)
+            img = self._load_img(img)
         else:
             self.fn = None
         self._orig_sfc = self._surface = img
@@ -827,6 +837,14 @@ Takes a transformation function like :meth:`transform` and returns self.
             del q[transform_fn]
         return self
 
+    def _load_img (self, fn, force_load = False):
+        # load image from disk/cache
+        resources = self._resource_manager
+        if resources is None:
+            resources = conf.GAME.resources
+        return resources.img(fn, pool = self._resource_pool,
+                             force_load = force_load)
+
     def reload (self):
         """Reload from disk if possible.
 
@@ -835,7 +853,7 @@ If successful, all transformations are reapplied afterwards, if any.
 """
         if self.fn is not None:
             # this calls a setter
-            self.orig_sfc = conf.GAME.img(self.fn, cache = False)
+            self.orig_sfc = self._load_img(self.fn, True)
 
     def _gen_mods_resize (self, src_sz, first_time, last_args, w, h,
                           about = (0, 0)):

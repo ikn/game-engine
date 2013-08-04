@@ -50,7 +50,8 @@ World(scheduler, evthandler)
                 this world should use for timing.
 :arg evthandler: the
                  :class:`evt.EventHandler <engine.evt.handler.EventHandler>`
-                 instance this world should use for input.
+                 instance this world should use for input.  Event names
+                 prefixed with ``_game`` are reserved.
 :arg resources: the :class:`res.ResourceManager <engine.res.ResourceManager>`
                 instance this world should use for loading resources.
 

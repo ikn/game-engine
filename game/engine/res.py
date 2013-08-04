@@ -1,19 +1,19 @@
 """Resource loading and caching."""
 
 """
- - add to doc/
- - update tutorial to use this instead of conf.GAME.img
- - .register()
- - graphics take optional pool and manager, use 'global'/the game's one by default (search conf.GAME.resources.img)
- - remove Game.fonts, make it load them into the resource manager
-    - and simplify mod:txt - maybe make it just a function
+TODO:
  - text, font loaders
     - text can take a font, or font_name as registered with the font loader
     - to make this work, the font loader's args are name[, file, size, is_bold], and mk_key returns name if given no other args, to get used as the cache key
+ - remove Game.fonts, make it load them into the resource manager
+    - and simplify mod:txt - maybe make it just a function
+ - add to doc/
+ - update tutorial to use this instead of conf.GAME.img
  - limits:
     - .limits: {type: amount}
     - .priorities: {pool: priority} - for determining what to unload if reach limits
     - .set_limits(**{type: amount}) - None for no limit
+    - in .load(), drop least frequently+recently used resources from cache if go over limits (print warnings if this happens often)
 
 """
 
@@ -80,38 +80,41 @@ in this module.
     def load (self, loader, *args, **kw):
         """Load a resource.
 
-load(loader, *args, **kwargs, pool='global') -> data
+load(loader, *args, **kwargs, pool=conf.DEFAULT_RESOURCE_POOL,
+     force_load=False) -> data
 
 :arg loader: resource loader to use, as found in :attr:`resource_loaders`.
 :arg args: positional arguments to pass to the resource loader.
 :arg kwargs: keyword arguments to pass the the resource loader.
 :arg pool: keyword-only argument giving the pool to cache the resource in.
+:arg force_load: whether to bypass the cache and reload the object through
+                 ``loader``.
 
 :return: the loaded resource data.
 
 This is equivalent to
-``getattr(manager, loader)(*args, **kwargs, pool='global')``.
+``getattr(manager, loader)(*args, **kwargs, pool=conf.DEFAULT_RESOURCE_POOL)``.
 
 """
-        # TODO: drop least frequently+recently used resources from cache if go over limits (print warnings if this happens often)
-        pool = kw.pop('pool', 'global')
+        pool = kw.pop('pool', conf.DEFAULT_RESOURCE_POOL)
+        force_load = kw.pop('force_load', False)
         # create pool and cache dicts if they don't exist, since they will soon
         cache = self.pools.setdefault(pool, ({}, set()))[0]
         cache = cache.setdefault(loader, {})
         # retrieve from cache, or load and store in cache
         load, mk_key, measure = self.resource_loaders[loader]
         k = mk_key(*args, **kw)
-        if k in cache:
-            resource = cache[k]
-        else:
+        if force_load or k not in cache:
             resource = load(*args, **kw)
             cache[k] = resource
+        else:
+            resource = cache[k]
         return resource
 
     def register (self, name, load, mk_key, measure = lambda resource: 1):
         """Register a new resource loader.
 
-register(name, load, mk_key, [, measure])
+register(name, load, mk_key[, measure])
 
 :arg name: the name to give the loader, as used in :attr:`resource_loaders`;
            must be hashable, and must be a string and a valid variable name if
@@ -128,7 +131,7 @@ register(name, load, mk_key, [, measure])
               default is to return ``1`` for any resource.
 
 """
-        pass
+        self.resource_loaders[name] = (load, mk_key, measure)
 
     def use (self, pool, user):
         """Add a user to a pool (see :attr:`pools`), if not already added.
