@@ -8,6 +8,7 @@ from random import randrange, expovariate
 from pygame.time import wait
 
 from .util import ir
+from .conf import conf
 
 
 def _match_in_nest (obj, x):
@@ -415,6 +416,9 @@ Timer(fps = 60)
         #: The current length of a frame in seconds.
         self.frame = None
         self.fps = fps
+        #: The current average frame time in seconds (like
+        #: :attr:`current_fps`).
+        self.current_frame_time = self.frame
         #: The amount of time in seconds that has elapsed since the start of
         #: the current call to :meth:`run`, if any.
         self.t = 0
@@ -425,13 +429,24 @@ Timer(fps = 60)
 
     @property
     def fps (self):
-        """The current target FPS.  Set this directly."""
+        """The target FPS.  Set this directly."""
         return self._fps
 
     @fps.setter
     def fps (self, fps):
         self._fps = int(round(fps))
         self.frame = 1. / fps
+
+    @property
+    def current_fps (self):
+        """The current framerate, an average based on
+:data:`conf.FPS_AVERAGE_RATIO`.
+
+If this is less than :attr:`fps`, then the timer isn't running at full speed
+because of slow calls to the ``cb`` argument to :meth:`run`.
+
+"""
+        return 1 / self.current_frame_time
 
     def run (self, cb, *args, **kwargs):
         """Run indefinitely or for a specified amount of time.
@@ -454,6 +469,7 @@ it does not necessarily reflect real time.
          This may be less than ``0`` if ``cb`` took a long time to run.
 
 """
+        r = conf.FPS_AVERAGE_RATIO
         self.t = 0
         self._stopped = False
         seconds = kwargs.get('seconds')
@@ -465,9 +481,11 @@ it does not necessarily reflect real time.
         # main loop
         t0 = time()
         while True:
+            # call the callback
             frame = self.frame
             cb(*args)
             t_gone = time() - t0
+            # return if necessary
             if self._stopped:
                 if seconds is not None:
                     return seconds - t_gone
@@ -475,17 +493,26 @@ it does not necessarily reflect real time.
                     return frames - t_gone / frame
                 else:
                     return None
-            t_left = frame - t_gone # until next frame
+            # check how long to wait until the end of the frame by aiming for a
+            # rolling frame average equal to the target frame time
+            frame_t = (1 - r) * self.current_frame_time + r * t_gone
+            t_left = (frame - frame_t) / r
+            # reduce wait if we would go over the requested running time
             if seconds is not None:
                 t_left = min(seconds, t_left)
             elif frames is not None:
                 t_left = min(frames * frame, t_left)
+            # wait
             if t_left > 0:
                 wait(int(1000 * t_left))
-                t_gone = frame
+                t_gone += t_left
+                frame_t += r * t_left
+            # update some attributes
             t0 += t_gone
             self.elapsed = t_gone
-            self.t += frame
+            self.current_frame_time = frame_t
+            self.t += t_gone
+            # return if necessary
             if seconds is not None:
                 seconds -= t_gone
                 if seconds <= 0:

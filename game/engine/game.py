@@ -81,7 +81,7 @@ World(scheduler, evthandler)
 
         self._initialised = False
         self._extra_args = args
-        self._avg_frame_time = self._avg_draw_time = scheduler.frame
+        self._avg_draw_time = scheduler.frame
         self._since_last_draw = 0
 
     @_ClassProperty
@@ -100,20 +100,14 @@ World(scheduler, evthandler)
 
 If this is less than :data:`conf.FPS`, then we're dropping frames.
 
-"""
-        return 1 / self._avg_draw_time
-
-    @property
-    def update_fps (self):
-        """The current update rate, an average based on
-:data:`conf.FPS_AVERAGE_RATIO`.
-
-If this is less than :data:`conf.FPS`, then the game isn't running at full
-speed.  (This may mean the draw rate (:attr:`fps`) is dropping to
+For the current update FPS, use the
+:attr:`Timer.current_fps <engine.sched.Timer.current_fps>` of
+:attr:`scheduler`.  (If this indicates the scheduler isn't running at full
+speed, it may mean the draw rate (:attr:`fps`) is dropping to
 :data:`conf.MIN_FPS`.)
 
 """
-        return 1 / self._avg_frame_time
+        return 1 / self._avg_draw_time
 
     def init (self):
         """Called when this first becomes the active world.
@@ -178,19 +172,19 @@ Raises ``KeyError`` for missing entities.
 
     def _handle_slowdown (self):
         """Return whether to draw this frame."""
-        elapsed = self.scheduler.elapsed
+        s = self.scheduler
+        elapsed = s.elapsed
         if elapsed is None:
             # haven't completed a frame yet
             return True
-        # update rolling frame average
+        frame_t = s.current_frame_time
+        target_t = s.frame
+        # compute rolling frame average for drawing, but don't store it just
+        # yet
         r = conf.FPS_AVERAGE_RATIO
-        frame_t = self._avg_frame_time = ((1 - r) * self._avg_frame_time +
-                                          r * elapsed)
-        # compute for drawing too, but don't store it just yet
         draw_t = ((1 - r) * self._avg_draw_time +
                   r * (self._since_last_draw + elapsed))
 
-        target_t = self.scheduler.frame
         if frame_t <= target_t or abs(frame_t - target_t) / target_t < .1:
             # running at (near enough (within 1% of)) full speed, so draw
             draw = True
