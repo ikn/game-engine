@@ -7,8 +7,8 @@ from random import randrange, expovariate
 
 from pygame.time import wait
 
-from .util import ir
 from .conf import conf
+from .util import ir
 
 
 def _match_in_nest (obj, x):

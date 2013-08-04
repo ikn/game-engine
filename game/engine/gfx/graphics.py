@@ -218,7 +218,7 @@ each tile type never changes.
             if len(tile_data.split()) == 1 and \
                splitext(tile_data)[1][1:] in ('png', 'jpg', 'jpeg', 'gif'):
                 # image file
-                tile_data = conf.GAME.img(tile_data, cache = cache)
+                tile_data = conf.GAME.resources.img(tile_data, cache = cache)
             else:
                 # string/text file
                 tile_data = (tile_data, None, None)

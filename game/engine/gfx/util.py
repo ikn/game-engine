@@ -197,7 +197,7 @@ so ``spritemap[(col, row)]`` works as well.)
 
     def __init__ (self, img, sw = None, sh = None, pad = 0, nsprites = None):
         if isinstance(img, basestring):
-            img = conf.GAME.img(img)
+            img = conf.GAME.resources.img(img)
         #: Surface containing the original spritesheet image.
         self.sfc = img
         img_sz = img.get_size()

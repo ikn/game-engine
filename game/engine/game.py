@@ -2,8 +2,7 @@
 
 Only one :class:`Game` instance should ever exist, and it stores itself in
 :data:`conf.GAME`.  Start the game with :func:`run` and use the :class:`Game`
-instance for changing worlds, clearing media caches, handling the display and
-playing audio.
+instance for changing worlds, handling the display and playing audio.
 
 """
 
@@ -15,7 +14,7 @@ from pygame.display import update as update_display
 
 from .conf import conf
 from .sched import Scheduler
-from . import evt, gfx
+from . import evt, gfx, res
 from .txt import Fonts
 from .util import ir, convert_sfc
 
@@ -52,6 +51,8 @@ World(scheduler, evthandler)
 :arg evthandler: the
                  :class:`evt.EventHandler <engine.evt.handler.EventHandler>`
                  instance this world should use for input.
+:arg resources: the :class:`res.ResourceManager <engine.res.ResourceManager>`
+                instance this world should use for loading resources.
 
 .. attribute:: id
 
@@ -65,7 +66,7 @@ World(scheduler, evthandler)
 
 """
 
-    def __init__ (self, scheduler, evthandler, *args):
+    def __init__ (self, scheduler, evthandler, resources, *args):
         #: :class:`sched.Scheduler <engine.sched.Scheduler>` instance taken by
         #: the constructor.
         self.scheduler = scheduler
@@ -75,6 +76,9 @@ World(scheduler, evthandler)
         #: :class:`gfx.GraphicsManager <engine.gfx.container.GraphicsManager>`
         #: instance used for drawing by default.
         self.graphics = gfx.GraphicsManager(scheduler)
+        #: :class:`res.ResourceManager <engine.res.ResourceManager>` instance
+        #: taken by the constructor.
+        self.resources = resources
         #: ``set`` of :class:`Entity <engine.entity.Entity>` instances in this
         #: world.
         self.entities = set()
@@ -235,23 +239,25 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         conf.RES_F = pg.display.list_modes()[0]
         self._quit = False
         self._update_again = False
-        self.world = None #: The currently running world.
+        #: The currently running world.
+        self.world = None
         #: A list of previous (nested) worlds, most 'recent' last.
         self.worlds = []
-        # initialise caches
-        self.file_cache = {} #: Cache for loaded images (before resize).
-        self.img_cache = {} #: Cache for images (after resize).
-        self.text_cache = {} #: Cache for rendered text.
         # load display settings
-        self.screen = None #: The main Pygame surface.
+        #: The main Pygame surface.
+        self.screen = None
         self.refresh_display()
+        #: :class:`res.ResourceManager <engine.res.ResourceManager>` instance
+        #: used for caching resources.
+        self.resources = res.ResourceManager()
         #: A :class:`txt.Fonts <engine.txt.Fonts>` instance.
         self.fonts = Fonts(conf.FONT_DIR)
         # start first world
         self.start_world(*args, **kwargs)
         # start playing music
         pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
-        self.music = [] #: Filenames for known music.
+        #: Filenames for known music.
+        self.music = []
         self.find_music()
         self.play_music()
         if not conf.MUSIC_AUTOPLAY:
@@ -292,7 +298,7 @@ should be passed to that base class).
         eh['_game_minimise'].cb(self.minimise)
         eh['_game_fullscreen'].cb(self.toggle_fullscreen)
         # instantiate class
-        world = cls(scheduler, eh, *args)
+        world = cls(scheduler, eh, self.resources, *args)
         scheduler.fps = conf.FPS[world.id]
         return world
 
@@ -382,106 +388,7 @@ If this quits the last (root) world, exit the game.
             self.quit()
         return [old_world] + self.quit_world(depth - 1)
 
-    # media
-
-    def img (self, filename, size = None, cache = True):
-        """Load or scale an image, or retrieve it from cache.
-
-img(filename[, size], cache = True) -> surface
-
-:arg filename: a filename to load, under :data:`conf.IMG_DIR`.
-:arg size: scale the image.  Can be an ``(x, y)`` size, a rect (in which case
-           its dimensions are used), or a number to scale by.  If ``(x, y)``,
-           either ``x`` or ``y`` can be ``None`` to scale to the other with
-           aspect ratio preserved.
-:arg cache: whether to store this image in/retrieve it from the appropriate
-            cache if possible.
-
-:rtype: ``pygame.Surface``
-
-"""
-        # get standardised cache key
-        if size is not None:
-            if isinstance(size, (int, float)):
-                size = float(size)
-            else:
-                if len(size) == 4:
-                    # rect (support Python 3 with no Rect slicing)
-                    size = size.size if isinstance(size, pg.Rect) else size[2:]
-                size = tuple(size)
-        key = (filename, size)
-        if key in self.img_cache:
-            return self.img_cache[key]
-        # else new: load/render
-        filename = conf.IMG_DIR + filename
-        # also cache loaded images to reduce file I/O
-        if cache and filename in self.file_cache:
-            img = self.file_cache[filename]
-        else:
-            img = convert_sfc(pg.image.load(filename))
-            if cache:
-                self.file_cache[filename] = img
-        # scale
-        if size is not None and size != 1:
-            current_size = img.get_size()
-            if not isinstance(size, tuple):
-                size = (ir(size * current_size[0]), ir(size * current_size[1]))
-            # handle None
-            for i in (0, 1):
-                if size[i] is None:
-                    size = list(size)
-                    scale = float(size[not i]) / current_size[not i]
-                    size[i] = ir(current_size[i] * scale)
-            img = pg.transform.smoothscale(img, size)
-            # speed up blitting (if not resized, this is already done)
-            img = convert_sfc(img)
-            if cache:
-                # add to cache (if not resized, this is in the file cache)
-                self.img_cache[key] = img
-        return img
-
-    def render_text (self, *args, **kwargs):
-        """Render text and cache the result.
-
-Takes the same arguments as :meth:`txt.Fonts.render <engine.txt.Fonts.render>`,
-plus a keyword-only ``cache`` argument.  If passed (with any value), the text
-is cached under this hashable value, and can be retrieved from cache by calling
-this function with the same value for this argument.
-
-Returns the same as :meth:`txt.Fonts.render <engine.txt.Fonts.render>`.
-
-"""
-        cache = 'cache' in kwargs
-        if cache:
-            key = kwargs['cache']
-            del kwargs['cache']
-            if key in self.text_cache:
-                return self.text_cache[key]
-        # else new: render
-        img, lines = self.fonts.render(*args, **kwargs)
-        img = convert_sfc(img)
-        result = (img, lines)
-        if cache:
-            self.text_cache[key] = result
-        return result
-
-    def clear_caches (self, *caches):
-        """Clear image caches.
-
-Takes any number of strings ``'file'``, ``'image'`` and ``'text'`` as
-arguments, which determine whether to clear :attr:`file_cache`,
-:attr:`img_cache` and :attr:`text_cache` respectively.  If none are given, all
-caches are cleared.
-
-"""
-        if not caches:
-            caches = ('file', 'image', 'text')
-        if 'file' in caches:
-            self.file_cache = {}
-        if 'image' in caches:
-            self.img_cache = {}
-        if 'text' in caches:
-            self.text_cache = {}
+    # audio
 
     def play_snd (self, base_id, volume = 1):
         """Play a sound.

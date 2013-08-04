@@ -63,7 +63,7 @@ correspond to builtin transforms (see :meth:`transform`).
             #: Filename of the loaded image, or ``None`` if a surface was
             #: given.
             self.fn = img
-            img = conf.GAME.img(img)
+            img = conf.GAME.resources.img(img)
         else:
             self.fn = None
         self._orig_sfc = self._surface = img
@@ -1332,7 +1332,8 @@ and visibility (:attr:`Graphic.visible`, :attr:`Graphic.layer`) without
 affecting the original graphic (or any other wrappers).
 
 Changes to the image represented by either the wrapper or the original graphic
-affect both instances.
+affect both instances.  This includes both transformations and changes to the
+original surface.
 
 """
 
