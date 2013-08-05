@@ -100,8 +100,9 @@ button _game_fullscreen DOWN
 
     # resources
     DEFAULT_RESOURCE_POOL = 'global'
-    # per-backend, each a {key: value} dict to update Game.fonts with
-    REQUIRED_FONTS = dd({})
+    # per-backend, each a {name: (filename, size)} dict of fonts to load into
+    # the default resource pool
+    REQUIRED_FONTS = dd({}, level={'test': ('Ubuntu-R.ttf', 20)})
 
 
 def _translate_dd (d):

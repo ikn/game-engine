@@ -15,7 +15,6 @@ from pygame.display import update as update_display
 from .conf import conf
 from .sched import Scheduler
 from . import evt, gfx, res
-from .txt import Fonts
 from .util import ir, convert_sfc
 
 
@@ -251,8 +250,6 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         #: :class:`res.ResourceManager <engine.res.ResourceManager>` instance
         #: used for caching resources.
         self.resources = res.ResourceManager()
-        #: A :class:`txt.Fonts <engine.txt.Fonts>` instance.
-        self.fonts = Fonts(conf.FONT_DIR)
         # start first world
         self.start_world(*args, **kwargs)
         # start playing music
@@ -313,9 +310,9 @@ should be passed to that base class).
         world.graphics.dirty()
         ident = world.id
         # set some per-world things
-        fonts = self.fonts
+        load_font = self.resources.pgfont
         for k, v in conf.REQUIRED_FONTS[ident].iteritems():
-            fonts[k] = v
+            load_font(*v, name=k)
         pg.event.set_grab(conf.GRAB_EVENTS[ident])
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[ident])
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[ident])
