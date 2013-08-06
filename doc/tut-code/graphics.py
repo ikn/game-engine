@@ -20,7 +20,7 @@ class Conf (object):
 class Puzzle (engine.game.World):
     def init (self):
         # load image
-        img = conf.GAME.img('img.jpg')
+        img = self.resources.img('img.jpg')
 
         # split up into tiles
         imgs = []

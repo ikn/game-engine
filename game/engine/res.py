@@ -3,7 +3,6 @@
 """
 TODO:
  - World.{use,drop}_pool
- - update tutorial to use this instead of conf.GAME.img
  - limits:
     - .limits: {type: amount}
     - .priorities: {pool: priority} - for determining what to unload if reach limits
@@ -74,7 +73,7 @@ load_text(text, font, colour[, shadow][, width], just=0, minimise=False,
 
 :arg text: text to render.
 :arg font: ``pygame.font.Font`` instance, or the name a font is cached under in
-           the the default pool.
+           the default pool.
 :arg colour: text colour, as taken by
              :func:`util.normalise_colour <engine.util.normalise_colour>`.
 :arg shadow: to draw a drop-shadow: ``(colour, offset)`` tuple, where

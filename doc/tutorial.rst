@@ -76,10 +76,11 @@ pixels wide and high.  I'm using
 `a lovely Toady Bloyster <_static/tut-img.jpg>`_.  Place the image in a
 directory named ``img`` next to the script.
 
-To load a Pygame surface from an image file, use :data:`conf.GAME`, which
-contains the current running game.  Working in the ``init`` method, we use::
+To load a Pygame surface from an image file, use the
+:class:`ResourceManager <engine.res.ResourceManager>` available to the
+world---working in the ``init`` method, we use::
 
-    img = conf.GAME.img('img.jpg')
+    img = self.resources.img('img.jpg')
 
 Most of the code to split the image up into tiles is basic Pygame.
 
@@ -220,7 +221,8 @@ they're easy to access::
     eh['quit'].cb(lambda evts: conf.GAME.quit_world())
     eh['move'].cb(self.move)
 
-We've registered callback functions for each event using
+(:data:`conf.GAME` contains the current running game.)  We've registered
+callback functions for each event using
 :meth:`BaseEvent.cb <engine.evt.evts.BaseEvent.cb>`; the arguments these get
 called with depends on the event type.  A ``button`` passes a single argument
 containing information about the numbers of ``DOWN``, etc. events that occurred
@@ -472,7 +474,8 @@ so I've left it as an exercise.  You might find the ``orig_pos`` part of each
 entry in the ``tiles`` attribute we've defined useful.
 
 After you've managed that, try putting together a victory message using
-:mod:`Game.render_text <engine.game.Game.render_text>` (take note of
+``World.resources.text`` via ``ResourceManager.text`` via
+:func:`res.load_text <engine.res.load_text>` (take note of
 :attr:`conf.REQUIRED_FONTS` and :attr:`conf.FONT_DIR`).
 
 High scores

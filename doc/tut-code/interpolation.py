@@ -33,7 +33,7 @@ class Puzzle (engine.game.World):
         eh['click'].cb(self.click)
 
         # load image
-        img = conf.GAME.img('img.jpg')
+        img = self.resources.img('img.jpg')
 
         # split up into tiles
         imgs = []
