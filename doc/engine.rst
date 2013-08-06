@@ -12,8 +12,8 @@ Modules:
    sched
    evt
    gfx
+   res
    entity
-   txt
    settings
    util
    conf

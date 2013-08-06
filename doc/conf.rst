@@ -201,5 +201,5 @@ Resources
 
    Fonts to automatically load as a
    ``{`` :attr:`game.World.id <engine.game.World.id>` ``: fonts}`` defaultdict,
-   where ``fonts`` is a dict to update the game's
-   :class:`txt.Fonts <engine.txt.Fonts>` instance with, and defaults to ``{}``.
+   where ``fonts`` is a ``{name: (filename, size)}`` dict giving fonts to load
+   into the default resource pool.

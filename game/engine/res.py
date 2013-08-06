@@ -2,7 +2,7 @@
 
 """
 TODO:
- - add to doc/ (and rebuild all so links work)
+ - World.{use,drop}_pool
  - update tutorial to use this instead of conf.GAME.img
  - limits:
     - .limits: {type: amount}
@@ -23,7 +23,7 @@ def _unit_measure (resource):
 
 
 def load_img (fn):
-    """Loader for resources of type ``'img'``.
+    """:class:`ResourceManager` loader for images (``'img'``).
 
 Takes the filename to load from, under :attr:`conf.IMG_DIR`.
 
@@ -36,11 +36,11 @@ def _mk_img_keys (fn):
 
 
 def _measure_img (sfc):
-    return img.get_bytesize() * img.get_width() * img.get_height()
+    return sfc.get_bytesize() * sfc.get_width() * sfc.get_height()
 
 
 def load_pgfont (fn, size, name=None):
-    """Loader for resources of type ``'pgfont'``.
+    """:class:`ResourceManager` loader for Pygame fonts (``'pgfont'``).
 
 mk_font_keys(fn, size[, name])
 
@@ -66,7 +66,7 @@ def _mk_pgfont_keys (fn=None, size=None, name=None):
 def load_text (text, font, colour, shadow=None, width=None, just=0,
                minimise=False, line_spacing=0, aa=True, bg=None,
                pad=(0, 0, 0, 0)):
-    """Loader for resources of type ``'text'``.
+    """:class:`ResourceManager` loader for rendering text (``'text'``).
 
 load_text(text, font, colour[, shadow][, width], just=0, minimise=False,
           line_spacing=0, aa=True[, bg], pad=(0, 0, 0, 0))
@@ -235,24 +235,28 @@ in this module.
 """
 
     def __init__ (self):
-        #: The resource loaders available to this manager.  This is a
-        #: ``{type: (load, mk_keys, measure)}`` dict, where ``type`` is the
-        #: loader identifier, and ``load``, ``mk_keys`` and ``measure`` are as
-        #: taken by :meth:`register`.
-        self.resource_loaders = {
+        # {name: (load, mk_keys, measure)}
+        self._loaders = {
             'img': (load_img, _mk_img_keys, _measure_img),
             'pgfont': (load_pgfont, _mk_pgfont_keys, _unit_measure),
             'text': (load_text, _mk_text_keys, _measure_text)
         }
-        #: The resource pools contained by this manager.  This is a
-        #: ``{name: (cache, users)}`` dict, where ``users`` is a set of users
-        #: claiming to be using the pool (probably :class:`ResourceProxy`
-        #: instances), and ``cache`` is ``{loader: {cache_key: data}}`` giving
-        #: the resources cached in the pool.
-        self.pools = {}
+        # {name: (cache, users)}, where cache is {loader: {cache_key: data}}
+        # and users is a set
+        self._pools = {}
+
+    @property
+    def resource_loaders (self):
+        """A list of the resource loaders available to this manager."""
+        return self._loaders.keys()
+
+    @property
+    def pools (self):
+        """A list of the resource pools contained by this manager."""
+        return self._pools.keys()
 
     def __getattr__ (self, attr):
-        if attr in self.resource_loaders:
+        if attr in self._loaders:
             # generate and return resource loader wrapper
             return lambda *args, **kw: self.load(attr, *args, **kw)
         else:
@@ -280,10 +284,10 @@ This is equivalent to
         pool = kw.pop('pool', conf.DEFAULT_RESOURCE_POOL)
         force_load = kw.pop('force_load', False)
         # create pool and cache dicts if they don't exist, since they will soon
-        cache = self.pools.setdefault(pool, ({}, set()))[0]
+        cache = self._pools.setdefault(pool, ({}, set()))[0]
         cache = cache.setdefault(loader, {})
         # retrieve from cache, or load and store in cache
-        load, mk_keys, measure = self.resource_loaders[loader]
+        load, mk_keys, measure = self._loaders[loader]
         ks = set(mk_keys(*args, **kw))
         if force_load or not ks & set(cache.iterkeys()):
             resource = load(*args, **kw)
@@ -315,24 +319,24 @@ register(name, load, mk_keys[, measure])
               default is to return ``1`` for any resource.
 
 """
-        self.resource_loaders[name] = (load, mk_keys, measure)
+        self._loaders[name] = (load, mk_keys, measure)
 
     def use (self, pool, user):
-        """Add a user to a pool (see :attr:`pools`), if not already added.
+        """Add a user to a pool, if not already added.
 
 The pool need not already exist.
 
 """
-        self.pools.setdefault(pool, ({}, []))[1].add(user)
+        self._pools.setdefault(pool, ({}, set()))[1].add(user)
 
     def drop (self, pool, user):
-        """Drop a user from a pool (see :attr:`pools`), if present.
+        """Drop a user from a pool, if present.
 
 The pool need not already exist.
 
 """
-        if pool in self.pools:
-            cache, users = self.pools[pool]
+        if pool in self._pools:
+            cache, users = self._pools[pool]
             try:
                 users.remove(user)
             except KeyError:
@@ -340,4 +344,31 @@ The pool need not already exist.
             else:
                 # remove pool if now empty
                 if not cache and not users:
-                    del self.pools[pool]
+                    del self._pools[pool]
+
+    def pool_users (self, pool):
+        """Get a set of users using the given pool."""
+        # freeze so can't modify it
+        return frozenset(self._pools.get(pool, (None, frozenset()))[1])
+
+    def measure (self, *pools):
+        """Measure the resources cached in the given pools.
+
+:return: ``{loader: size}`` dict giving the total size of the resources cached
+         for each loader, summed over all pools given.  Missing loaders have no
+         cached resources in these pools.
+
+"""
+        sizes = {}
+        all_pools = self._pools
+        for pool in pools:
+            if pool in all_pools:
+                for loader, cache in all_pools[pool][0].iteritems():
+                    measure_fn = self._loaders[loader][2]
+                    size = sum(measure_fn(resource)
+                               for resource in cache.itervalues())
+                    if loader in sizes:
+                        sizes[loader] += size
+                    else:
+                        sizes[loader] = size
+        return sizes
