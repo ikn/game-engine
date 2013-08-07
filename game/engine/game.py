@@ -14,7 +14,7 @@ from pygame.display import update as update_display
 
 from .conf import conf
 from .sched import Scheduler
-from . import evt, gfx, res
+from . import evt, gfx, res, text
 from .util import ir, convert_sfc
 
 
@@ -266,6 +266,10 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         #: used for caching resources.
         self.resources = res.ResourceManager()
         self.resources.use(conf.DEFAULT_RESOURCE_POOL, self)
+        #: ``{name: renderer}`` dict of :class:`text.TextRenderer
+        #: <engine.text.TextRenderer>` instances available for referral by name
+        #: in the ``'text'`` resource loader.
+        self.text_renderers = {}
         # start first world
         self.start_world(*args, **kwargs)
         # start playing music
@@ -326,9 +330,12 @@ should be passed to that base class).
         world.graphics.dirty()
         ident = world.id
         # set some per-world things
-        load_font = self.resources.pgfont
-        for k, v in conf.REQUIRED_FONTS[ident].iteritems():
-            load_font(*v, name=k)
+        for name, r in conf.TEXT_RENDERERS[ident].iteritems():
+            if isinstance(r, basestring):
+                r = (r,)
+            if not isinstance(r, text.TextRenderer):
+                r = text.TextRenderer(*r)
+            self.text_renderers[name] = r
         pg.event.set_grab(conf.GRAB_EVENTS[ident])
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[ident])
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[ident])

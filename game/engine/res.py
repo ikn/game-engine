@@ -37,179 +37,79 @@ def _measure_img (sfc):
     return sfc.get_bytesize() * sfc.get_width() * sfc.get_height()
 
 
-def load_pgfont (fn, size, name=None):
+def load_pgfont (fn, size):
     """:class:`ResourceManager` loader for Pygame fonts (``'pgfont'``).
 
-mk_font_keys(fn, size[, name])
+mk_font_keys(fn, size)
 
 :arg fn: font filename, under :data:`conf.FONT_DIR`.
 :arg size: size this font should render at.
-:arg name: if given, it is used as an alternative caching key---so if you know
-           a font is cached, you can retrieve it using just the name, omitting
-           all other arguments.
 
 """
     return pg.font.Font(conf.FONT_DIR + fn, size)
 
 
-def _mk_pgfont_keys (fn=None, size=None, name=None):
-    if fn is None and name is None:
-        raise TypeError('name required if fn and size not given')
-    if name is not None:
-        yield name
-    if fn is not None:
-        yield (fn, int(size))
+def _mk_pgfont_keys (fn, size):
+    yield (fn, int(size))
 
-
-def load_text (text, font, colour, shadow=None, width=None, just=0,
-               minimise=False, line_spacing=0, aa=True, bg=None,
-               pad=(0, 0, 0, 0)):
-    """:class:`ResourceManager` loader for rendering text (``'text'``).
-
-load_text(text, font, colour[, shadow][, width], just=0, minimise=False,
-          line_spacing=0, aa=True[, bg], pad=(0, 0, 0, 0))
-    -> (surface, num_lines)
-
-:arg text: text to render.
-:arg font: ``pygame.font.Font`` instance, or the name a font is cached under in
-           the default pool.
-:arg colour: text colour, as taken by
-             :func:`util.normalise_colour <engine.util.normalise_colour>`.
-:arg shadow: to draw a drop-shadow: ``(colour, offset)`` tuple, where
-             ``offset`` is ``(x, y)``.
-:arg width: maximum width of returned surface (wrap text).  ``ValueError`` is
-        raised if any words are too long to fit in this width.
-:arg just: if the text has multiple lines, justify: ``0`` = left, `1`` =
-           centre, ``2`` = right.
-:arg minimise: if width is set, treat it as a minimum instead of absolute width
-               (that is, shrink the surface after, if possible).
-:arg line_spacing: space between lines, in pixels.
-:arg aa: whether to anti-alias the text.
-:arg bg: background colour (``(R, G, B[, A])`` tuple); defaults to alpha.
-:arg pad: ``(left, top, right, bottom)`` padding in pixels.  Can also be one
-          number for all sides or ``(left_and_right, top_and_bottom)``.  This
-          treats shadow as part of the text.
-
-:return: ``surface`` is the ``pygame.Surface`` containing the rendered text and
-         ``num_lines`` is the final number of lines of text.
-
-Line breaks split the text into lines, as does the width restriction.
 
 """
-    if isinstance(font, basestring):
-        font = conf.GAME.resources.pgfont(name=font)
-    lines = []
-    colour = normalise_colour(colour)
-    if shadow is None:
-        offset = (0, 0)
-    else:
-        shadow_colour, offset = shadow
-        shadow_colour = normalise_colour(shadow_colour)
-    if isinstance(pad, int):
-        pad = (pad, pad, pad, pad)
-    elif len(pad) == 2:
-        pad = tuple(pad)
-        pad = pad + pad
-    else:
-        pad = tuple(pad)
-    if width is not None:
-        width -= pad[0] + pad[2]
-
-    # split into lines
-    text = text.splitlines()
-    if width is None:
-        width = max(font.size(line)[0] for line in text)
-        lines = text
-        minimise = True
-    else:
-        for line in text:
-            if font.size(line)[0] > width:
-                # wrap
-                words = line.split(' ')
-                # check if any words won't fit
-                for word in words:
-                    if font.size(word)[0] >= width:
-                        e = '\'{0}\' doesn\'t fit on one line'.format(word)
-                        raise ValueError(e)
-                # build line
-                build = ''
-                for word in words:
-                    temp = build + ' ' if build else build
-                    temp += word
-                    if font.size(temp)[0] < width:
-                        build = temp
-                    else:
-                        lines.append(build)
-                        build = word
-                lines.append(build)
-            else:
-                lines.append(line)
-    if minimise:
-        width = max(font.size(line)[0] for line in lines)
-
-    # simple case: just one line and no shadow or padding and bg is opaque
-    # or fully transparent bg and want to minimise
-    if (len(lines) == 1 and pad == (0, 0, 0, 0) and shadow is None and
-        (bg is None or len(bg) == 3 or bg[3] in (0, 255)) and minimise):
-        if bg is None:
-            sfc = font.render(lines[0], True, colour)
-        else:
-            sfc = font.render(lines[0], True, colour, bg)
-        return (sfc, 1)
-    # else create surface to blit all the lines to
-    size = font.get_height()
-    h = (line_spacing + size) * (len(lines) - 1) + font.size(lines[-1])[1]
-    sfc = pygame.Surface((width + abs(offset[0]) + pad[0] + pad[2],
-                          h + abs(offset[1]) + pad[1] + pad[3]))
-    # to get transparency, need to be blitting to a converted surface
-    sfc = sfc.convert_alpha()
-    sfc.fill((0, 0, 0, 0) if bg is None else bg)
-    # render and blit text
-    todo = []
-    if shadow is not None:
-        todo.append((shadow_colour, 1))
-    todo.append((colour, -1))
-    n_lines = 0
-    for colour, mul in todo:
-        o = (max(mul * offset[0] + pad[0], 0),
-                max(mul * offset[1] + pad[1], 0))
-        h = 0
-        for line in lines:
-            if line:
-                n_lines += 1
-                s = font.render(line, aa, colour)
-                if just == 2:
-                    sfc.blit(s, (width - s.get_width() + o[0], h + o[1]))
-                elif just == 1:
-                    sfc.blit(s, ((width - s.get_width()) // 2 + o[0],
-                                 h + o[1]))
-                else:
-                    sfc.blit(s, (o[0], h + o[1]))
-            h += size + line_spacing
-    return (sfc, n_lines)
+:arg name: if given, it is used as an alternative caching key---so if you know
+           a font is cached, you can retrieve it using just the name, omitting
+           all other arguments.
+"""
 
 
-def _mk_text_keys (text, font, colour, shadow=None, width=None, just=0,
-                   minimise=False, line_spacing=0, aa=True, bg=None,
-                   pad=(0, 0, 0, 0)):
+def load_text (text, renderer, options={}, **kwargs):
+    """:class:`ResourceManager` loader for rendering text (``'text'``).
+
+load_text(text, renderer, options={}, **kwargs) -> (surface, num_lines)
+
+:arg renderer: :class:`text.TextRenderer <engine.text.TextRenderer>` instance
+               or the name a renderer is stored under in
+               :attr:`Game.text_renderers <engine.game.Game.text_renderers>`.
+
+Other arguments are as taken by and the return value is as given by
+:meth:`TextRenderer.render <engine.text.TextRenderer.render>`.
+
+"""
+    if isinstance(renderer, basestring):
+        renderer = conf.GAME.text_renderers[renderer]
+    return renderer.render(text, options, **kwargs)
+
+
+def _mk_text_keys (text, renderer, options={}, **kwargs):
+    if isinstance(renderer, basestring):
+        renderer = conf.GAME.text_renderers[renderer]
+    opts = renderer.mk_options(options, **kwargs)
     # just use a tuple of arguments, normalised and made hashable
-    if isinstance(font, basestring):
-        font = conf.GAME.resources.pgfont(name=font)
-    if width is not None:
-        width = int(width)
+    if opts.get('colour') is not None:
+        opts['colour'] = normalise_colour(opts['colour'])
+    shadow = opts.get('shadow')
     if shadow is not None:
         shadow = (normalise_colour(shadow[0]), tuple(shadow[1][:2]))
-    if bg is not None:
-        bg = normalise_colour(bg)
-    if isinstance(pad, int):
-        pad = (pad, pad, pad, pad)
-    elif len(pad) == 2:
-        pad = tuple(pad)
-        pad = pad + pad
-    else:
-        pad = tuple(pad)
-    return (text, text, normalise_colour(colour), shadow, width, just,
-            bool(minimise), int(line_spacing), bool(aa), bg, pad)
+    if opts.get('width') is not None:
+        opts['width'] = int(opts['width'])
+    if opts.get('minimise') is not None:
+        opts['minimise'] = bool(opts['minimise'])
+    if opts.get('line_spacing') is not None:
+        opts['line_spacing'] = int(opts['line_spacing'])
+    if opts.get('aa') is not None:
+        opts['aa'] = bool(opts['aa'])
+    if opts.get('bg') is not None:
+        opts['bg'] = normalise_colour(opts['bg'])
+    pad = opts.get('pad')
+    if pad is not None:
+        if isinstance(pad, int):
+            pad = (pad, pad, pad, pad)
+        elif len(pad) == 2:
+            pad = tuple(pad)
+            pad = pad + pad
+        else:
+            pad = tuple(pad)
+    return (text, opts.get('colour'), shadow, opts.get('width'),
+            opts.get('just'), opts.get('minimise'), opts.get('line_spacing'),
+            opts.get('aa'), opts['bg'], pad)
 
 
 def _measure_text (text):

@@ -100,8 +100,9 @@ button _game_fullscreen DOWN
 
     # resources
     DEFAULT_RESOURCE_POOL = 'global'
-    # per-backend, each {name: (filename, size)}
-    REQUIRED_FONTS = dd({}, level={'test': ('Ubuntu-R.ttf', 20)})
+    # per-backend, each {name: renderer}, where renderer is TextRenderer,
+    # (font_filename, options) or just font_filename
+    TEXT_RENDERERS = dd({})
 
 
 def _translate_dd (d):
