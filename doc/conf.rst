@@ -195,7 +195,8 @@ Resources
    :annotation: = 'global'
 
    Default :class:`ResourceManager <engine.res.ResourceManager>` resource pool
-   name.
+   name.  Resources cached in this pool are never dropped while the game is
+   still running.
 
 .. data:: REQUIRED_FONTS
 

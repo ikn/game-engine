@@ -164,6 +164,21 @@ Raises ``KeyError`` for missing entities.
             # unset gm even if it's not this world's main manager
             e.graphics.manager = None
 
+    def use_pools (self, *pools):
+        """Tell the resource manager that this world is using the given pools.
+
+This means the resources in the pool will not be removed from cache until this
+world drops the pool.
+
+"""
+        for pool in pools:
+            self.resources.use(pool, self)
+
+    def drop_pools (self, *pools):
+        """Stop using the given pools of the resource manager."""
+        for pool in pools:
+            self.resources.drop(pool, self)
+
     def update (self):
         """Called every frame to makes any necessary changes."""
         pass
@@ -250,6 +265,7 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         #: :class:`res.ResourceManager <engine.res.ResourceManager>` instance
         #: used for caching resources.
         self.resources = res.ResourceManager()
+        self.resources.use(conf.DEFAULT_RESOURCE_POOL, self)
         # start first world
         self.start_world(*args, **kwargs)
         # start playing music
@@ -521,8 +537,10 @@ run([t])
 :arg t: stop after this many seconds (else run forever).
 
 """
+        self.resources.use(conf.DEFAULT_RESOURCE_POOL, self)
         while not self._quit and (t is None or t > 0):
             t = self.world.scheduler.run(seconds = t)
+        self.resources.drop(conf.DEFAULT_RESOURCE_POOL, self)
 
     def quit (self, *args):
         """Quit the game.

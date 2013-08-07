@@ -2,7 +2,6 @@
 
 """
 TODO:
- - World.{use,drop}_pool
  - limits:
     - .limits: {type: amount}
     - .priorities: {pool: priority} - for determining what to unload if reach limits
@@ -283,15 +282,17 @@ This is equivalent to
         pool = kw.pop('pool', conf.DEFAULT_RESOURCE_POOL)
         force_load = kw.pop('force_load', False)
         # create pool and cache dicts if they don't exist, since they will soon
-        cache = self._pools.setdefault(pool, ({}, set()))[0]
+        cache, users = self._pools.setdefault(pool, ({}, set()))
         cache = cache.setdefault(loader, {})
         # retrieve from cache, or load and store in cache
         load, mk_keys, measure = self._loaders[loader]
         ks = set(mk_keys(*args, **kw))
         if force_load or not ks & set(cache.iterkeys()):
             resource = load(*args, **kw)
-            for k in ks:
-                cache[k] = resource
+            # only cache if the pool has users
+            if users:
+                for k in ks:
+                    cache[k] = resource
         else:
             resource = cache[ks.pop()]
         return resource
@@ -323,6 +324,8 @@ register(name, load, mk_keys[, measure])
     def use (self, pool, user):
         """Add a user to a pool, if not already added.
 
+If a pool ever has no users, all resources cached in it are removed.
+
 The pool need not already exist.
 
 """
@@ -341,8 +344,9 @@ The pool need not already exist.
             except KeyError:
                 pass
             else:
-                # remove pool if now empty
-                if not cache and not users:
+                # remove pool if now has no users (even if cached resources
+                # remain)
+                if not users:
                     del self._pools[pool]
 
     def pool_users (self, pool):
