@@ -133,24 +133,50 @@ This is relative to the top-left corner of the grid.
 """
         return Rect(self.tile_pos(col, row), self.tile_size(col, row))
 
-    def align (self, graphic, col, row, alignment = 0, pad = 0, offset = 0):
+    def tile_at (self, x, y):
+        """Return the ``(col, row)`` tile at the point ``(x, y)``, or
+``None``."""
+        if x < 0 or y < 0:
+            return None
+        pos = (x, y)
+        tile = []
+        for axis, pos in enumerate((x, y)):
+            current_pos = 0
+            ts = self._tile_size[axis]
+            gap = self._gap[axis] + (0,)
+            for i in xrange(self.ntiles[axis]):
+                current_pos += ts[i]
+                # now we're at the end of a tile
+                if current_pos > pos:
+                    # pos is within the previous tile
+                    tile.append(i)
+                    break
+                current_pos += gap[i]
+                # now we're at the start of a tile
+                if current_pos > pos:
+                    # pos is within the previous gap
+                    return None
+            else:
+                # didn't find a tile: point is past the end
+                return None
+        return tuple(tile)
+
+    def align (self, graphic, col, row, alignment=0, pad=0, offset=0):
         """Align a graphic or surface within a tile.
 
-align(self, graphic, col, row, alignment = 0, pad = 0, offset = 0)
-    -> aligned_rect
+align(self, graphic, col, row, alignment=0, pad=0, offset=0) -> aligned_rect
 
 ``alignment``, ``pad`` and ``offset`` are as taken by
 :func:`engine.util.align_rect`.
 
 :arg graphic: a :class:`Graphic <engine.gfx.graphic.Graphic>` instance or a
-              Pygame surface.  In the former case, the
-              :meth:`Graphic.align <engine.gfx.graphic.Graphic.align>` method
-              is called (but the graphic is not cropped to fit in the tile).
+              Pygame surface.  In the former case, the graphic is moved (but it
+              is not cropped to fit in the tile).
 :arg col: column of the tile.
 :arg row: row of the tile.
 
 :return: a Pygame rect clipped within the tile giving the area the graphic
-         should be put in, relative to the grid's top-left corner.
+         should be put in.
 
 """
         if isinstance(graphic, Graphic):
@@ -167,9 +193,9 @@ align(self, graphic, col, row, alignment = 0, pad = 0, offset = 0)
 class Spritemap (object):
     """A wrapper for spritesheets.
 
-Spritemap(img[, sw][, sh], pad = 0[, nsprites],
-          resource_pool = conf.DEFAULT_RESOURCE_POOL,
-          resource_manager = conf.GAME.resources)
+Spritemap(img[, sw][, sh], pad=0[, nsprites],
+          resource_pool=conf.DEFAULT_RESOURCE_POOL,
+          resource_manager=conf.GAME.resources)
 
 :arg img: a surface or filename to load from; this is a grid of sprites with
           the same size.
@@ -202,13 +228,13 @@ so ``spritemap[(col, row)]`` works as well.)
 
 """
 
-    def __init__ (self, img, sw = None, sh = None, pad = 0, nsprites = None,
-                  resource_pool = conf.DEFAULT_RESOURCE_POOL,
-                  resource_manager = None):
+    def __init__ (self, img, sw=None, sh=None, pad=0, nsprites=None,
+                  resource_pool=conf.DEFAULT_RESOURCE_POOL,
+                  resource_manager=None):
         if isinstance(img, basestring):
             if resource_manager is None:
                 resource_manager = conf.GAME.resources
-            img = resource_manager.img(img, pool = resource_pool)
+            img = resource_manager.img(img, pool=resource_pool)
         #: Surface containing the original spritesheet image.
         self.sfc = img
         img_sz = img.get_size()

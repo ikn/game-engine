@@ -123,14 +123,11 @@ class Puzzle (engine.game.World):
     def click (self, evts):
         # get the tile clicked on
         x, y = pg.mouse.get_pos()
-        x -= conf.TILE_GAP[0]
-        y -= conf.TILE_GAP[1]
-        tile_w, tile_h = conf.TILE_SIZE
-        if x % conf.N_TILES[0] >= tile_w or y % conf.N_TILES[1] >= tile_h:
+        tile = self.grid.tile_at(x - conf.TILE_GAP[0], y - conf.TILE_GAP[1])
+        if tile is None:
             # clicked on the gap between tiles, so do nothing
             return
-        x //= tile_w
-        y //= tile_h
+        x, y = tile
         for i in xrange(evts[evt.bmode.DOWN]):
             if self.tiles[x][y] is None:
                 # this is the missing tile

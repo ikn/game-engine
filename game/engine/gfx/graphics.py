@@ -5,7 +5,8 @@
 TODO:
  - tiled graphic
  - Text
- - Animation(surface | filename[image])
+ - Animation(sequence of surfaces/filenames/graphics/(surface, rect))
+    - be careful with graphics - need to change as they change, both dirty and rect
  - particle system
 
 ---NODOC---

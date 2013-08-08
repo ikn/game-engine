@@ -114,7 +114,7 @@ The top-left of this is not necessarily the same as :attr:`pos`.
 
     @property
     def x (self):
-        """``x`` co-ordinate of the entity's top-left corner."""
+        """``x`` co-ordinate of the group's top-left corner."""
         return self._pos[0]
 
     @x.setter
@@ -123,10 +123,10 @@ The top-left of this is not necessarily the same as :attr:`pos`.
 
     @property
     def y (self):
-        """``y`` co-ordinate of the entity's top-left corner."""
+        """``y`` co-ordinate of the group's top-left corner."""
         return self._pos[1]
 
-    @x.setter
+    @y.setter
     def y (self, y):
         self.pos = (self._pos[0], y)
 

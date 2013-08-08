@@ -666,9 +666,8 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
 :arg resolution: 'framerate' to update the value at.  If not given, the value
                  is set every frame it changes; if given, this sets an upper
                  limit on the number of times per second the value may updated.
-                 The current value of :attr:`frame <Timer.frame>` (which may
-                 change over the interpolation) puts an upper limit on the
-                 rate.
+                 The current value of :attr:`fps <Timer.fps>` (which may change
+                 over the interpolation) also puts an upper limit on the rate.
 
 :return: an identifier that can be passed to :meth:`rm_timeout` to remove the
         callback that continues the interpolation.  In this case ``end`` is not

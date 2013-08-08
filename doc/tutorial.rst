@@ -344,14 +344,11 @@ and define the callback::
     def click (self, evts):
         # get the tile clicked on
         x, y = pg.mouse.get_pos()
-        x -= conf.TILE_GAP[0]
-        y -= conf.TILE_GAP[1]
-        tile_w, tile_h = conf.TILE_SIZE
-        if x % conf.N_TILES[0] >= tile_w or y % conf.N_TILES[1] >= tile_h:
+        tile = self.grid.tile_at(x - conf.TILE_GAP[0], y - conf.TILE_GAP[1])
+        if tile is None:
             # clicked on the gap between tiles, so do nothing
             return
-        x //= tile_w
-        y //= tile_h
+        x, y = tile
         for i in xrange(evts[evt.bmode.DOWN]):
             if self.tiles[x][y] is None:
                 # this is the missing tile
@@ -363,7 +360,9 @@ and define the callback::
                 break
             self.move_tile(x, y)
 
-Again, we're not doing anything particularly new here.
+The only new thing here is the call to
+:meth:`Grid.tile_at <engine.gfx.util.Grid.tile_at>`---it saves a bit of work,
+and handles the edge cases for us.
 
 You might notice you can't see the cursor.  This is the default behaviour, so
 let's disable that.  This setting is actually configured on a per-world basis,
