@@ -14,6 +14,7 @@ Modules:
    gfx
    res
    entity
+   text
    settings
    util
    conf

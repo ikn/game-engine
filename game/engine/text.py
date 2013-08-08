@@ -5,7 +5,19 @@ import pygame as pg
 from .conf import conf
 from .util import normalise_colour
 
-#: default values for text rendering options
+#: Default values for text rendering options.  Value::
+#:
+#:  {
+#:      'colour': '000',
+#:      'shadow': None,
+#:      'width': None,
+#:      'just': 0,
+#:      'minimise': False,
+#:      'line_spacing': 0,
+#:      'aa': True,
+#:      'bg': None,
+#:      'pad': (0, 0, 0, 0)
+#:  }
 # be sure to update res._mk_text_keys if these change
 option_defaults = {
     'colour': '000',
@@ -34,8 +46,8 @@ TextRenderer(font, options={}, resource_pool=conf.DEFAULT_RESOURCE_POOL,
 :arg resource_manager: :class:`ResourceManager <engine.res.ResourceManager>`
                        instance to use to load any Pygame fonts.
 
-This is basically a way of storing a number of rendering paramaters for
-rendering text by a reference to some name.
+This is basically a way of storing a number of rendering parameters so you can
+render text in a certain way without specifying them.
 
 """
 
