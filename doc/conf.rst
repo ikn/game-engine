@@ -134,7 +134,7 @@ Display
 .. data:: RES
 
    Current game resolution, no matter the display mode.  Only exists if the
-   engine is initialised.
+   game has been run.
 
 .. data:: MIN_RES_W
    :annotation: = (320, 180)

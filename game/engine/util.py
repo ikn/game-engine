@@ -3,6 +3,7 @@
 from random import random, randrange
 from collections import defaultdict
 from bisect import bisect
+import types
 
 import pygame as pg
 
@@ -28,6 +29,49 @@ dd(default[, items], **kwargs) -> default_dict
 """
     items.update(kwargs)
     return defaultdict(lambda: default, items)
+
+
+def takes_args (func):
+    """Determine whether the given function takes any arguments.
+
+:return: ``True`` if the function can take arguments, or if the result could
+         not be determined (the argument is not a function, or not a
+         pure-Python function), else ``False``.
+
+"""
+    if isinstance(func, types.MethodType):
+        # a bound method takes arguments if it takes more than one positional
+        # argument or has variadic arguments (in the latter case, we have more
+        # argument names than reported arguments)
+        code = meth.im_func.func_code
+        return len(code.co_varnames) > code.co_argcount or code.co_argcount > 1
+    elif isinstance(func, types.FunctionType):
+        # takes arguments if has any argument names (argcount might still be 0)
+        return bool(func.func_code.co_varnames)
+    else:
+        # be explicit
+        return None
+
+
+def wrap_fn (func):
+    """Return a function that calls ``func``, possibly omitting arguments.
+
+wrap_fn(func) -> wrapper
+
+When ``wrapper`` is called, it calls ``func`` (and returns its return value),
+but only passes any arguments on to ``func`` if it is determined that ``func``
+takes any arguments (using :func:`takes_args`).
+
+"""
+    pass_args = takes_args(func)
+
+    def wrapper (*args, **kwargs):
+        if pass_args:
+            return func(*args, **kwargs)
+        else:
+            return func()
+
+    return wrapper
 
 
 def ir (x):

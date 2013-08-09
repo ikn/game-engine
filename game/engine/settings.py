@@ -11,6 +11,8 @@ from copy import deepcopy
 import json
 from collections import defaultdict
 
+from .util import wrap_fn
+
 
 class _JSONEncoder (json.JSONEncoder):
     """Extended json.JSONEncoder with support for sets and defaultdicts."""
@@ -36,7 +38,8 @@ class DummySettingsManager (object):
             used.
 
 To access and change settings, use attributes of this object.  To restore a
-setting to its default (initial) value, delete it.
+setting to its default (initial) value, delete it.  To add a new setting, just
+set it to a value (or use :meth:`add`).
 
 """
 
@@ -45,6 +48,8 @@ setting to its default (initial) value, delete it.
         self._defaults = {}
         self._types = {}
         self._tricky_types = types
+        # {setting: {passed_cb: wrapped_cb}}
+        self._cbs = {}
         self.add(settings)
 
     def add (self, settings):
@@ -71,7 +76,6 @@ setting to its default (initial) value, delete it.
             if v is not None:
                 self._types[k] = type(v)
         elif not isinstance(v, t):
-            print self._tricky_types.get(t, t)(v)
             try:
                 v = self._tricky_types.get(t, t)(v)
             except (TypeError, ValueError):
@@ -85,10 +89,70 @@ setting to its default (initial) value, delete it.
             return (True, None)
         # store
         self._settings[k] = v
+        if k in self._cbs:
+            for cb in self._cbs[k].itervalues():
+                cb(v)
         return (False, v)
 
     def __delattr__ (self, k):
         setattr(self, k, self._defaults[k])
+
+    def changed (self, *settings):
+        """Mark some settings as having changed.
+
+:arg settings: any number of names of settings that have been changed.
+
+This is for settings that can be changed internally without setting them to new
+values, such as appending to a list.  If you do this, you should call this
+function to make sure that events are propagated and new values are handled
+properly.
+
+"""
+        if settings:
+            cbs = self._cbs
+            for k in settings:
+                if k in cbs:
+                    v = self._settings[k]
+                    for cb in cbs[k].itervalues():
+                        cb(v)
+            self.dump()
+
+    def on_change (self, setting, *cbs):
+        """Register callbacks for when the given setting is changed.
+
+:arg setting: the setting name, as used to change the setting (case-sensitive).
+:arg cbs: any number of functions to call when the setting is changed.  A
+          callback is called after the setting has been changed, and is passed
+          the new value of the setting (or, if it is determined that the
+          function takes no arguments, it is passed no arguments).
+
+"""
+        # need to store passed callback for removing
+        if setting not in self._settings:
+            raise KeyError('no such setting: \'{0}\''.format(setting))
+        self._cbs.setdefault(setting, {}).update(
+            (cb, wrap_fn(cb)) for cb in cbs
+        )
+
+    def rm_cbs (self, setting, *cbs):
+        """Remove callbacks registered for change events for the given setting.
+
+:arg setting: the setting for which the callbacks were registered for change
+              events.
+:arg cbs: any number of callbacks, as previously passed to :meth:`on_change`.
+
+Missing items are ignored.
+
+"""
+        if setting in self._cbs:
+            all_cbs = self._cbs[setting]
+            for cb in cbs:
+                try:
+                    del all_cbs[cb]
+                except KeyError:
+                    pass
+            if not all_cbs:
+                del self._cbs[setting]
 
     def dump (self):
         """Force saving all settings.
@@ -167,9 +231,14 @@ Takes any number of strings corresponding to setting names.
 dump()
 
 """
+        if not self._save:
+            # nothing to save
+            return
         if public:
             print >> sys.stderr, 'info: saving settings'
         try:
+            if not os.path.exists:
+                os.makedirs(os.path.dirname(self._fn))
             with open(self._fn, 'w') as f:
                 json.dump(self._save, f, indent = 4, cls = _JSONEncoder)
         except IOError:

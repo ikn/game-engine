@@ -6,6 +6,7 @@ TODO:
  - tiled graphic
  - Text
  - Animation(sequence of surfaces/filenames/graphics/(surface, rect))
+    - note spritemap fulfills conditions for the argument
     - be careful with graphics - need to change as they change, both dirty and rect
  - particle system
 

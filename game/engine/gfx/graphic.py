@@ -7,7 +7,7 @@ TODO:
  - in graphics, store n (5?) last # draws between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
-        - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 3?)
+        - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 2?)
  - tint transform (as fade, which uses tint with (255, 255, 255, opacity))
 
 ---NODOC---

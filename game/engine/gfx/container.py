@@ -6,15 +6,11 @@ TODO:
  - make it possible for GM to have transparent BG (only if orig_sfc has alpha)
  - GG:
     - allow for transforms
-    - internal layers
- - ignore off-screen things
+    - internal layers (has allowed range in manager, and distributes graphics within it)
+ - ignore off-screen things (clip all dirty rects and discard zero-size ones)
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio) or set a Graphic property (make GraphicView have its own copy)
-    - implementation:
-        - in first loop, for each graphic, offset _rect by -offset
-        - when using, offset old graphic dirty rects by -last_offset, current by -offset
-        - after drawing, for each graphic, offset _rect by offset
  - do something with/like dispman
 
 ---NODOC---
