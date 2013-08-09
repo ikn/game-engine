@@ -43,7 +43,7 @@ def takes_args (func):
         # a bound method takes arguments if it takes more than one positional
         # argument or has variadic arguments (in the latter case, we have more
         # argument names than reported arguments)
-        code = meth.im_func.func_code
+        code = func.im_func.func_code
         return len(code.co_varnames) > code.co_argcount or code.co_argcount > 1
     elif isinstance(func, types.FunctionType):
         # takes arguments if has any argument names (argcount might still be 0)

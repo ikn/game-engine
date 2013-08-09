@@ -258,18 +258,38 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         self.world = None
         #: A list of previous (nested) worlds, most 'recent' last.
         self.worlds = []
+
         # load display settings
         #: The main Pygame surface.
         self.screen = None
         self.refresh_display()
+        conf.on_change('FULLSCREEN', self.refresh_display,
+                       lambda: conf.RESIZABLE, source=self)
+
+        def change_res_w ():
+            if not conf.FULLSCREEN:
+                self.refresh_display()
+
+        conf.on_change('RES_W', change_res_w, source=self)
+
+        def change_res_f ():
+            if conf.FULLSCREEN:
+                self.refresh_display()
+
+        conf.on_change('RES_F', change_res_f, source=self)
+
         #: :class:`res.ResourceManager <engine.res.ResourceManager>` instance
         #: used for caching resources.
         self.resources = res.ResourceManager()
         self.resources.use(conf.DEFAULT_RESOURCE_POOL, self)
-        #: ``{name: renderer}`` dict of :class:`text.TextRenderer
-        #: <engine.text.TextRenderer>` instances available for referral by name
-        #: in the ``'text'`` resource loader.
+        self._using_pool = conf.DEFAULT_RESOURCE_POOL
+        conf.on_change('DEFAULT_RESOURCE_POOL', self._change_resource_pool,
+                       source=self)
+        #: ``{name: renderer}`` dict of
+        #: :class:`text.TextRenderer <engine.text.TextRenderer>` instances
+        #: available for referral by name in the ``'text'`` resource loader.
         self.text_renderers = {}
+
         # start first world
         self.start_world(*args, **kwargs)
         # start playing music
@@ -314,7 +334,7 @@ should be passed to that base class).
         eh.load_s(conf.GAME_EVENTS)
         eh['_game_quit'].cb(self.quit)
         eh['_game_minimise'].cb(self.minimise)
-        eh['_game_fullscreen'].cb(self.toggle_fullscreen)
+        eh['_game_fullscreen'].cb(self._toggle_fullscreen)
         # instantiate class
         world = cls(scheduler, eh, self.resources, *args)
         scheduler.fps = conf.FPS[world.id]
@@ -409,7 +429,13 @@ If this quits the last (root) world, exit the game.
             self.quit()
         return [old_world] + self.quit_world(depth - 1)
 
-    # audio
+    # resources
+
+    def _change_resource_pool (self, new_pool):
+        # callback: after conf.DEFAULT_RESOURCE_POOL change
+        self.resources.drop(self._using_pool, self)
+        self.resources.use(new_pool, self)
+        self._using_pool = new_pool
 
     def play_snd (self, base_id, volume = 1):
         """Play a sound.
@@ -484,15 +510,18 @@ refresh_display()
         if self.world is not None:
             self.world.graphics.dirty()
 
-    def toggle_fullscreen (self, *args):
+    def toggle_fullscreen (self):
         """Toggle fullscreen mode.
 
 toggle_fullscreen()
 
 """
-        if conf.RESIZABLE:
-            conf.FULLSCREEN = not conf.FULLSCREEN
-            self.refresh_display()
+        conf.FULLSCREEN = not conf.FULLSCREEN
+
+    def _toggle_fullscreen (self, *args):
+        # callback: keyboard shortcut pressed
+        if self.RESIZABLE:
+            self.toggle_fullscreen()
 
     def minimise (self, *args):
         """Minimise the display.
@@ -545,9 +574,12 @@ run([t])
 
 """
         self.resources.use(conf.DEFAULT_RESOURCE_POOL, self)
+        self._using_pool = conf.DEFAULT_RESOURCE_POOL
         while not self._quit and (t is None or t > 0):
             t = self.world.scheduler.run(seconds = t)
         self.resources.drop(conf.DEFAULT_RESOURCE_POOL, self)
+        self._using_pool = None
+        conf.rm_cbs(self)
 
     def quit (self, *args):
         """Quit the game.

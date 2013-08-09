@@ -587,6 +587,8 @@ will not be called again.
         repeat_frames = kwargs.get('repeat_frames')
         if seconds is not None:
             frames = None
+        elif frames is None:
+            raise TypeError('expected \'seconds\' or \'frames\' argument')
         if repeat_seconds is not None:
             repeat_frames = None
         elif repeat_frames is None:

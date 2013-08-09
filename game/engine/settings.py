@@ -48,7 +48,7 @@ set it to a value (or use :meth:`add`).
         self._defaults = {}
         self._types = {}
         self._tricky_types = types
-        # {setting: {passed_cb: wrapped_cb}}
+        # {setting: {source: (set([before_cb]), set([after_cb]))}}
         self._cbs = {}
         self.add(settings)
 
@@ -88,14 +88,32 @@ set it to a value (or use :meth:`add`).
         if k in self._settings and v == self._settings[k]:
             return (True, None)
         # store
-        self._settings[k] = v
-        if k in self._cbs:
-            for cb in self._cbs[k].itervalues():
-                cb(v)
-        return (False, v)
+        if self._call_before_cbs(k, v):
+            self._settings[k] = v
+            self._call_after_cbs(k, v)
+            return (False, v)
+        else:
+            return (True, None)
 
     def __delattr__ (self, k):
         setattr(self, k, self._defaults[k])
+
+    def _call_before_cbs (self, setting, value):
+        if setting in self._cbs:
+            for source, (before_cbs, after_cbs) \
+                in self._cbs[setting].iteritems():
+                for cb in before_cbs:
+                    if not cb(value):
+                        return False
+        return True
+
+    def _call_after_cbs (self, setting, value):
+        if setting in self._cbs:
+            for source, (before_cbs, after_cbs) \
+                in self._cbs[setting].iteritems():
+                for cb in after_cbs:
+                    cb(value)
+        return True
 
     def changed (self, *settings):
         """Mark some settings as having changed.
@@ -109,50 +127,57 @@ properly.
 
 """
         if settings:
-            cbs = self._cbs
             for k in settings:
-                if k in cbs:
-                    v = self._settings[k]
-                    for cb in cbs[k].itervalues():
-                        cb(v)
+                self._call_after_cbs(k, self._settings[v])
             self.dump()
 
-    def on_change (self, setting, *cbs):
+    def on_change (self, setting, after_cb=None, before_cb=None, source=None):
         """Register callbacks for when the given setting is changed.
 
+on_change(setting[, after_cb][, before_cb][, source])
+
 :arg setting: the setting name, as used to change the setting (case-sensitive).
-:arg cbs: any number of functions to call when the setting is changed.  A
-          callback is called after the setting has been changed, and is passed
-          the new value of the setting (or, if it is determined that the
-          function takes no arguments, it is passed no arguments).
+:arg before_cb: function to call before the setting is changed; its return
+                value indicates whether to allow the setting to be changed.
+                Note, however, that mutable settings may not always be
+                prevented from changing, in which case ``before_cb`` will not
+                be called and ``after_cb`` will.
+:arg after_cb: function to call after the setting has changed.
+:arg source: non-``None`` hashable object by which to group these callbacks for
+             removal at a later time.  It is important to remove all callbacks
+             added by a world when it is removed, since they may have
+             references to the world, keeping all its objects in memory.
+
+Both callbacks, when called, are passed the new value of the setting (or, if it
+is determined that a callback takes no arguments, it is passed no arguments).
 
 """
-        # need to store passed callback for removing
+        if before_cb is None and after_cb is None:
+            return
         if setting not in self._settings:
             raise KeyError('no such setting: \'{0}\''.format(setting))
-        self._cbs.setdefault(setting, {}).update(
-            (cb, wrap_fn(cb)) for cb in cbs
-        )
+        cbs = self._cbs.setdefault(setting, {})
+        before_cbs, after_cbs = cbs.setdefault(source, (set(), set()))
+        if before_cb is not None:
+            before_cb = wrap_fn(before_cb)
+            before_cbs.add(before_cb)
+        if after_cb is not None:
+            after_cb = wrap_fn(after_cb)
+            after_cbs.add(after_cb)
 
-    def rm_cbs (self, setting, *cbs):
-        """Remove callbacks registered for change events for the given setting.
+    def rm_cbs (self, source):
+        """Remove callbacks registered for change events in the given group.
 
-:arg setting: the setting for which the callbacks were registered for change
-              events.
-:arg cbs: any number of callbacks, as previously passed to :meth:`on_change`.
+:arg source: the ``source`` argument passed to :meth:`on_change` previously.
 
-Missing items are ignored.
+Missing sources are ignored.
 
 """
-        if setting in self._cbs:
-            all_cbs = self._cbs[setting]
-            for cb in cbs:
-                try:
-                    del all_cbs[cb]
-                except KeyError:
-                    pass
-            if not all_cbs:
-                del self._cbs[setting]
+        for setting, cbs in self._cbs.items():
+            if source in cbs:
+                del cbs[source]
+                if not cbs:
+                    del self._cbs[setting]
 
     def dump (self):
         """Force saving all settings.

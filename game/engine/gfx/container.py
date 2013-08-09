@@ -7,7 +7,7 @@ TODO:
  - GG:
     - allow for transforms
     - internal layers (has allowed range in manager, and distributes graphics within it)
- - ignore off-screen things (clip all dirty rects and discard zero-size ones)
+ - ignore off-screen (OoB) things (clip all dirty rects and discard zero-size ones)
  - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio) or set a Graphic property (make GraphicView have its own copy)
