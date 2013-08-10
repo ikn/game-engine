@@ -2,6 +2,7 @@
 
 import pygame as pg
 
+from ..util import wrap_fn
 from . import inputs
 
 class bmode:
@@ -38,9 +39,9 @@ either :meth:`Event.gen_cb_args` or :meth:`respond`.
         #: Containing :class:`EventHandler <engine.evt.handler.EventHandler>`,
         #: or ``None``.
         self.eh = None
-        #: ``set`` of functions to call on input.  Change this directly if you
-        #: want.
-        self.cbs = set()
+        #: dict whose keys are functions to call on input.
+        # values are wrappers to call
+        self.cbs = {}
 
     def _parse_input (self, i):
         # normalise the form of an input as taken by Event.add
@@ -98,8 +99,14 @@ either :meth:`Event.gen_cb_args` or :meth:`respond`.
 
 cb(*cbs) -> self
 
+For all event types, if a callback is determined not to be able to take
+arguments, it is not passed any.
+
 """
-        self.cbs.update(cbs)
+        all_cbs = self.cbs
+        for cb in cbs:
+            if cb not in all_cbs:
+                all_cbs[cb] = wrap_fn(cb)
         return self
 
     def rm_cbs (self, *cbs):
@@ -110,7 +117,10 @@ rm_cbs(*cbs) -> self
 Missing items are ignored.
 
 """
-        self.cbs.difference_update(cbs)
+        all_cbs = self.cbs
+        for cb in cbs:
+            if cb in all_cbs:
+                del all_cbs[cb]
         return self
 
     def respond (self, changed):
@@ -122,7 +132,7 @@ Called by the containing
 :class:`EventHandler <engine.evt.handler.EventHandler>`.
 
 """
-        cbs = self.cbs
+        cbs = self.cbs.values()
         for args in self.gen_cb_args(changed):
             for cb in cbs:
                 cb(*args)

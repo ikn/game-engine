@@ -66,7 +66,7 @@ World(scheduler, evthandler)
 
 """
 
-    def __init__ (self, scheduler, evthandler, resources, *args):
+    def __init__ (self, scheduler, evthandler, resources, *args, **kwargs):
         #: :class:`sched.Scheduler <engine.sched.Scheduler>` instance taken by
         #: the constructor.
         self.scheduler = scheduler
@@ -84,7 +84,7 @@ World(scheduler, evthandler)
         self.entities = set()
 
         self._initialised = False
-        self._extra_args = args
+        self._extra_args = (args, kwargs)
         self._avg_draw_time = scheduler.frame
         self._since_last_draw = 0
 
@@ -129,7 +129,7 @@ This receives the extra arguments passed in constructing the world through the
     def _select (self):
         """Called by the game when becomes the active world."""
         if not self._initialised:
-            self.init(*self._extra_args)
+            self.init(*self._extra_args[0], **self._extra_args[1])
             self._initialised = True
             del self._extra_args
         self.select()
@@ -263,6 +263,32 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         #: The main Pygame surface.
         self.screen = None
         self.refresh_display()
+        #: :class:`res.ResourceManager <engine.res.ResourceManager>` instance
+        #: used for caching resources.
+        self.resources = res.ResourceManager()
+        self.resources.use(conf.DEFAULT_RESOURCE_POOL, self)
+        self._using_pool = conf.DEFAULT_RESOURCE_POOL
+        #: ``{name: renderer}`` dict of
+        #: :class:`text.TextRenderer <engine.text.TextRenderer>` instances
+        #: available for referral by name in the ``'text'`` resource loader.
+        self.text_renderers = {}
+
+        self._init_cbs()
+        # start first world
+        self.start_world(*args, **kwargs)
+        # start playing music
+        pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
+        #: Filenames for known music.
+        self.music = []
+        self.find_music()
+        self.play_music()
+        if not conf.MUSIC_AUTOPLAY:
+            pg.mixer.music.pause()
+
+    def _init_cbs (self):
+        # set up settings callbacks
+        conf.on_change('DEFAULT_RESOURCE_POOL', self._change_resource_pool,
+                       source=self)
         conf.on_change('FULLSCREEN', self.refresh_display,
                        lambda: conf.RESIZABLE, source=self)
 
@@ -277,29 +303,6 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
                 self.refresh_display()
 
         conf.on_change('RES_F', change_res_f, source=self)
-
-        #: :class:`res.ResourceManager <engine.res.ResourceManager>` instance
-        #: used for caching resources.
-        self.resources = res.ResourceManager()
-        self.resources.use(conf.DEFAULT_RESOURCE_POOL, self)
-        self._using_pool = conf.DEFAULT_RESOURCE_POOL
-        conf.on_change('DEFAULT_RESOURCE_POOL', self._change_resource_pool,
-                       source=self)
-        #: ``{name: renderer}`` dict of
-        #: :class:`text.TextRenderer <engine.text.TextRenderer>` instances
-        #: available for referral by name in the ``'text'`` resource loader.
-        self.text_renderers = {}
-
-        # start first world
-        self.start_world(*args, **kwargs)
-        # start playing music
-        pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
-        #: Filenames for known music.
-        self.music = []
-        self.find_music()
-        self.play_music()
-        if not conf.MUSIC_AUTOPLAY:
-            pg.mixer.music.pause()
 
     # world handling
 
@@ -470,7 +473,7 @@ play_snd(base_id, volume = 1)
         else:
             self.music = [d + f for f in files if os.path.isfile(d + f)]
 
-    def play_music (self, event = None):
+    def play_music (self):
         """Play the next piece of music, chosen randomly from :attr:`music`."""
         if self.music:
             f = choice(self.music)
@@ -482,12 +485,8 @@ play_snd(base_id, volume = 1)
 
     # display
 
-    def refresh_display (self, *args):
-        """Update the display mode from :mod:`conf`.
-
-refresh_display()
-
-"""
+    def refresh_display (self):
+        """Update the display mode from :mod:`conf`."""
         # get resolution and flags
         flags = conf.FLAGS
         if conf.FULLSCREEN:
@@ -511,11 +510,7 @@ refresh_display()
             self.world.graphics.dirty()
 
     def toggle_fullscreen (self):
-        """Toggle fullscreen mode.
-
-toggle_fullscreen()
-
-"""
+        """Toggle fullscreen mode."""
         conf.FULLSCREEN = not conf.FULLSCREEN
 
     def _toggle_fullscreen (self, *args):
@@ -523,12 +518,8 @@ toggle_fullscreen()
         if self.RESIZABLE:
             self.toggle_fullscreen()
 
-    def minimise (self, *args):
-        """Minimise the display.
-
-minimise()
-
-"""
+    def minimise (self):
+        """Minimise the display."""
         pg.display.iconify()
 
     def _active_cb (self, event):
@@ -575,27 +566,20 @@ run([t])
 """
         self.resources.use(conf.DEFAULT_RESOURCE_POOL, self)
         self._using_pool = conf.DEFAULT_RESOURCE_POOL
+        self._init_cbs()
         while not self._quit and (t is None or t > 0):
             t = self.world.scheduler.run(seconds = t)
         self.resources.drop(conf.DEFAULT_RESOURCE_POOL, self)
         self._using_pool = None
         conf.rm_cbs(self)
 
-    def quit (self, *args):
-        """Quit the game.
-
-quit()
-
-"""
+    def quit (self):
+        """Quit the game."""
         self.world.scheduler.stop()
         self._quit = True
 
-    def restart (self, *args):
-        """Restart the game.
-
-restart()
-
-"""
+    def restart (self):
+        """Restart the game."""
         global restarting
         restarting = True
         self.quit()

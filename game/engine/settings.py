@@ -137,12 +137,12 @@ properly.
 on_change(setting[, after_cb][, before_cb][, source])
 
 :arg setting: the setting name, as used to change the setting (case-sensitive).
+:arg after_cb: function to call after the setting has changed.
 :arg before_cb: function to call before the setting is changed; its return
                 value indicates whether to allow the setting to be changed.
                 Note, however, that mutable settings may not always be
                 prevented from changing, in which case ``before_cb`` will not
                 be called and ``after_cb`` will.
-:arg after_cb: function to call after the setting has changed.
 :arg source: non-``None`` hashable object by which to group these callbacks for
              removal at a later time.  It is important to remove all callbacks
              added by a world when it is removed, since they may have
