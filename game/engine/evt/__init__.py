@@ -4,12 +4,9 @@
 
 TODO:
     [ESSENTIAL]
- - button events should call once per event, not once per frame
-    - and multi-button events should do it in order (might interleave between components)
  - eh.grab (and maybe have grab toggle for getting all input for a while)
  - eh.set_deadzones (can set by device var; can pass a default for other devices/ids)
  - auto pad(/other?) initialisation
- - double-click for buttons
     [CONFIG]
  - can do per-device, per-input name or global thresholds/bdy - and make them setters, and provide eh.set_{thresholds,bdys}
  - conffile.generate{,_s}, eh.save{,_s}

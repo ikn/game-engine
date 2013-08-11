@@ -79,7 +79,7 @@ def fix_sig (app, o_type, name, obj, options, sig, rtn):
 def setup (app):
     app.connect('autodoc-process-docstring', rm_sig)
     app.connect('autodoc-process-docstring',
-                sphinx.ext.autodoc.between('---NODOC---', exclude = True))
+                sphinx.ext.autodoc.between('---NODOC---', exclude=True))
     app.connect('autodoc-process-signature', fix_sig)
 
 

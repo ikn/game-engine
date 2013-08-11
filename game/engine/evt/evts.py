@@ -11,6 +11,7 @@ class bmode:
     UP = 2
     HELD = 4
     REPEAT = 8
+    DBLCLICK = 16
 
 #: ``{n_components: component_names}`` for event components, giving a sequence
 #: of component names corresponding to their indices for an event's number of
@@ -129,7 +130,8 @@ Missing items are ignored.
 :arg changed: whether any inputs changed in any way.
 
 Called by the containing
-:class:`EventHandler <engine.evt.handler.EventHandler>`.
+:class:`EventHandler <engine.evt.handler.EventHandler>`, and guaranteed to be
+called every time the handler is updated (which should happen every frame).
 
 """
         cbs = self.cbs.values()
@@ -246,7 +248,8 @@ ignores missing items.
 :arg changed: whether any inputs changed in any way.
 
 This is implemented as an iterator, with each value a sequence of arguments to
-pass to each callback.
+pass to each callback.  Guaranteed to be called whenever
+:meth:`BaseEvent.respond` is.
 
 """
         if changed:
@@ -363,7 +366,7 @@ the first argument.
 class Button (Event):
     """:class:`Event` subclass representing a button.
 
-Button(*items[, initial_delay][, repeat_delay])
+Button(*items[, initial_delay][, repeat_delay][, dbl_click_time])
 
 :arg items: each item is either an input as taken by :class:`Event`, or a
             button mode (one of :data:`bmode.DOWN`, :data:`bmode.UP`,
@@ -373,13 +376,22 @@ Button(*items[, initial_delay][, repeat_delay])
                     given, this is the initial delay in seconds before a button
                     starts repeating while held.
 :arg repeat_delay: like initial_delay, the time between repeats in seconds.
+:arg dbl_click_time: keyword-only argument.  If the :data:`bmode.DBLCLICK` mode
+                     is given, this is the maximum delay in seconds between
+                     down events for a double-click event to be registered.
 
 Callbacks are called with ``{mode: count}`` for each ``mode`` given, where
 ``count`` is the number of occurrences of events corresponding to that mode
-that have happened within the last frame.  The ``count`` for :data:`bmode.HELD`
-is only ever ``0`` or ``1``, and indicates whether the button was held at the
-end of the frame.  The ``count`` for :data:`bmode.REPEAT` may only be ``> 1``
-if either repeat rate is greater than the current framerate.
+that have happened within the last frame.
+
+The ``count`` for :data:`bmode.HELD` is only ever ``0`` or ``1``, and indicates
+whether the button was held at the end of the frame.
+
+The ``count`` for :data:`bmode.REPEAT` may only be ``> 1`` if either repeat
+rate is greater than the current framerate.
+
+The ``count`` for :data:`bmode.DBLCLICK` may only be ``> 1`` if at least 3 down
+events are registered within a frame.
 
 """
 
@@ -406,8 +418,15 @@ if either repeat rate is greater than the current framerate.
                                      self.repeat_delay is None):
             raise TypeError('initial_delay and repeat_delay arguments are '
                             'required if given the REPEAT mode')
+        #: As passed to the constructor.
+        self.dbl_click_time = kw.get('dbl_click_time')
+        if modes & bmode.DBLCLICK and self.dbl_click_time is None:
+            raise TypeError('dbl_click_time argument is required if given the '
+                            'DBLCLICK mode')
         # whether currently repeating
         self._repeating = False
+        # whether within the double-click timeout
+        self._can_dbl_click = False
 
     def input_valid (self, i):
         """:meth:`Event.input_valid`."""
@@ -434,11 +453,12 @@ if either repeat rate is greater than the current framerate.
             held = any(i.held(self)[0] for i in self.inputs)
         else:
             held = False
-        if not changed and not held:
+        if not changed and not held and not self._can_dbl_click:
             # nothing to do
             return
         # construct callback argument
         evts = {}
+        downevts = self._downevts
         if modes & bmode.DOWN:
             evts[bmode.DOWN] = self._downevts
         if modes & bmode.UP:
@@ -470,6 +490,27 @@ if either repeat rate is greater than the current framerate.
                 self._repeating = True
                 self._repeat_remain = self.initial_delay
             evts[bmode.REPEAT] = n_repeats
+        if modes & bmode.DBLCLICK:
+            n_dbls = 0
+            got = downevts > 0
+            if not self._can_dbl_click:
+                # handled the first down event
+                downevts -= 1
+            self._can_dbl_click = can = not (downevts % 2)
+            if got:
+                # got some presses
+                if can:
+                    # end on a first press: reset timer
+                    self._dbl_click_remain = self.dbl_click_time
+                if downevts > 0:
+                    # got some second presses within the required time
+                    n_dbls = (downevts + 1) / 2
+            elif can:
+                # reduce time left to click again
+                self._dbl_click_remain -= self.eh.scheduler.frame
+                if self._dbl_click_remain < 0:
+                    self._can_dbl_click = False
+            evts[bmode.DBLCLICK] = n_dbls
         if any(evts.itervalues()):
             yield (evts,)
 

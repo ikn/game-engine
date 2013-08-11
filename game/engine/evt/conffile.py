@@ -27,8 +27,9 @@ depends on ``type``:
 
 - ``button*`` events take any number of button modes from
   :class:`evts.bmode <engine.evt.evts.bmode>` (``DOWN``, ``HELD``, etc.).
-  If ``REPEAT`` is included, the final two arguments must be the initial and
-  repeat delays, in seconds.
+  If ``REPEAT`` is included, the initial and repeat delays must follow these,
+  in seconds.  If ``DBLCLICK`` is included, the double-click delay must follow,
+  in seconds
 - other event types take no extra arguments.
 
 Inputs
@@ -426,31 +427,41 @@ def _parse_evthead (lnum, words):
     words = words[2:]
     # parse args according to event type
     args = []
+    kwargs = {}
     if evt_type in ('axis', 'axis2', 'relaxis', 'relaxis2'):
         if words:
             raise ValueError('line {0}: axis and relaxis events take no '
                              'arguments'.format(lnum))
     elif evt_type in ('button', 'button2', 'button4'):
-        # args are modes, last two may be repeat delays
+        # args are modes, last few may be repeat/double-click delays
+        delays = []
         for i in xrange(len(words)):
             if hasattr(evts.bmode, words[i]):
                 args.append(getattr(evts.bmode, words[i]))
             else:
                 # check for float
-                if i != len(words) - 2:
+                if i < len(words) - 3:
                     raise ValueError('line {0}: invalid event arguments'
                                      .format(lnum))
-                for w in words[-2:]:
+                # got one: do the last part of the loop
+                for w in words[i:]:
                     try:
-                        args.append(float(w))
+                        delays.append(float(w))
                     except ValueError:
                         raise ValueError('line {0}: invalid event arguments'
                                          .format(lnum))
                 break
+        # work out which delay is which
+        kwargs.update(dict(zip([
+            (),
+            ('dbl_click_time',),
+            ('initial_delay', 'repeat_delay'),
+            ('dbl_click_time', 'initial_delay', 'repeat_delay'),
+        ][len(delays)], delays)))
     else:
         raise ValueError('line {0}: unknown event type \'{1}\''
                          .format(lnum, evt_type))
-    return (evts_by_name[evt_type], name, args)
+    return (evts_by_name[evt_type], name, args, kwargs)
 
 
 def parse (config):
@@ -478,7 +489,7 @@ parse(config) -> parsed
                 # new event: create and add current event
                 if evt_cls is not None:
                     parsed[evt_name] = evt_cls(*args)
-                evt_cls, evt_name, args = _parse_evthead(lnum, words)
+                evt_cls, evt_name, args, kwargs = _parse_evthead(lnum, words)
                 if evt_name in parsed:
                     raise ValueError('line {0}: duplicate event name'
                                      .format(lnum))
@@ -495,7 +506,7 @@ parse(config) -> parsed
         # else blank line
         lnum += 1
     if evt_cls is not None:
-        parsed[evt_name] = evt_cls(*args)
+        parsed[evt_name] = evt_cls(*args, **kwargs)
     return parsed
 
 
