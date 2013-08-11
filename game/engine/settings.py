@@ -11,22 +11,26 @@ from copy import deepcopy
 import json
 from collections import defaultdict
 
-from .util import wrap_fn
+from .util import dd, wrap_fn
 
 
 class _JSONEncoder (json.JSONEncoder):
-    """Extended json.JSONEncoder with support for sets and defaultdicts."""
+    """Extended json.JSONEncoder with support for sets and defaultdicts.
+
+Assumes a constant default factory for defaultdicts.
+
+"""
 
     def default (self, o):
         if isinstance(o, set):
             return list(o)
         elif isinstance(o, defaultdict):
-            return (o.default_factory(None), dict(o))
+            return (o.default_factory(), dict(o))
         else:
             return json.JSONEncoder.default(self, o)
 
 
-def translate_dd (o):
+def cast_dd (o):
     """Generate a defaultdict from the given object."""
     if isinstance(o, defaultdict):
         return defaultdict(d.default_factory, o)
@@ -39,18 +43,26 @@ def translate_dd (o):
             return dd(o)
 
 
+def cmp_dd (d1, d2):
+    """Compare defaultdicts, assuming a constant default factory."""
+    return d1.default_factory() == d2.default_factory() and d1 == d2
+
+
 class DummySettingsManager (object):
     """An object for handling settings.
 
-DummySettingsManager(settings, types={defaultdict: translate_dd},
-                     filter_caps=False)
+DummySettingsManager(settings, casts={defaultdict: cast_dd},
+                     cmps={defaultdict: cmp_dd}, filter_caps=False)
 
 :arg settings: as taken by :meth:`add`.
-:arg types: the types of settings are preserved when changes are made by
+:arg casts: the types of settings are preserved when changes are made by
             casting to their initial types.  For types for which this will not
-            work, this argument can be passed as a ``{from_type: to_type}``
-            dict to use ``to_type`` whenever ``from_type`` would otherwise be
-            used.
+            work, this argument can be passed as a ``{type: cast}`` dict to use
+            ``cast`` whenever ``type`` would otherwise be used.
+:arg cmps: comparison functions for setting types for which a normal equality
+           comparision is insufficient.  This is a ``{type: cmp}`` dict, where
+           cmp takes two arguments of type ``type`` and returns whether they
+           are determined to be equal.
 :arg filter_caps: as taken by :meth:`add`.
 
 To access and change settings, use attributes of this object.  To restore a
@@ -60,12 +72,14 @@ set it to a value (or use :meth:`add`).  Note that a setting may not begin with
 
 """
 
-    def __init__ (self, settings, types={defaultdict: translate_dd},
-                  filter_caps=False):
+    def __init__ (self, settings, casts={defaultdict: cast_dd},
+                  cmps={defaultdict: cmp_dd}, filter_caps=False):
         self._settings = {}
         self._defaults = {}
         self._types = {}
-        self._tricky_types = dict(types) # copy, as we might update later
+        # copy these, as we might update later
+        self._casts = dict(casts)
+        self._cmps = dict(cmps)
         # {setting: {source: (set([before_cb]), set([after_cb]))}}
         self._cbs = {}
         self.add(settings, filter_caps)
@@ -88,15 +102,25 @@ set it to a value (or use :meth:`add`).  Note that a setting may not begin with
                     raise ValueError('invalid setting name: \'{0}\''.format(k))
                 setattr(self, k, v)
 
-    def add_types (self, types):
+    def add_casts (self, casts):
         """Add extra types to translate before casting.
 
-Like the ``types`` argument to the constructor.
+Like the ``casts`` argument to the constructor.
 
 """
-        # can't just make _types public as it would mess with how the settings
+        # can't just make _casts public as it would mess with how the settings
         # work
-        self._types.update(types)
+        self._casts.update(casts)
+
+    def add_cmps (self, cmps):
+        """Add custom comparisons for extra types.
+
+Like the ``cmps`` argument to the constructor.
+
+"""
+        # can't just make _cmps public as it would mess with how the settings
+        # work
+        self._cmps.update(cmps)
 
     def __getattr__ (self, k):
         return self._settings[k]
@@ -115,7 +139,7 @@ Like the ``types`` argument to the constructor.
                 self._types[k] = type(v)
         elif not isinstance(v, t):
             try:
-                v = self._tricky_types.get(t, t)(v)
+                v = self._casts.get(t, t)(v)
             except (TypeError, ValueError):
                 # invalid: fall back to default
                 print >> sys.stderr, \
@@ -123,8 +147,10 @@ Like the ``types`` argument to the constructor.
                       'back to default'.format(repr(v), k)
                 v = self._defaults[k]
         # check if different
-        if k in self._settings and v == self._settings[k]:
-            return (True, None)
+        if k in self._settings:
+            if (self._cmps[t](v, self._settings[k])
+                if t in self._cmps else v == self._settings[k]):
+                return (True, None)
         # store
         if self._call_before_cbs(k, v):
             self._settings[k] = v
@@ -229,8 +255,8 @@ This class's implementation does nothing.
 class SettingsManager (DummySettingsManager):
     """An object for handling settings; :class:`DummySettingsManager` subclass.
 
-SettingsManager(settings, fn, save=(), types={defaultdict: translate_dd},
-                filter_caps=False)
+SettingsManager(settings, fn, save=(), casts={defaultdict: cast_dd},
+                cmps={defaultdict: cmp_dd}, filter_caps=False)
 
 :arg fn: filename to save settings in.
 :arg save: a list containing the names of the settings to save to ``fn``
@@ -245,7 +271,8 @@ whenever they are set.  If you change settings internally without setting them
 """
 
     def __init__ (self, settings, fn, save=(),
-                  types={defaultdict: translate_dd}, filter_caps=False):
+                  casts={defaultdict: cast_dd}, cmps={defaultdict: cmp_dd},
+                  filter_caps=False):
         # load settings
         try:
             with open(fn) as f:
@@ -262,7 +289,7 @@ whenever they are set.  If you change settings internally without setting them
         # initialise
         self._fn = fn
         self._save = {}
-        DummySettingsManager.__init__(self, settings, types, filter_caps)
+        DummySettingsManager.__init__(self, settings, casts, cmps, filter_caps)
         self.save(*save)
 
     def save (self, *save):
