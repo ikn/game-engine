@@ -134,6 +134,14 @@ This receives the extra arguments passed in constructing the world through the
             del self._extra_args
         self.select()
 
+    def quit (self):
+        """Called when this is removed from the currently running worlds.
+
+Called before removal---when the :attr:`Game.world` is still this world.
+
+"""
+        pass
+
     def add (self, *entities):
         """Add any number of :class:`Entity <engine.entity.Entity> instances to
 the world.
@@ -418,7 +426,7 @@ quit_world(depth = 1) -> worlds
 
 :arg depth: quit this many (nested) worlds.
 
-:return: a list of worlds that were quit.
+:return: a list of worlds that were quit, in the order they were quit.
 
 If this quits the last (root) world, exit the game.
 
@@ -426,6 +434,7 @@ If this quits the last (root) world, exit the game.
         if depth < 1:
             return []
         old_world = self.world
+        old_world.quit()
         if self.worlds:
             self._select_world(self.worlds.pop())
         else:
