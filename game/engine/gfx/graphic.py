@@ -8,7 +8,7 @@ TODO:
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 2?)
- - tint transform (as fade, which uses tint with (255, 255, 255, opacity))
+ - tint transform (as opacify, which uses tint with (255, 255, 255, opacity))
 
 ---NODOC---
 
@@ -57,12 +57,12 @@ Position and size can also be retrieved and altered using list indexing, like
 with Pygame rects.  Altering size in any way applies the :meth:`resize`
 transformation.
 
-:meth:`resize`, :meth:`crop`, :meth:`flip`, :meth:`fade` and :meth:`rotate`
+:meth:`resize`, :meth:`crop`, :meth:`flip`, :meth:`opacify` and :meth:`rotate`
 correspond to builtin transforms (see :meth:`transform`).
 
 """
 
-    _builtin_transforms = ('crop', 'flip', 'fade', 'resize', 'rotate')
+    _builtin_transforms = ('crop', 'flip', 'opacify', 'resize', 'rotate')
 
     def __init__ (self, img, pos = (0, 0), layer = 0, blit_flags = 0,
                   resource_pool = conf.DEFAULT_RESOURCE_POOL,
@@ -339,7 +339,7 @@ Can be set to a single value to apply to both dimensions.
 
     @opacity.setter
     def opacity (self, opacity):
-        self.fade(opacity)
+        self.opacify(opacity)
 
     @property
     def angle (self):
@@ -1069,7 +1069,7 @@ flip(x = False, y = False) -> self
 """
         return self.transform('flip', bool(x), bool(y))
 
-    def _gen_mods_fade (self, src_sz, first_time, last_args, opacity):
+    def _gen_mods_opacify (self, src_sz, first_time, last_args, opacity):
         if first_time or last_args[0] != opacity:
 
             def apply_fn (g):
@@ -1083,7 +1083,7 @@ flip(x = False, y = False) -> self
             mods = None
         return (mods, src_sz)
 
-    def _fade (self, src, dest, dirty, last_args, opacity):
+    def _opacify (self, src, dest, dirty, last_args, opacity):
         if opacity == 255:
             return (src, dirty)
         if dirty is False and last_args is not None and \
@@ -1096,9 +1096,14 @@ flip(x = False, y = False) -> self
         new_sfc.blit(src, (0, 0), special_flags = pg.BLEND_RGBA_MULT)
         return (new_sfc, True)
 
-    def fade (self, opacity):
-        """Set opacity, from 0 (transparent) to 255."""
-        return self.transform('fade', opacity)
+    def opacify (self, opacity):
+        """Set opacity, from 0 (transparent) to 255.
+
+(Sorry about the name---``fade`` would be nice, but conflicts with
+:meth:`GraphicsManager.fade <engine.gfx.container.GraphicsManager.fade>`.)
+
+"""
+        return self.transform('opacify', opacity)
 
     def _gen_mods_rotate (self, src_sz, first_time, last_args, angle, about):
         # - dest_sz will never get used: all following transforms are
@@ -1292,7 +1297,9 @@ surface.
             pr.size = sfc.get_size()
 
     def _pre_draw (self):
-        """Called by GraphicsManager before drawing."""
+        """Called by
+:class:`GraphicsManager <engine.gfx.container.GraphicsManager>` before
+drawing."""
         self.render()
         dirty = self._dirty
         if self._rect != self.last_rect:
