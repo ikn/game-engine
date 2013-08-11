@@ -3,7 +3,6 @@ from platform import system
 import os
 from os.path import sep, expanduser, join as join_path
 from glob import glob
-from collections import defaultdict
 
 import pygame as pg
 
@@ -105,21 +104,4 @@ button _game_fullscreen DOWN
     TEXT_RENDERERS = dd({})
 
 
-def _translate_dd (d):
-    if isinstance(d, defaultdict):
-        return defaultdict(d.default_factory, d)
-    else:
-        try:
-            # should be (default, dict)
-            return dd(*d)
-        except TypeError:
-            # use given value as default
-            return dd(d)
-
-
-conf = dict((k, v) for k, v in Conf.__dict__.iteritems()
-            if k.isupper() and not k.startswith('__'))
-_types = {
-    defaultdict: _translate_dd
-}
-conf = settings.SettingsManager(conf, Conf.CONF, (), _types)
+conf = settings.SettingsManager(Conf, Conf.CONF, filter_caps=True)

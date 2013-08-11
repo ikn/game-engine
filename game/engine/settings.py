@@ -26,39 +26,77 @@ class _JSONEncoder (json.JSONEncoder):
             return json.JSONEncoder.default(self, o)
 
 
+def translate_dd (o):
+    """Generate a defaultdict from the given object."""
+    if isinstance(o, defaultdict):
+        return defaultdict(d.default_factory, o)
+    else:
+        try:
+            # should be (default, dict)
+            return dd(*o)
+        except TypeError:
+            # use given value as default
+            return dd(o)
+
+
 class DummySettingsManager (object):
     """An object for handling settings.
 
-:arg settings: a dict used to store the settings, or a (new-style) class with
-               settings as attributes.
+DummySettingsManager(settings, types={defaultdict: translate_dd},
+                     filter_caps=False)
+
+:arg settings: as taken by :meth:`add`.
 :arg types: the types of settings are preserved when changes are made by
             casting to their initial types.  For types for which this will not
             work, this argument can be passed as a ``{from_type: to_type}``
             dict to use ``to_type`` whenever ``from_type`` would otherwise be
             used.
+:arg filter_caps: as taken by :meth:`add`.
 
 To access and change settings, use attributes of this object.  To restore a
 setting to its default (initial) value, delete it.  To add a new setting, just
-set it to a value (or use :meth:`add`).
+set it to a value (or use :meth:`add`).  Note that a setting may not begin with
+'_'.
 
 """
 
-    def __init__ (self, settings, types = {}):
+    def __init__ (self, settings, types={defaultdict: translate_dd},
+                  filter_caps=False):
         self._settings = {}
         self._defaults = {}
         self._types = {}
-        self._tricky_types = types
+        self._tricky_types = dict(types) # copy, as we might update later
         # {setting: {source: (set([before_cb]), set([after_cb]))}}
         self._cbs = {}
-        self.add(settings)
+        self.add(settings, filter_caps)
 
-    def add (self, settings):
-        """Add more settings; takes ``settings`` like the constructor."""
+    def add (self, settings, filter_caps=False):
+        """Add more settings.
+
+:arg settings: a dict used to store the settings, or a (new-style) class with
+               settings as attributes.
+:arg filter_caps: if ``True``, ignore all settings whose names are not entirely
+                  upper-case.
+
+"""
         if isinstance(settings, type):
             settings = dict((k, v) for k, v in settings.__dict__.iteritems()
                                    if not k.startswith('_'))
         for k, v in settings.iteritems():
-            setattr(self, k, v)
+            if not filter_caps or k.isupper():
+                if k.startswith('_'):
+                    raise ValueError('invalid setting name: \'{0}\''.format(k))
+                setattr(self, k, v)
+
+    def add_types (self, types):
+        """Add extra types to translate before casting.
+
+Like the ``types`` argument to the constructor.
+
+"""
+        # can't just make _types public as it would mess with how the settings
+        # work
+        self._types.update(types)
 
     def __getattr__ (self, k):
         return self._settings[k]
@@ -191,9 +229,14 @@ This class's implementation does nothing.
 class SettingsManager (DummySettingsManager):
     """An object for handling settings; :class:`DummySettingsManager` subclass.
 
+SettingsManager(settings, fn, save=(), types={defaultdict: translate_dd},
+                filter_caps=False)
+
 :arg fn: filename to save settings in.
 :arg save: a list containing the names of the settings to save to ``fn``
           (others are stored in memory only).
+
+Other arguments are as taken by :class:`DummySettingsManager`.
 
 All settings registered through :meth:`save` will be saved to the given file
 whenever they are set.  If you change settings internally without setting them
@@ -201,7 +244,8 @@ whenever they are set.  If you change settings internally without setting them
 
 """
 
-    def __init__ (self, settings, fn, save = (), types = {}):
+    def __init__ (self, settings, fn, save=(),
+                  types={defaultdict: translate_dd}, filter_caps=False):
         # load settings
         try:
             with open(fn) as f:
@@ -218,7 +262,7 @@ whenever they are set.  If you change settings internally without setting them
         # initialise
         self._fn = fn
         self._save = {}
-        DummySettingsManager.__init__(self, settings, types)
+        DummySettingsManager.__init__(self, settings, types, filter_caps)
         self.save(*save)
 
     def save (self, *save):
