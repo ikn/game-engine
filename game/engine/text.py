@@ -56,8 +56,17 @@ TextRenderer(font, options={}, resource_pool=conf.DEFAULT_RESOURCE_POOL,
         self._font = font
         self._defaults = option_defaults.copy()
         self._defaults.update(options)
+        self.normalise_options(self._defaults)
         self._resource_pool = resource_pool
         self._resource_manager = resource_manager
+
+    def __eq__ (self, other):
+        # equal if we would render the exact same thing
+        if isinstance(other, TextRenderer):
+            return (self._font == other._font and
+                    self._defaults == other._defaults)
+        else:
+            return False
 
     def _get_font (self, opts):
         # load the font required for the given (normalised) options
