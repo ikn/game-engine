@@ -71,7 +71,7 @@ load_text(text, renderer, options={}, **kwargs) -> (surface, num_lines)
                :attr:`Game.text_renderers <engine.game.Game.text_renderers>`.
 
 Other arguments are as taken by and the return value is as given by
-:meth:`TextRenderer.render <engine.text.TextRenderer.render>`.
+:meth:`TextRenderer.render() <engine.text.TextRenderer.render>`.
 
 """
     if isinstance(renderer, basestring):

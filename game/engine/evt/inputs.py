@@ -57,7 +57,7 @@ types may be equal).
         #: keys ``'button'``, ``'axis'``, ``'relaxis'``.
         self.provides = {'button': False, 'axis': False, 'relaxis': False}
         #: Variable representing the current device ID; may be a string as a
-        #: variable name, or ``None`` (see :meth:`EventHandler.assign_devices
+        #: variable name, or ``None`` (see :meth:`EventHandler.assign_devices()
         #: <engine.evt.handler.EventHandler.assign_devices>` for details).
         self.device_var = None
         #: A set of :class:`Event <engine.evt.evts.Event>` instances that

@@ -7,6 +7,8 @@ Abstract
 --------
 
 .. autofunction:: engine.util.dd
+.. autofunction:: engine.util.takes_args
+.. autofunction:: engine.util.wrap_fn
 .. autofunction:: engine.util.ir
 .. autofunction:: engine.util.sum_pos
 .. autofunction:: engine.util.normalise_colour

@@ -7,9 +7,10 @@ import types
 
 import pygame as pg
 
-__all__ = ('dd', 'ir', 'sum_pos', 'normalise_colour', 'randsgn', 'rand0',
-           'weighted_rand', 'align_rect', 'position_sfc', 'convert_sfc',
-           'combine_drawn', 'blank_sfc') # be sure to change util.rst
+# be sure to change util.rst
+__all__ = ('dd', 'takes_args', 'wrap_fn', 'ir', 'sum_pos', 'normalise_colour',
+           'randsgn','rand0', 'weighted_rand', 'align_rect', 'position_sfc',
+           'convert_sfc', 'combine_drawn', 'blank_sfc')
 
 
 # abstract

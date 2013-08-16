@@ -414,7 +414,7 @@ fade_to(colour, t[, resolution])
 :arg colour: the ``(R, G, B[, A = 255])`` colour to fade to.
 :arg t: how many seconds to take to reach ``colour``.
 :arg resolution: as taken by
-                 :meth:`Scheduler.interp <engine.sched.Scheduler.interp>`.
+                 :meth:`Scheduler.interp() <engine.sched.Scheduler.interp>`.
 
 If already fading, the current colour is used as the initial colour; otherwise,
 the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
@@ -434,7 +434,7 @@ the initial colour is taken to be ``(R, G, B, 0)`` for the given value of
     def fade (self, get_val, *args, **kw):
         """Fade between colours.
 
-Takes arguments like :meth:`Scheduler.interp <engine.sched.Scheduler.interp>`,
+Takes arguments like :meth:`Scheduler.interp() <engine.sched.Scheduler.interp>`,
 with ``set_val`` omitted.
 
 Any currently running fade will be canceled.  After fading, the overlay
@@ -458,7 +458,7 @@ persists; set :attr:`overlay` to ``None`` to remove it.
             self.overlay = None
 
     def dirty (self, *rects):
-        """:meth:`Graphic.dirty <engine.gfx.graphic.Graphic.dirty>`"""
+        """:meth:`Graphic.dirty() <engine.gfx.graphic.Graphic.dirty>`"""
         if self._surface is None:
             # nothing to mark as dirty
             return
@@ -500,6 +500,6 @@ changed parts of the surface, or ``False`` if nothing changed.
         return dirty
 
     def render (self):
-        """:meth:`Graphic.render <engine.gfx.graphic.Graphic.render>`"""
+        """:meth:`Graphic.render() <engine.gfx.graphic.Graphic.render>`"""
         self.draw()
         Graphic.render(self)

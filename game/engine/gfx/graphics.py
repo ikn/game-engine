@@ -130,7 +130,7 @@ Text(text, renderer, pos=(0, 0), options={}, layer=0, blit_flags=0)
                :attr:`Game.text_renderers <engine.game.Game.text_renderers>`.
 :arg pos: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 :arg options: rendering options to override defaults, as taken by
-              :meth:`TextRenderer.render <engine.text.TextRenderer.render>`.
+              :meth:`TextRenderer.render() <engine.text.TextRenderer.render>`.
               All options can be get and set as properties of this instance,
               and all are guaranteed to exist, even if not given in this
               argument.
@@ -213,7 +213,7 @@ use."""
         return self._renderer.render(self._text, self._options)
 
     def render (self):
-        """:meth:`Graphic.render <engine.gfx.graphic.Graphic.render>`."""
+        """:meth:`Graphic.render() <engine.gfx.graphic.Graphic.render>`."""
         changed = False
         if self._last_text != self._text:
             changed = True

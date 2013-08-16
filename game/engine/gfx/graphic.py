@@ -50,7 +50,7 @@ Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0,
 Many properties of a graphic, such as :attr:`pos` and :attr:`size`, can be
 changed in two main ways: by setting the attribute directly, or by calling the
 corresponding method.  The former is more natural, and is useful for
-:meth:`sched.Scheduler.interp <engine.sched.Scheduler.interp>`, while the
+:meth:`sched.Scheduler.interp() <engine.sched.Scheduler.interp>`, while the
 latter all return the graphic, and so can be chained together.
 
 Position and size can also be retrieved and altered using list indexing, like
@@ -1152,7 +1152,7 @@ flip(x = False, y = False) -> self
         """Set opacity, from 0 (transparent) to 255.
 
 (Sorry about the name---``fade`` would be nice, but conflicts with
-:meth:`GraphicsManager.fade <engine.gfx.container.GraphicsManager.fade>`.)
+:meth:`GraphicsManager.fade() <engine.gfx.container.GraphicsManager.fade>`.)
 
 """
         return self.transform('opacify', opacity)

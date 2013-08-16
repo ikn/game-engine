@@ -22,8 +22,8 @@ event line follows the form
 
 where ``<type>`` is the class's ``name`` attribute (a key in
 :data:`evts_by_name`) and ``<name>`` is the name to give to the event
-(see :meth:`EventHandler.add <engine.evt.handler.EventHandler.add>`).  ``args``
-depends on ``type``:
+(see :meth:`EventHandler.add() <engine.evt.handler.EventHandler.add>`).
+``args`` depends on ``type``:
 
 - ``button*`` events take any number of button modes from
   :class:`evts.bmode <engine.evt.evts.bmode>` (``DOWN``, ``HELD``, etc.).

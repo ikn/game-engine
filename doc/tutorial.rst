@@ -61,7 +61,7 @@ This will show a blank window, which you can close like any other window.
 
 - We won't use some of these imports for a while, but it's worth having them
   all together at the start.
-- :meth:`World.init <engine.game.World.init>` is where your world's
+- :meth:`World.init() <engine.game.World.init>` is where your world's
   initialisation code goes.
 - The ``Conf`` object is not especially necessary, but it's nice to keep all
   the magic constants together.  It gets added to the global :mod:`conf`
@@ -150,8 +150,8 @@ code should contain nothing unfamiliar:
 
 The only thing left to do is add the graphics to the graphics manager.  This is
 accessed through :attr:`World.graphics <engine.game.World.graphics>`, and has
-an :meth:`add <engine.gfx.container.GraphicsManager.add>` method.  I also add a
-dark grey background; Pygame-style colours and ``0xrrggbbaa`` are supported
+an :meth:`add() <engine.gfx.container.GraphicsManager.add>` method.  I also add
+a dark grey background; Pygame-style colours and ``0xrrggbbaa`` are supported
 too.
 
 .. code-block:: python
@@ -223,7 +223,7 @@ they're easy to access::
 
 (:data:`conf.GAME` contains the current running game.)  We've registered
 callback functions for each event using
-:meth:`BaseEvent.cb <engine.evt.evts.BaseEvent.cb>`; the arguments these get
+:meth:`BaseEvent.cb() <engine.evt.evts.BaseEvent.cb>`; the arguments these get
 called with depends on the event type.  A ``button`` passes a single argument
 containing information about the numbers of ``DOWN``, etc. events that occurred
 in the last frame.  We only get called if there was at least one event, and
@@ -361,7 +361,7 @@ and define the callback::
             self.move_tile(x, y)
 
 The only new thing here is the call to
-:meth:`Grid.tile_at <engine.gfx.util.Grid.tile_at>`---it saves a bit of work,
+:meth:`Grid.tile_at() <engine.gfx.util.Grid.tile_at>`---it saves a bit of work,
 and handles the edge cases for us.
 
 You might notice you can't see the cursor.  This is the default behaviour, so
@@ -462,7 +462,7 @@ played.  Volume works with something like::
     conf.SOUND_VOLUMES['name'] = .3
 
 It might be worth finding an appropriate sound effect and getting it to play
-when a tile is moved (see :meth:`Game.play_snd <engine.game.Game.play_snd>`).
+when a tile is moved (see :meth:`Game.play_snd() <engine.game.Game.play_snd>`).
 
 Victory condition
 #################
@@ -483,9 +483,9 @@ High scores
 Try timing a player's attempt by keeping a counter and adding the frame
 duration (``World.scheduler.elapsed`` via
 :attr:`Timer.elapsed <engine.sched.Timer.elapsed>`) to it each frame
-(:meth:`World.update <engine.game.World.update>`).
+(:meth:`World.update() <engine.game.World.update>`).
 
 As mentioned earlier, the ``conf`` object could easily be used to save
 settings.  Try tracking and saving a list of the best times (see
-:meth:`SettingsManager.save <engine.settings.SettingsManager.save>` and
-:meth:`SettingsManager.dump <engine.settings.SettingsManager.dump>`).
+:meth:`SettingsManager.save() <engine.settings.SettingsManager.save>` and
+:meth:`SettingsManager.dump() <engine.settings.SettingsManager.dump>`).
