@@ -151,11 +151,11 @@ When setting this, the surface should be already converted for blitting.
 
     @orig_sfc.setter
     def orig_sfc (self, sfc):
-        if self._orig_sfc.get_size() != sfc.get_size():
-            if self.transforms:
-                self._undo_transforms(0)
-                self._apply_transforms(0, True)
+        size = sfc.get_size()
+        old_sfc = self._orig_sfc
         self._orig_sfc = sfc
+        if size != old_sfc.get_size():
+            self.size_changed(size)
         self._orig_dirty = True
 
     @property
@@ -570,6 +570,7 @@ queued transformations to be applied.
         self.render()
         # now queue is empty, so is_size will be False
         sfc, is_size = self._sfc_before_transform(transform_fn)
+        assert not is_size
         return sfc
 
     def sz_before_transform (self, transform_fn):
@@ -789,7 +790,9 @@ blitting.
     def retransform (self, transform_fn):
         """Reapply the given transformation (if already applied).
 
-Takes a transformation function like :meth:`transform` and returns self.
+retransform(transform_fn) -> self
+
+:arg transform_fn: a transformation function as taken by :meth:`transform`.
 
 """
         try:
@@ -800,17 +803,20 @@ Takes a transformation function like :meth:`transform` and returns self.
         else:
             # no need to regenerate modifiers - nothing changed
             if isinstance(transform, basestring):
-                self._queued_transforms[transform_fn] = \
-                    (args, src.get_size(), dest.get_size(), apply_fn, undo_fn)
+                self._queued_transforms[transform_fn] = (
+                    args, src.get_size(), dest.get_size(), apply_fn, undo_fn
+                )
             else:
-                self._queued_transforms[transform_fn] = \
-                    (args, None, None, None, None)
+                self._queued_transforms[transform_fn] = (args, None, None,
+                                                         None, None)
         return self
 
     def untransform (self, transform_fn):
         """Remove an applied transformation.
 
-Takes a transformation function like :meth:`transform` and returns self.
+untransform(transform_fn) -> self
+
+:arg transform_fn: a transformation function as taken by :meth:`transform`.
 
 """
         t_ks = self.transforms
@@ -837,6 +843,30 @@ Takes a transformation function like :meth:`transform` and returns self.
             del q[transform_fn]
         return self
 
+    def size_changed (self, rect):
+        """Tell the graphic that the original size has changed.
+
+:arg rect: the new original Pygame Rect to use, or a function to take the
+           current original rect and return the new original rect, or the new
+           original size to use (leaving the original position unchanged).
+
+'Original' means before any transforms.  This method is for use by subclasses,
+to call when :attr:`orig_sfc` will change, but will not be set until
+:meth:`render` is called to avoid unnecessary computations.
+
+"""
+        got_transforms = bool(self.transforms)
+        if got_transforms:
+            self._undo_transforms(0)
+        if callable(rect):
+            rect = rect(self._rect)
+        elif len(rect) == 2:
+            # got a size
+            rect = Rect(self._rect.topleft, rect)
+        self._rect = rect
+        if got_transforms:
+            self._apply_transforms(0, True)
+
     def _load_img (self, fn, force_load = False):
         # load image from disk/cache
         resources = self._resource_manager
@@ -856,31 +886,53 @@ If successful, all transformations are reapplied afterwards, if any.
             self.orig_sfc = self._load_img(self.fn, True)
 
     def _gen_mods_resize (self, src_sz, first_time, last_args, w, h,
-                          about = (0, 0)):
+                          about=(0, 0), scale=False):
         # mods are size-dependent, so they always change
         ax, ay = about
-        scale = (float(w) / src_sz[0], float(h) / src_sz[1])
+        ow, oh = src_sz
+        if scale:
+            w = ir(scale[0] * ow)
+            h = ir(scale[1] * oh)
+        else:
+            if w is None:
+                w = ow
+            elif w is False:
+                w = ir(ow * float(h) / oh)
+            if h is None:
+                h = start_h
+            elif h is False:
+                h = ir(oh * float(w) / ow)
+            scale = (float(w) / ow, float(h) / oh)
         ox = ir((1 - scale[0]) * ax)
         oy = ir((1 - scale[1]) * ay)
 
         def apply_fn (g):
             g._scale = scale
-            x, y, gw, gh = g._rect
+            x, y = g._rect.topleft
             g._rect = Rect(x + ox, y + oy, w, h)
 
         def undo_fn (g):
             g._scale = (1, 1)
-            x, y, gw, gh = g._rect
-            g._rect = Rect(x - ox, y - oy, gw, gh)
+            x, y = g._rect.topleft
+            g._rect = Rect(x - ox, y - oy, ow, oh)
 
         return ((apply_fn, undo_fn), (w, h))
 
-    def _resize (self, src, dest, dirty, last_args, w, h, about):
+    def _resize (self, src, dest, dirty, last_args, w, h, about=(0, 0),
+                 scale=False):
         start_w, start_h = src.get_size()
-        if w is None:
-            w = start_w
-        if h is None:
-            h = start_h
+        if scale:
+            w = ir(scale[0] * start_w)
+            h = ir(scale[1] * start_h)
+        else:
+            if w is None:
+                w = start_w
+            elif w is False:
+                w = ir(start_w * float(h) / start_h)
+            if h is None:
+                h = start_h
+            elif h is False:
+                h = ir(start_h * float(w) / start_w)
         ax, ay = about
         if w == start_w and h == start_h:
             # transform does nothing
@@ -893,10 +945,10 @@ If successful, all transformations are reapplied afterwards, if any.
         # full transform
         return (self.scale_fn(src, (w, h)), True)
 
-    def resize (self, w = None, h = None, about = (0, 0)):
+    def resize (self, w=None, h=None, about=(0, 0), scale=False):
         """Resize the graphic.
 
-resize([w][, h], about = (0, 0)) -> self
+resize([w][, h], about=(0, 0)) -> self
 
 :arg w: the new width.
 :arg h: the new height.
@@ -906,12 +958,12 @@ resize([w][, h], about = (0, 0)) -> self
 No scaling occurs in omitted dimensions.
 
 """
-        return self.transform('resize', w, h, about)
+        return self.transform('resize', w, h, about, scale)
 
-    def rescale (self, w = 1, h = 1, about = (0, 0)):
+    def rescale (self, w=1, h=1, about=(0, 0)):
         """A convenience wrapper around resize to scale by a ratio.
 
-rescale(w = 1, h = 1, about = (0, 0)) -> self
+rescale(w=1, h=1, about=(0, 0)) -> self
 
 :arg w: the new width; ratio of the width before scaling.
 :arg h: the new height; ratio of the height before scaling.
@@ -919,13 +971,12 @@ rescale(w = 1, h = 1, about = (0, 0)) -> self
             scale about.
 
 """
-        ow, oh = self.sz_before_transform('resize')
-        return self.resize(ir(w * ow), ir(h * oh), about)
+        return self.resize(None, None, about, (w, h))
 
-    def resize_both (self, w = None, h = None, about = (0, 0)):
+    def resize_both (self, w=None, h=None, about=(0, 0)):
         """Resize with constant aspect ratio.
 
-resize_both([w][, h], about = (0, 0)) -> self
+resize_both([w][, h], about=(0, 0)) -> self
 
 :arg w: the new width; pass only one of ``w`` and ``h``.
 :arg h: the new height.
@@ -933,17 +984,18 @@ resize_both([w][, h], about = (0, 0)) -> self
             scale about.
 
 """
-        ow, oh = self.sz_before_transform('resize')
         if w is None:
-            w = ir(ow * float(h) / oh)
+            w = False
+        elif h is None:
+            h = False
         else:
-            h = ir(oh * float(w) / ow)
+            raise TypeError('expected only one of w or h')
         return self.resize(w, h, about)
 
-    def rescale_both (self, scale = 1, about = (0, 0)):
+    def rescale_both (self, scale=1, about=(0, 0)):
         """A convenience wrapper around rescale to scale the same on both axes.
 
-rescale_both(scale = 1, about = (0, 0)) -> self
+rescale_both(scale=1, about=(0, 0)) -> self
 
 :arg scale: ratio to scale both width and height by.
 :arg about: the ``(x, y)`` position relative to the top-left of the graphic to
@@ -995,7 +1047,7 @@ rescale_both(scale = 1, about = (0, 0)) -> self
                     return (dest, False)
         # do a full transform
         if start.contains(rect) and not has_alpha(src):
-            new_sfc = pg.Surface(rect.size).convert()
+            new_sfc = pg.Surface(rect.size)
         else:
             # not (no longer) opaque
             new_sfc = blank_sfc(rect.size)
@@ -1012,7 +1064,7 @@ crop(rect) -> self
 """
         return self.transform('crop', Rect(rect))
 
-    def _gen_mods_flip (self, src_sz, first_time, last_args, x, y):
+    def _gen_mods_flip (self, src_sz, first_time, last_args, x=False, y=False):
         if first_time or last_args != (x, y):
 
             def apply_fn (g):
@@ -1026,7 +1078,7 @@ crop(rect) -> self
             mods = None
         return (mods, src_sz)
 
-    def _flip (self, src, dest, dirty, last_args, x, y):
+    def _flip (self, src, dest, dirty, last_args, x=False, y=False):
         if not x and not y:
             return (src, dirty)
         if dirty is not True and last_args is not None and last_args == (x, y):
@@ -1105,7 +1157,8 @@ flip(x = False, y = False) -> self
 """
         return self.transform('opacify', opacity)
 
-    def _gen_mods_rotate (self, src_sz, first_time, last_args, angle, about):
+    def _gen_mods_rotate (self, src_sz, first_time, last_args, angle,
+                          about=None):
         # - dest_sz will never get used: all following transforms are
         #   guaranteed to be non-builtins, if the user does nothing silly
         # - mods are size-dependent, so they always change
@@ -1123,7 +1176,7 @@ flip(x = False, y = False) -> self
 
         return ((apply_fn, undo_fn), src_sz)
 
-    def _rotate (self, src, dest, dirty, last_args, angle, about):
+    def _rotate (self, src, dest, dirty, last_args, angle, about=None):
         if abs(angle) < self.rotate_threshold:
             # transform does nothing
             return (src, dirty)
@@ -1264,6 +1317,10 @@ surface.
                 # have modifier functions following code above
                 ts[fn] = (args, sfc, new_sfc, apply_fn, undo_fn)
             sfc = new_sfc
+            if not passed_rot:
+                before_rot = sfc
+                if fn == 'rotate':
+                    passed_rot = True
         if len(last_t_ks) > len(t_ks):
             # might have just removed transforms from the end
             dirty = True

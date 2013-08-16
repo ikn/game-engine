@@ -8,7 +8,6 @@ TODO:
     - allow for transforms
     - internal layers (has allowed range in manager, and distributes graphics within it)
  - ignore off-screen (OoB) things (clip all dirty rects and discard zero-size ones)
- - if GM is fully dirty or GM.busy, draw everything without any rect checks (but still nothing under opaque)
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio) or set a Graphic property (make GraphicView have its own copy)
  - do something with/like dispman
@@ -162,7 +161,7 @@ The top-left of this is not necessarily the same as :attr:`pos`.
         self.pos = (self._pos[0] + dx, self._pos[1] + dy)
 
     def add (self, *graphics):
-        """Add a graphic.
+        """Add graphics.
 
 Call either as ``add(graphic, dx=0, dy=0)`` for a single graphic, or pass any
 number of arguments which are ``(graphic, dx=0, dy=0)`` tuples or just
@@ -232,7 +231,7 @@ using :attr:`manager`.
         return rtn
 
     def rm (self, *graphics):
-        """Remove a graphic previously added using :meth:`add`.
+        """Remove graphics previously added using :meth:`add`.
 
 Raises ``KeyError`` for missing graphics.
 
@@ -359,7 +358,8 @@ previous overlay from the :class:`GraphicsManager`.
     def add (self, *graphics):
         """Add graphics.
 
-Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` instances.
+Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` instances,
+and returns a list of added graphics.
 
 """
         all_gs = self.graphics
@@ -377,6 +377,7 @@ Takes any number of :class:`Graphic <engine.gfx.graphic.Graphic>` instances.
             # don't draw over any possible previous location
             g.was_visible = False
         self.layers = sorted(ls)
+        return graphics
 
     def rm (self, *graphics):
         """Remove graphics.

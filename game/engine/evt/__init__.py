@@ -27,11 +27,12 @@ TODO:
 
     [FUTURE]
  - Scheme [NOTE]
- - generalised clickable things - define a rect (ClickRect, ClickArea subclass), has .click(cb(event_type), events_bitmask), .hover(cb(in/out))
-    - have any number of moveable 'cursors' in eh, with .click() and .move(), and can attach these rects to them (or all/a subset of them)
-    - can easily attach some event types to these?
+ - generalised input areas
+    - define a rect (InputRect, InputArea subclass), has .click(cb(event_type), events_bitmask), .hover(cb(in/out))
+    - have any number of moveable 'cursors' in eh, with .click(), .move_by(), .move_to, and can attach these areas to all/a subset of them
+    - can easily attach some event types to these?  (.click(btn_evt_arg=None), .move_by(relaxis2_evt_arg=None), .move_to(axis2_evt_arg=None))
  - tools for editing/typing text
- - input recording and playback (allow whitelisting/excluding by domain/registered event name)
+ - input recording and playback (allow white/blacklisting by domain/registered event name)
  - eh.*monitor_deadzones
  - a way to register new input/event types (consider module data structures)
     - document using __str__ backends

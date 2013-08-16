@@ -518,6 +518,8 @@ events are registered within a frame.
 class Button2 (MultiEvent):
     """A 2-component version of :class:`Button`.
 
+Button2(*items[, initial_delay][, repeat_delay][, dbl_click_time])
+
 Callbacks are called with ``(button, evts)``, where ``button`` is the button
 this applies to (``0`` or ``1``) and ``evts`` is the argument passed by
 :class:`Button`.
@@ -541,6 +543,8 @@ this applies to (``0`` or ``1``) and ``evts`` is the argument passed by
 
 class Button4 (Button2):
     """A 4-component version of :class:`Button`.
+
+Button4(*items[, initial_delay][, repeat_delay][, dbl_click_time])
 
 Callbacks are called with ``(axis, dirn, evts)``, where we treat the 4 buttons
 as being (left, up, right, down).  ``axis`` corresponds to the x or y axis
