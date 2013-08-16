@@ -4,7 +4,8 @@
 
 TODO:
  - tiled graphic
- - Text
+ - Text: anchor argument/property: (horiz, vert)
+    - have some expand()/whatever function to deal with these (cf. pad - search 'or just')
  - Animation(sequence of surfaces/filenames/graphics/(surface, rect))
     - note spritemap fulfills conditions for the argument
     - be careful with graphics - need to change as they change, both dirty and rect
@@ -20,6 +21,7 @@ import pygame as pg
 from pygame import Rect
 
 from ..conf import conf
+from ..text import option_defaults as text_option_defaults
 from ..util import normalise_colour, align_rect, blank_sfc
 from .graphic import Graphic
 from .util import Grid
@@ -33,9 +35,7 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
 
 :arg colour: a colour to draw, as accepted by
              :func:`engine.util.normalise_colour`.
-:arg rect: ``(left, top, width, height)`` rect (of ints) to draw in (or
-           anything taken by ``pygame.Rect``, like a ``Rect``, or
-           ``((left, top), (width, height))``).
+:arg rect: Pygame-style rect to draw in.
 :arg layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 :arg blit_flags: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
@@ -118,9 +118,121 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
         return self
 
 
+class Text (Graphic):
+    """Rendered text (:class:`Graphic <engine.gfx.graphic.Graphic>`
+subclass).
+
+Text(text, renderer, pos=(0, 0), options={}, layer=0, blit_flags=0)
+
+:arg text: text to render; may contain line breaks to display separate lines.
+:arg renderer: :class:`text.TextRenderer <engine.text.TextRenderer>` instance
+               or the name a renderer is stored under in
+               :attr:`Game.text_renderers <engine.game.Game.text_renderers>`.
+:arg pos: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg options: rendering options to override defaults, as taken by
+              :meth:`TextRenderer.render <engine.text.TextRenderer.render>`.
+              All options can be get and set as properties of this instance,
+              and all are guaranteed to exist, even if not given in this
+              argument.
+:arg layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg blit_flags: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+
+"""
+
+    def __init__ (self, text, renderer, pos=(0, 0), options={}, layer=0,
+                  blit_flags=0):
+        self._last_text = self._text = text
+        self._renderer = None
+        self.renderer = renderer # retrieves from game
+        self._last_renderer = self._renderer
+        self._options = dict(options)
+        # want to always be normalised for better testing for changes
+        self.renderer.normalise_options(self._options)
+        self._last_options = self._options.copy()
+        sfc, lines = self._render_text()
+        #: Number of lines of text rendered.
+        self.nlines = lines
+        Graphic.__init__(self, sfc, pos, layer, blit_flags)
+
+    def _update_rect (self):
+        # set size from current text/renderer/options, and pos based on anchor
+        size = self._renderer.get_info(self._text, self._options)[2]
+        if size != self.orig_sfc.get_size():
+            self.size_changed(size)
+
+    @property
+    def text (self):
+        """Text to render (as taken by constructor)."""
+        return self._text
+
+    @text.setter
+    def text (self, text):
+        if text != self._text:
+            self._text = text
+            self._update_rect()
+
+    @property
+    def renderer (self):
+        """:class:`text.TextRenderer <engine.text.TextRenderer>` instance to
+use."""
+        return self._renderer
+
+    @renderer.setter
+    def renderer (self, renderer):
+        if isinstance(renderer, basestring):
+            renderer = conf.GAME.text_renderers[renderer]
+        old_renderer = self._renderer
+        self._renderer = renderer
+        # None if calling from constructor
+        if old_renderer is not None and renderer != old_renderer:
+            self._update_rect()
+
+    def __getattr__ (self, attr):
+        if attr in text_option_defaults:
+            if attr in self._options:
+                return self._options[attr]
+            else:
+                return getattr(self._renderer, attr) # guaranteed to exist
+        else:
+            return object.__getattribute__(self, attr)
+
+    def __setattr__ (self, attr, val):
+        if attr in text_option_defaults:
+            opts = {attr: val}
+            # make sure all stored options are normalised
+            self._renderer.normalise_options(opts)
+            val = opts[attr]
+            if val != self._options.get(attr):
+                self._options[attr] = val
+                self._update_rect()
+        else:
+            object.__setattr__(self, attr, val)
+
+    def _render_text (self):
+        # actually render text, and return the result
+        return self._renderer.render(self._text, self._options)
+
+    def render (self):
+        """:meth:`Graphic.render <engine.gfx.graphic.Graphic.render>`."""
+        changed = False
+        if self._last_text != self._text:
+            changed = True
+            self._last_text = self._text
+        if self._last_renderer != self._renderer:
+            changed = True
+            self._last_renderer = self._renderer
+        if self._last_options != self._options:
+            changed = True
+            self._last_options = self._options.copy()
+        if changed:
+            self.orig_sfc, self.nlines = self._render_text()
+        # handles any earlier change to self.rect
+        Graphic.render(self)
+
+
 class Tilemap (Graphic):
-    """A :class:`Graphic <engine.gfx.graphic.Graphic>` subclass representing a
-finite, flat grid of tiles.
+    """A finite, flat grid of tiles
+(:class:`Graphic <engine.gfx.graphic.Graphic>` subclass).
 
 Tilemap(grid, tile_data, tile_types, pos = (0, 0), layer = 0[, translate_type],
         cache_tile_data = False, blit_flags = 0,

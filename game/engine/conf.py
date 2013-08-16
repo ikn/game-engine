@@ -101,7 +101,7 @@ button _game_fullscreen DOWN
     DEFAULT_RESOURCE_POOL = 'global'
     # per-backend, each {name: renderer}, where renderer is TextRenderer,
     # (font_filename, options) or just font_filename
-    TEXT_RENDERERS = dd({})
+    TEXT_RENDERERS = dd({'main': 'Ubuntu-R.ttf'})
 
 
 conf = settings.SettingsManager(Conf, Conf.CONF, filter_caps=True)

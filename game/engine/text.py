@@ -102,7 +102,7 @@ render(text, options={}, **kwargs) -> (surface, num_lines)
 
 Options available:
 
-:arg size: text size, in points.
+:arg text_size: text size, in points.
 :arg colour: text colour, as taken by
              :func:`util.normalise_colour <engine.util.normalise_colour>`.
              Alpha seems to be unsupported by Pygame.
@@ -264,7 +264,7 @@ Like :meth:`render`, raises ``ValueError`` if wrapping fails.
         n = len(lines)
         height = n * line_height + (n - 1) * opts['line_spacing']
         sfc_size = (width + abs(offset[0]) + pad[0] + pad[2],
-                    height + abs(offset[1]) + pad[3])
+                    height + abs(offset[1]) + pad[1] + pad[3])
 
         return (lines, (width, height), sfc_size)
 
