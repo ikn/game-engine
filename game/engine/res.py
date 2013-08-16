@@ -82,35 +82,10 @@ Other arguments are as taken by and the return value is as given by
 def _mk_text_keys (text, renderer, options={}, **kwargs):
     if isinstance(renderer, basestring):
         renderer = conf.GAME.text_renderers[renderer]
-    opts = renderer.mk_options(options, **kwargs)
+    o = renderer.mk_options(options, **kwargs)
     # just use a tuple of arguments, normalised and made hashable
-    if opts.get('colour') is not None:
-        opts['colour'] = normalise_colour(opts['colour'])
-    shadow = opts.get('shadow')
-    if shadow is not None:
-        shadow = (normalise_colour(shadow[0]), tuple(shadow[1][:2]))
-    if opts.get('width') is not None:
-        opts['width'] = int(opts['width'])
-    if opts.get('minimise') is not None:
-        opts['minimise'] = bool(opts['minimise'])
-    if opts.get('line_spacing') is not None:
-        opts['line_spacing'] = int(opts['line_spacing'])
-    if opts.get('aa') is not None:
-        opts['aa'] = bool(opts['aa'])
-    if opts.get('bg') is not None:
-        opts['bg'] = normalise_colour(opts['bg'])
-    pad = opts.get('pad')
-    if pad is not None:
-        if isinstance(pad, int):
-            pad = (pad, pad, pad, pad)
-        elif len(pad) == 2:
-            pad = tuple(pad)
-            pad = pad + pad
-        else:
-            pad = tuple(pad)
-    return (text, opts.get('colour'), shadow, opts.get('width'),
-            opts.get('just'), opts.get('minimise'), opts.get('line_spacing'),
-            opts.get('aa'), opts['bg'], pad)
+    renderer.normalise_options(o)
+    yield (text,) + tuple([o[k] for k in sorted(o)])
 
 
 def _measure_text (text):

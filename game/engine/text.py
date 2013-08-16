@@ -21,6 +21,7 @@ from .util import normalise_colour
 #:  }
 # be sure to update res._mk_text_keys if these change
 option_defaults = {
+    'text_size': 12,
     'colour': '000',
     'shadow': None,
     'width': None,
@@ -28,7 +29,7 @@ option_defaults = {
     'minimise': False,
     'line_spacing': 0,
     'aa': True,
-    'bg': None,
+    'bg': (0, 0, 0, 0),
     'pad': (0, 0, 0, 0),
     'wrap': 'char'
 }
@@ -42,7 +43,9 @@ TextRenderer(font, options={}, resource_pool=conf.DEFAULT_RESOURCE_POOL,
 
 :arg font: font filename to use, under :data:`conf.FONT_DIR`.
 :arg options: dict giving rendering parameters.  These act as default values in
-              the same argument to :meth:`render`.
+              the same argument to :meth:`render`.  All options can be
+              retrieved as properties of this instance (and all are guaranteed
+              to exist), but cannot be changed.
 :arg resource_pool: :class:`ResourceManager <engine.res.ResourceManager>`
                     resource pool name to cache any loaded Pygame fonts in.
 :arg resource_manager: :class:`ResourceManager <engine.res.ResourceManager>`
@@ -68,15 +71,19 @@ TextRenderer(font, options={}, resource_pool=conf.DEFAULT_RESOURCE_POOL,
         else:
             return False
 
+    def __getattr__ (self, attr):
+        if attr in option_defaults:
+            return self._defaults.get(attr, option_defaults[attr])
+        else:
+            return object.__getattribute__(self, attr)
+
     def _get_font (self, opts):
         # load the font required for the given (normalised) options
-        if 'size' not in opts: # others are always filled in from defaults
-            raise TypeError('\'size\' rendering option is required')
         if self._resource_manager is None:
             resources = conf.GAME.resources
         else:
             resources = self._resource_manager
-        return resources.pgfont(self._font, opts['size'],
+        return resources.pgfont(self._font, opts['text_size'],
                                 pool=self._resource_pool)
 
     def render (self, text, options={}, **kwargs):
@@ -95,7 +102,7 @@ render(text, options={}, **kwargs) -> (surface, num_lines)
 
 Options available:
 
-:arg size: text size, in points.  This is the only required 'option'.
+:arg size: text size, in points.
 :arg colour: text colour, as taken by
              :func:`util.normalise_colour <engine.util.normalise_colour>`.
              Alpha seems to be unsupported by Pygame.
@@ -109,7 +116,7 @@ Options available:
                (that is, shrink the surface after, if possible).
 :arg line_spacing: space between lines, in pixels.
 :arg aa: whether to anti-alias the text.
-:arg bg: background colour; defaults to alpha.
+:arg bg: background colour.
 :arg pad: ``(left, top, right, bottom)`` padding in pixels.  Can also be one
           number for all sides or ``(left_and_right, top_and_bottom)``.  This
           treats shadow as part of the text.
@@ -142,8 +149,6 @@ Options available:
         line_spacing = opts['line_spacing']
         aa = opts['aa']
         bg = opts['bg']
-        if bg is None:
-            bg = (0, 0, 0, 0)
         pad = opts['pad']
 
         lines, text_size, sfc_size = self.get_info(text, opts)
@@ -151,17 +156,15 @@ Options available:
 
         opaque = len(bg) == 3 or bg[3] == 255
         # simple case: just one line and want to minimise width and no shadow
-        # or padding and bg is opaque or fully transparent
+        # or padding and bg is opaque (Pygame seems not to do alpha bg)
         if (len(lines) == 1 and minimise and pad == (0, 0, 0, 0) and
-            shadow_colour is None and (opaque or bg[3] == 0)):
-            if bg is None:
-                sfc = font.render(lines[0], True, colour)
-            else:
-                sfc = font.render(lines[0], True, colour, bg)
+            shadow_colour is None and opaque):
+            sfc = font.render(lines[0], True, colour, bg)
             return (sfc, 1)
         # else create surface to blit all the lines to
         sfc = pg.Surface(sfc_size)
-        sfc = sfc.convert() if opaque else sfc.convert_alpha()
+        if not opaque:
+            sfc = sfc.convert_alpha()
         sfc.fill(bg)
         # render and blit text
         line_height = font.get_height()
@@ -288,7 +291,9 @@ This involves making every option hashable and putting it in a standard format.
 
 """
         o = options
-        if o.get('colour') is not None:
+        if 'size' in o:
+            o['text_size'] = int(o['text_size'])
+        if 'colour' in o:
             o['colour'] = normalise_colour(o['colour'])
         shadow = o.get('shadow')
         if shadow is not None:
@@ -296,16 +301,18 @@ This involves making every option hashable and putting it in a standard format.
         o['shadow'] = shadow
         if o.get('width') is not None:
             o['width'] = int(o['width'])
-        if o.get('minimise') is not None:
+        if 'just' in o:
+            o['just'] = int(o['just'])
+        if 'minimise' in o:
             o['minimise'] = bool(o['minimise'])
-        if o.get('line_spacing') is not None:
+        if 'line_spacing' in o:
             o['line_spacing'] = int(o['line_spacing'])
-        if o.get('aa') is not None:
+        if 'aa' in o:
             o['aa'] = bool(o['aa'])
-        if o.get('bg') is not None:
+        if 'bg' in o:
             o['bg'] = normalise_colour(o['bg'])
-        pad = o.get('pad')
-        if pad is not None:
+        if 'pad' in o:
+            pad = o['pad']
             if isinstance(pad, int):
                 pad = (pad, pad, pad, pad)
             elif len(pad) == 2:
@@ -313,6 +320,6 @@ This involves making every option hashable and putting it in a standard format.
                 pad = pad + pad
             else:
                 pad = tuple(pad)
-        o['pad'] = pad
-        if o['wrap'] not in ('char', 'word', 'none'):
+            o['pad'] = pad
+        if 'wrap' in o and o['wrap'] not in ('char', 'word', 'none'):
             raise ValueError('unknown wrap mode: \'{0}\''.format(o['wrap']))
