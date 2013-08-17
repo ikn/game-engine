@@ -263,7 +263,7 @@ class GraphicsManager (Graphic):
     """Draws things to a surface intelligently.
 :class:`Graphic <engine.gfx.graphic.Graphic>` subclass.
 
-GraphicsManager(scheduler[, sfc], pos = (0, 0), layer = 0, blit_flags = 0)
+GraphicsManager(scheduler[, sfc], pos=(0, 0), layer=0)
 
 :arg scheduler: a :class:`sched.Scheduler <engine.sched.Scheduler>` instance
                 this manager should use for timing.
@@ -282,12 +282,11 @@ however, and transformations are only applied in
 
 """
 
-    def __init__ (self, scheduler, sfc = None, pos = (0, 0), layer = 0,
-                  blit_flags = 0):
+    def __init__ (self, scheduler, sfc=None, pos=(0, 0), layer=0):
         #: The ``scheduler`` argument passed to the constructor.
         self.scheduler = scheduler
         self._init_as_graphic = False
-        self._init_as_graphic_args = (pos, layer, blit_flags)
+        self._init_as_graphic_args = (pos, layer)
         self._orig_sfc = None
         self.orig_sfc = sfc # calls setter
         self._gm_dirty = False

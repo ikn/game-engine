@@ -7,7 +7,6 @@ TODO:
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 2?)
- - tint transform (as opacify, which uses tint with (255, 255, 255, opacity))
 
 ---NODOC---
 
@@ -26,9 +25,8 @@ from ..util import (ir, pos_in_rect, align_rect, normalise_colour, has_alpha,
 class Graphic (object):
     """Something that can be drawn to the screen.
 
-Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0,
-        resource_pool = conf.DEFAULT_RESOURCE_POOL,
-        resource_manager = conf.GAME.resources)
+Graphic(img, pos=(0, 0), layer=0, resource_pool=conf.DEFAULT_RESOURCE_POOL,
+        resource_manager=conf.GAME.resources)
 
 :arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.  If a
           surface, it should be already converted for blitting.
@@ -40,8 +38,6 @@ Graphic(img, pos = (0, 0), layer = 0, blit_flags = 0,
             layers used in the same
             :class:`GraphicsManager <engine.gfx.container.GraphicsManager>` can
             be ordered with respect to each other.
-:arg blit_flags: when blitting the surface to the screen, this is passed as the
-                 ``special_flags`` argument.
 :arg resource_pool: :class:`ResourceManager <engine.res.ResourceManager>`
                     resource pool name to cache any loaded images in.
 :arg resource_manager: :class:`ResourceManager <engine.res.ResourceManager>`
@@ -64,9 +60,9 @@ correspond to builtin transforms (see :meth:`transform`).
 
     _builtin_transforms = ('crop', 'flip', 'tint', 'resize', 'rotate')
 
-    def __init__ (self, img, pos = (0, 0), layer = 0, blit_flags = 0,
-                  resource_pool = conf.DEFAULT_RESOURCE_POOL,
-                  resource_manager = None):
+    def __init__ (self, img, pos=(0, 0), layer=0,
+                  resource_pool=conf.DEFAULT_RESOURCE_POOL,
+                  resource_manager=None):
         self._resource_pool = resource_pool
         self._resource_manager = resource_manager
         if isinstance(img, basestring):
@@ -103,8 +99,9 @@ correspond to builtin transforms (see :meth:`transform`).
         self.opaque = not has_alpha(img)
         self._manager = None
         self._layer = layer
-        #: As taken by the constructor.
-        self._last_blit_flags = self.blit_flags = blit_flags
+        #: When blitting the surface, this is passed as the ``special_flags``
+        #: argument.
+        self._last_blit_flags = self.blit_flags = 0
         #: Whether currently (supposed to be) visible on-screen.
         self.visible = True
         #: Whether this graphic was visible at the time of the last draw; do

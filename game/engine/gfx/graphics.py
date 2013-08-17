@@ -29,13 +29,12 @@ class Colour (Graphic):
     """A solid rect of colour
 (:class:`Graphic <engine.gfx.graphic.Graphic>` subclass).
 
-Colour(colour, rect, layer = 0, blit_flags = 0)
+Colour(colour, rect, layer=0)
 
 :arg colour: a colour to draw, as accepted by
              :func:`engine.util.normalise_colour`.
 :arg rect: Pygame-style rect to draw in.
 :arg layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
-:arg blit_flags: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
 :meth:`fill` corresponds to a builtin transform.
 
@@ -45,11 +44,10 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
     _builtin_transforms = Graphic._builtin_transforms[:_i] + ('fill',) + \
                           Graphic._builtin_transforms[_i:]
 
-    def __init__ (self, colour, rect, layer = 0, blit_flags = 0):
+    def __init__ (self, colour, rect, layer=0):
         rect = Rect(rect)
         # converts surface and sets opaque to True
-        Graphic.__init__(self, pg.Surface(rect.size), rect.topleft, layer,
-                         blit_flags)
+        Graphic.__init__(self, pg.Surface(rect.size), rect.topleft, layer)
         self._colour = (0, 0, 0, 255)
         self.fill(colour)
 
@@ -120,7 +118,7 @@ class Text (Graphic):
     """Rendered text (:class:`Graphic <engine.gfx.graphic.Graphic>`
 subclass).
 
-Text(text, renderer, pos=(0, 0), options={}, layer=0, blit_flags=0)
+Text(text, renderer, pos=(0, 0), options={}, layer=0)
 
 :arg text: text to render; may contain line breaks to display separate lines.
 :arg renderer: :class:`text.TextRenderer <engine.text.TextRenderer>` instance
@@ -133,12 +131,10 @@ Text(text, renderer, pos=(0, 0), options={}, layer=0, blit_flags=0)
               and all are guaranteed to exist, even if not given in this
               argument.
 :arg layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
-:arg blit_flags: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
 """
 
-    def __init__ (self, text, renderer, pos=(0, 0), options={}, layer=0,
-                  blit_flags=0):
+    def __init__ (self, text, renderer, pos=(0, 0), options={}, layer=0):
         self._last_text = self._text = text
         self._renderer = None
         self.renderer = renderer # retrieves from game
@@ -150,7 +146,7 @@ Text(text, renderer, pos=(0, 0), options={}, layer=0, blit_flags=0)
         sfc, lines = self._render_text()
         #: Number of lines of text rendered.
         self.nlines = lines
-        Graphic.__init__(self, sfc, pos, layer, blit_flags)
+        Graphic.__init__(self, sfc, pos, layer)
 
     def _update_rect (self):
         # set size from current text/renderer/options
@@ -233,10 +229,9 @@ class Tilemap (Graphic):
     """A finite, flat grid of tiles
 (:class:`Graphic <engine.gfx.graphic.Graphic>` subclass).
 
-Tilemap(grid, tile_data, tile_types, pos = (0, 0), layer = 0[, translate_type],
-        cache_tile_data = False, blit_flags = 0,
-        resource_pool = conf.DEFAULT_RESOURCE_POOL,
-        resource_manager = conf.GAME.resources)
+Tilemap(grid, tile_data, tile_types, pos=(0, 0), layer=0[, translate_type],
+        cache_tile_data=False, resource_pool=conf.DEFAULT_RESOURCE_POOL,
+        resource_manager=conf.GAME.resources)
 
 :arg grid: a :class:`util.Grid <engine.gfx.util.Grid>` defining the size and
            shape of the tiles in the tilemap, or the ``tile_size`` argument to
@@ -297,8 +292,7 @@ Tilemap(grid, tile_data, tile_types, pos = (0, 0), layer = 0[, translate_type],
                     type.  You might want to pass ``True`` if requesting
                     ``tile_graphic`` from ``tile_types`` generates a surface.
                     If ``True``, tile type IDs must be hashable (after
-                    translation),
-:arg blit_flags: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+                    translation
 :arg resource_pool: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 :arg resource_manager: as taken by
                        :class:`Graphic <engine.gfx.graphic.Graphic>`.
@@ -308,10 +302,10 @@ each tile type never changes.
 
 """
 
-    def __init__ (self, grid, tile_data, tile_types, pos = (0, 0), layer = 0,
-                  translate_type = None, cache_graphic = False,
-                  blit_flags = 0, resource_pool = conf.DEFAULT_RESOURCE_POOL,
-                  resource_manager = None):
+    def __init__ (self, grid, tile_data, tile_types, pos=(0, 0), layer=0,
+                  translate_type=None, cache_graphic=False,
+                  resource_pool=conf.DEFAULT_RESOURCE_POOL,
+                  resource_manager=None):
         if not callable(tile_types):
             tile_types = lambda tile_type_id: tile_types[tile_type_id]
         self._type_to_graphic = tile_types
@@ -327,8 +321,8 @@ each tile type never changes.
         #: The :class:`util.Grid <engine.gfx.util.Grid>` covered.
         self.grid = grid
         # apply initial data
-        Graphic.__init__(self, blank_sfc(grid.size), pos, layer, blit_flags,
-                         resource_pool, resource_manager)
+        Graphic.__init__(self, blank_sfc(grid.size), pos, layer, resource_pool,
+                         resource_manager)
         update = self._update
         for i, col in enumerate(self._tile_data):
             for j, tile_type_id in enumerate(col):
