@@ -3,7 +3,6 @@
 ---NODOC---
 
 TODO:
- - *anchor as properties, and retransform on set
  - update .opaque on transform
  - in graphics, store n (5?) last # draws between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
@@ -84,14 +83,8 @@ correspond to builtin transforms (see :meth:`transform`).
         self._last_postrot_rect = Rect(self._postrot_rect)
         #: :attr:`rect` at the time of the last draw.
         self.last_rect = Rect(self._rect)
-        #: The point within :attr:`rect` to fix in place when size changes.
-        #:
-        #: This is a position as taken by :func:`engine.util.pos_in_rect`
-        #: (where the ``rect`` argument will be :attr:`rect`).  Defaults to
-        #: ``(0, 0)``.
-        self.anchor = (0, 0)
-        #: Like :attr:`anchor`, used for rotation.
-        self.rot_anchor = 'center'
+        self._anchor = (0, 0)
+        self._rot_anchor = 'center'
         self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
         self._must_apply_rot = False
         #: A list of transformations applied to the graphic.  Always contains
@@ -371,6 +364,35 @@ Also see :attr:`rot_anchor`.
         return self._postrot_rect
 
     @property
+    def anchor (self):
+        """The point within :attr:`rect` to fix in place when size changes.
+
+This is a position as taken by :func:`engine.util.pos_in_rect` (where the
+``rect`` argument will be :attr:`rect`).  Defaults to ``(0, 0)``.
+
+"""
+        return self._anchor
+
+    @anchor.setter
+    def anchor (self, anchor):
+        self._anchor = anchor
+        self.retransform('resize')
+
+    @property
+    def rot_anchor (self):
+        """Like :attr:`anchor`, used for rotation.
+
+Defaults to ``'center'``.
+
+"""
+        return self._rot_anchor
+
+    @rot_anchor.setter
+    def rot_anchor (self, anchor):
+        self._rot_anchor = anchor
+        self.retransform('rotate')
+
+    @property
     def scale_fn (self):
         """Function to use for scaling.
 
@@ -597,7 +619,7 @@ apply queued transformations.
             sz = sz.get_size()
         return sz
 
-    def _undo_transforms (self, transform_fn, include = True):
+    def _undo_transforms (self, transform_fn, include=True):
         """Undo modifiers up to the given transform.
 
 transform_fn may be an index in transforms.
@@ -623,7 +645,7 @@ include: whether to undo for the given transform.
                 # else non-applied builtin
             # else non-builtin: nothing to undo
 
-    def _apply_transforms (self, transform_fn, regen, include = True):
+    def _apply_transforms (self, transform_fn, regen, include=True):
         """Apply modifiers from the given transforms.
 
 transform_fn may be an index in transforms.
@@ -805,20 +827,26 @@ retransform(transform_fn) -> self
 :arg transform_fn: a transformation function as taken by :meth:`transform`.
 
 """
-        try:
-            args, src, dest, apply_fn, undo_fn = self._transforms[transform_fn]
-        except KeyError:
-            # either doesn't exist or already queued
-            pass
-        else:
-            # no need to regenerate modifiers - nothing changed
-            if isinstance(transform, basestring):
-                self._queued_transforms[transform_fn] = (
-                    args, src.get_size(), dest.get_size(), apply_fn, undo_fn
-                )
-            else:
-                self._queued_transforms[transform_fn] = (args, None, None,
-                                                         None, None)
+        t_ks = self.transforms
+        ts = self._transforms
+        q = self._queued_transforms
+        if transform_fn in ts:
+            if isinstance(transform_fn, basestring):
+                # no need to handle mods if not builtin, since then _gen_mods
+                # args don't change for any builtins
+                self._undo_transforms(transform_fn)
+                args, src, dest, apply_fn, undo_fn = ts[transform_fn]
+                # queue for full retransform
+                if isinstance(transform_fn, basestring):
+                    q[transform_fn] = (args, src.get_size(), dest.get_size(),
+                                       apply_fn, undo_fn)
+                else:
+                    q[transform_fn] = (args, None, None, None, None)
+                self._apply_transforms(transform_fn,
+                                       src.get_size() != dest.get_size())
+            # remove last_args to force retransform
+            del ts[transform_fn]
+        # else nothing to do
         return self
 
     def untransform (self, transform_fn):
@@ -841,7 +869,9 @@ untransform(transform_fn) -> self
             if transform_fn in q:
                 src_sz, dest_sz = q[transform_fn][1:3]
             else:
-                src_sz, dest_sz = ts[transform_fn][1:3]
+                src, dest = ts[transform_fn][1:3]
+                src_sz = src.get_size()
+                dest_sz = dest.get_size()
             self._apply_transforms(transform_fn, src_sz != dest_sz, False)
         else:
             # don't remove builtins from transforms list
