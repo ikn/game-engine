@@ -116,6 +116,7 @@ correspond to builtin transforms (see :meth:`transform`).
         self._tint_colour = (255, 255, 255, 255)
         self._angle = 0
         self._scale_fn = pg.transform.smoothscale
+        self._tint_mode = pg.BLEND_RGBA_MULT
         self._rotate_fn = lambda sfc, angle: \
             pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
         self._rotate_threshold = 2 * pi / 500
@@ -415,6 +416,21 @@ signature as this default).
     def scale_fn (self, scale_fn):
         self._scale_fn = scale_fn
         self.retransform('resize')
+
+    @property
+    def tint_mode (self):
+        """Mode of the ``'tint'`` transform.
+
+One of the Pygame ``special_flags`` to ``Surface.blit``; defaults to
+``BLEND_RGBA_MULT``.
+
+"""
+        return self._tint_mode
+
+    @tint_mode.setter
+    def tint_mode (self, mode):
+        self._tint_mode = mode
+        self.retransform('tint')
 
     @property
     def rotate_fn (self):
@@ -1184,7 +1200,7 @@ flip(x = False, y = False) -> self
             src = src.convert_alpha()
         new_sfc = pg.Surface(src.get_size()).convert_alpha()
         new_sfc.fill(colour)
-        new_sfc.blit(src, (0, 0), special_flags=pg.BLEND_RGBA_MULT)
+        new_sfc.blit(src, (0, 0), special_flags=self._tint_mode)
         return (new_sfc, True)
 
     def tint (self, colour):
