@@ -50,7 +50,7 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
         # converts surface and sets opaque to True
         Graphic.__init__(self, pg.Surface(rect.size), rect.topleft, layer,
                          blit_flags)
-        self._colour = (0, 0, 0)
+        self._colour = (0, 0, 0, 255)
         self.fill(colour)
 
     @property
@@ -63,14 +63,14 @@ Colour(colour, rect, layer = 0, blit_flags = 0)
         self.fill(colour)
 
     def _gen_mods_fill (self, src_sz, first_time, last_args, colour):
-        if first_time or \
-           normalise_colour(last_args[0]) != normalise_colour(colour):
+        colour = normalise_colour(colour)
+        if first_time or normalise_colour(last_args[0]) != colour:
 
             def apply_fn (g):
                 g._colour = colour
 
             def undo_fn (g):
-                g._colour = (0, 0, 0)
+                g._colour = (0, 0, 0, 255)
 
             mods = (apply_fn, undo_fn)
         else:

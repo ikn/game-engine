@@ -3,7 +3,6 @@
 ---NODOC---
 
 TODO:
- - update .opaque on transform
  - in graphics, store n (5?) last # draws between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
@@ -20,8 +19,8 @@ import pygame as pg
 from pygame import Rect
 
 from ..conf import conf
-from ..util import (ir, pos_in_rect, align_rect, has_alpha, blank_sfc,
-                    combine_drawn)
+from ..util import (ir, pos_in_rect, align_rect, normalise_colour, has_alpha,
+                    blank_sfc, combine_drawn)
 
 
 class Graphic (object):
@@ -63,7 +62,7 @@ correspond to builtin transforms (see :meth:`transform`).
 
 """
 
-    _builtin_transforms = ('crop', 'flip', 'opacify', 'resize', 'rotate')
+    _builtin_transforms = ('crop', 'flip', 'tint', 'resize', 'rotate')
 
     def __init__ (self, img, pos = (0, 0), layer = 0, blit_flags = 0,
                   resource_pool = conf.DEFAULT_RESOURCE_POOL,
@@ -114,7 +113,7 @@ correspond to builtin transforms (see :meth:`transform`).
         self._scale = (1, 1)
         self._cropped_rect = None
         self._flipped = (False, False)
-        self._opacity = 1
+        self._tint_colour = (255, 255, 255, 255)
         self._angle = 0
         self._scale_fn = pg.transform.smoothscale
         self._rotate_fn = lambda sfc, angle: \
@@ -336,9 +335,19 @@ Can be set to a single value to apply to both dimensions.
             self.flip(*flipped)
 
     @property
+    def tint_colour (self):
+        """Tinted colour of the graphic, as taken by
+:func:`engine.util.normalise_colour`."""
+        return self._tint_colour
+
+    @tint_colour.setter
+    def tint_colour (self, colour):
+        self.tint(colour)
+
+    @property
     def opacity (self):
-        """Opacity of the graphic, from 0 (transparent) to 255."""
-        return self._opacity
+        """Opacity of the graphic, from ``0`` (transparent) to ``255``."""
+        return self._tint_colour[3]
 
     @opacity.setter
     def opacity (self, opacity):
@@ -1149,41 +1158,56 @@ flip(x = False, y = False) -> self
 """
         return self.transform('flip', bool(x), bool(y))
 
-    def _gen_mods_opacify (self, src_sz, first_time, last_args, opacity):
-        if first_time or last_args[0] != opacity:
+    def _gen_mods_tint (self, src_sz, first_time, last_args, colour):
+        colour = normalise_colour(colour)
+        if first_time or normalise_colour(last_args[0]) != colour:
 
             def apply_fn (g):
-                g._opacity = opacity
+                g._tint_colour = colour
 
             def undo_fn (g):
-                g._opacity = 255
+                g._tint_colour = (255, 255, 255, 255)
 
             mods = (apply_fn, undo_fn)
         else:
             mods = None
         return (mods, src_sz)
 
-    def _opacify (self, src, dest, dirty, last_args, opacity):
-        if opacity == 255:
+    def _tint (self, src, dest, dirty, last_args, colour):
+        colour = normalise_colour(colour)
+        if colour == (255, 255, 255, 255):
             return (src, dirty)
-        if dirty is False and last_args is not None and \
-           last_args[0] == opacity:
+        if (dirty is False and last_args is not None and
+            normalise_colour(last_args[0]) == colour):
             return (dest, False)
         if not has_alpha(src):
             src = src.convert_alpha()
         new_sfc = pg.Surface(src.get_size()).convert_alpha()
-        new_sfc.fill((255, 255, 255, opacity))
-        new_sfc.blit(src, (0, 0), special_flags = pg.BLEND_RGBA_MULT)
+        new_sfc.fill(colour)
+        new_sfc.blit(src, (0, 0), special_flags=pg.BLEND_RGBA_MULT)
         return (new_sfc, True)
 
+    def tint (self, colour):
+        """Set tint colour, as taken by :func:`engine.util.normalise_colour`.
+
+tint(colour) -> self
+
+This doesn't actually add any colour; it just alters the amount of colour in
+each channel.
+
+"""
+        return self.transform('tint', colour)
+
     def opacify (self, opacity):
-        """Set opacity, from 0 (transparent) to 255.
+        """Set opacity, from ``0`` (transparent) to ``255``.
+
+opacify(opacity) -> self
 
 (Sorry about the name---``fade`` would be nice, but conflicts with
 :meth:`GraphicsManager.fade() <engine.gfx.container.GraphicsManager.fade>`.)
 
 """
-        return self.transform('opacify', opacity)
+        return self.transform('tint', self._tint_colour[:3] + (opacity,))
 
     def _gen_mods_rotate (self, src_sz, first_time, last_args, angle):
         # - dest_sz will never get used: all following transforms are
