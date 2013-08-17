@@ -8,9 +8,10 @@ import types
 import pygame as pg
 
 # be sure to change util.rst
-__all__ = ('dd', 'takes_args', 'wrap_fn', 'ir', 'sum_pos', 'normalise_colour',
-           'randsgn','rand0', 'weighted_rand', 'align_rect', 'position_sfc',
-           'convert_sfc', 'combine_drawn', 'blank_sfc')
+__all__ = ('dd', 'takes_args', 'wrap_fn', 'ir', 'sum_pos', 'pos_in_rect',
+           'normalise_colour', 'randsgn','rand0', 'weighted_rand',
+           'align_rect', 'position_sfc', 'convert_sfc', 'combine_drawn',
+           'blank_sfc')
 
 
 # abstract
@@ -94,13 +95,54 @@ def sum_pos (*pos):
     return (sx, sy)
 
 
-def normalise_colour (c):
-    """Turn a colour into (R, G, B, A) format with each number from 0 to 255.
+def pos_in_rect (pos, rect, round_val=False):
+    """Return the position relative to ``rect`` given by ``pos``.
 
-Accepts 3- or 4-item sequences (if 3, alpha is assumed to be 255), or an
-integer whose hexadecimal representation is 0xrrggbbaa, or a CSS-style colour
-in a string ('#rgb', '#rrggbb', '#rgba', '#rrggbbaa' - or without the leading
-'#').
+:arg pos: a position identifier.  This can be:
+
+    - ``(x, y)``, where each is either a number relative to ``rect``'s
+      top-left, or the name of a property of ``pygame.Rect`` which returns a
+      number.
+    - a single number ``x`` that is the same as ``(x, x)``.
+    - the name of a property of ``pygame.Rect`` which returns an ``(x, y)`` 
+      sequence of numbers.
+
+:arg rect: a Pygame-style rect, or just a ``(width, height)`` size to assume a
+           rect with top-left ``(0, 0)``.
+:arg round_val: whether to round the resulting numbers to integers before
+                returning.
+
+:return: the qualified position relative to ``rect``'s top-left, as ``(x, y)``
+         numbers.
+
+"""
+    if len(rect) == 2 and isinstance(rect[0], (int, float)):
+        # got a size
+        rect = ((0, 0), rect)
+    rect = pg.Rect(rect)
+    if isinstance(pos, basestring):
+        x, y = getattr(rect, pos)
+        x -= rect.left
+        y -= rect.top
+    elif isinstance(pos, (int, float)):
+        x = y = pos
+    else:
+        x, y = pos
+        if isinstance(x, basestring):
+            x = getattr(rect, x) - rect.left
+        if isinstance(y, basestring):
+            y = getattr(rect, y) - rect.top
+    return (ir(x), ir(y)) if round_val else (x, y)
+
+
+def normalise_colour (c):
+    """Turn a colour into ``(R, G, B, A)`` format with each number from ``0``
+to ``255``.
+
+Accepts 3- or 4-item sequences (if 3, alpha is assumed to be ``255``), or an
+integer whose hexadecimal representation is ``0xrrggbbaa``, or a CSS-style
+colour in a string (``'#rgb'``, ``'#rrggbb'``, ``'#rgba'``, ``'#rrggbbaa'``
+- or without the leading ``'#'``).
 
 """
     if isinstance(c, int):
@@ -141,7 +183,7 @@ in a string ('#rgb', '#rrggbb', '#rgba', '#rrggbbaa' - or without the leading
 
 
 def randsgn ():
-    """Randomly return ``1`` or `-1``."""
+    """Randomly return ``1`` or ``-1``."""
     return 2 * randrange(2) - 1
 
 

@@ -11,6 +11,7 @@ Abstract
 .. autofunction:: engine.util.wrap_fn
 .. autofunction:: engine.util.ir
 .. autofunction:: engine.util.sum_pos
+.. autofunction:: engine.util.pos_in_rect
 .. autofunction:: engine.util.normalise_colour
 
 Random

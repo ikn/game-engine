@@ -4,8 +4,6 @@
 
 TODO:
  - tiled graphic
- - Text: anchor argument/property: (horiz, vert)
-    - have some expand()/whatever function to deal with these (cf. pad - search 'or just')
  - Animation(sequence of surfaces/filenames/graphics/(surface, rect))
     - note spritemap fulfills conditions for the argument
     - be careful with graphics - need to change as they change, both dirty and rect
@@ -155,9 +153,10 @@ Text(text, renderer, pos=(0, 0), options={}, layer=0, blit_flags=0)
         Graphic.__init__(self, sfc, pos, layer, blit_flags)
 
     def _update_rect (self):
-        # set size from current text/renderer/options, and pos based on anchor
+        # set size from current text/renderer/options
         size = self._renderer.get_info(self._text, self._options)[2]
         if size != self.orig_sfc.get_size():
+            # repositions based on anchor
             self.size_changed(size)
 
     @property

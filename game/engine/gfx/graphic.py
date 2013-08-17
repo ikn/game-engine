@@ -3,6 +3,7 @@
 ---NODOC---
 
 TODO:
+ - *anchor as properties, and retransform on set
  - update .opaque on transform
  - in graphics, store n (5?) last # draws between changes to the surface (by transform or altering the original)
     - if the average > x or current length < n, do some things:
@@ -20,7 +21,8 @@ import pygame as pg
 from pygame import Rect
 
 from ..conf import conf
-from ..util import ir, align_rect, has_alpha, blank_sfc, combine_drawn
+from ..util import (ir, pos_in_rect, align_rect, has_alpha, blank_sfc,
+                    combine_drawn)
 
 
 class Graphic (object):
@@ -82,6 +84,14 @@ correspond to builtin transforms (see :meth:`transform`).
         self._last_postrot_rect = Rect(self._postrot_rect)
         #: :attr:`rect` at the time of the last draw.
         self.last_rect = Rect(self._rect)
+        #: The point within :attr:`rect` to fix in place when size changes.
+        #:
+        #: This is a position as taken by :func:`engine.util.pos_in_rect`
+        #: (where the ``rect`` argument will be :attr:`rect`).  Defaults to
+        #: ``(0, 0)``.
+        self.anchor = (0, 0)
+        #: Like :attr:`anchor`, used for rotation.
+        self.rot_anchor = 'center'
         self._rot_offset = (0, 0) # postrot_pos = pos + rot_offset
         self._must_apply_rot = False
         #: A list of transformations applied to the graphic.  Always contains
@@ -345,7 +355,7 @@ Can be set to a single value to apply to both dimensions.
     def angle (self):
         """Current rotation angle, anti-clockwise in radians.
 
-Setting this rotates about the graphic's centre.
+Also see :attr:`rot_anchor`.
 
 """
         return self._angle
@@ -843,27 +853,25 @@ untransform(transform_fn) -> self
             del q[transform_fn]
         return self
 
-    def size_changed (self, rect):
+    def size_changed (self, size):
         """Tell the graphic that the original size has changed.
 
-:arg rect: the new original Pygame Rect to use, or a function to take the
-           current original rect and return the new original rect, or the new
-           original size to use (leaving the original position unchanged).
+:arg size: the new original size to use.
 
 'Original' means before any transforms.  This method is for use by subclasses,
 to call when :attr:`orig_sfc` will change, but will not be set until
-:meth:`render` is called to avoid unnecessary computations.
+:meth:`render` is called to avoid unnecessary computations.  The new position
+is determined by :attr:`anchor`.
 
 """
         got_transforms = bool(self.transforms)
         if got_transforms:
             self._undo_transforms(0)
-        if callable(rect):
-            rect = rect(self._rect)
-        elif len(rect) == 2:
-            # got a size
-            rect = Rect(self._rect.topleft, rect)
-        self._rect = rect
+        # compute offset due to anchor
+        old_ox, old_oy = pos_in_rect(self.anchor, self._rect)
+        new_ox, new_oy = pos_in_rect(self.anchor, size)
+        x, y = self._rect.topleft
+        self._rect = Rect((x + old_ox - new_ox, y + old_oy - new_oy), size)
         if got_transforms:
             self._apply_transforms(0, True)
 
@@ -886,9 +894,9 @@ If successful, all transformations are reapplied afterwards, if any.
             self.orig_sfc = self._load_img(self.fn, True)
 
     def _gen_mods_resize (self, src_sz, first_time, last_args, w, h,
-                          about=(0, 0), scale=False):
+                          scale=False):
         # mods are size-dependent, so they always change
-        ax, ay = about
+        ax, ay = pos_in_rect(self.anchor, ((0, 0), src_sz), True)
         ow, oh = src_sz
         if scale:
             w = ir(scale[0] * ow)
@@ -918,8 +926,7 @@ If successful, all transformations are reapplied afterwards, if any.
 
         return ((apply_fn, undo_fn), (w, h))
 
-    def _resize (self, src, dest, dirty, last_args, w, h, about=(0, 0),
-                 scale=False):
+    def _resize (self, src, dest, dirty, last_args, w, h, scale=False):
         start_w, start_h = src.get_size()
         if scale:
             w = ir(scale[0] * start_w)
@@ -933,76 +940,67 @@ If successful, all transformations are reapplied afterwards, if any.
                 h = start_h
             elif h is False:
                 h = ir(start_h * float(w) / start_w)
-        ax, ay = about
+        ax, ay = pos_in_rect(self.anchor, (0, 0, start_w, start_h), True)
         if w == start_w and h == start_h:
             # transform does nothing
             return (src, dirty)
         if not dirty and last_args is not None:
-            last_w, last_h, (last_ax, last_ay) = last
+            last_w, last_h, last_about = last
+            last_ax, last_ay = pos_in_rect(self.anchor, (0, 0, last_w, last_h),
+                                           True)
             if w == last_w and h == last_h and ax == last_ax and ay == last_ay:
                 # same as last time
                 return (dest, False)
         # full transform
         return (self.scale_fn(src, (w, h)), True)
 
-    def resize (self, w=None, h=None, about=(0, 0), scale=False):
+    def resize (self, w=None, h=None, scale=False):
         """Resize the graphic.
 
-resize([w][, h], about=(0, 0)) -> self
+resize([w][, h]) -> self
 
 :arg w: the new width.
 :arg h: the new height.
-:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
-            scale about.
 
-No scaling occurs in omitted dimensions.
+No scaling occurs in omitted dimensions.  Also see :attr:`anchor`.
 
 """
-        return self.transform('resize', w, h, about, scale)
+        return self.transform('resize', w, h, scale)
 
-    def rescale (self, w=1, h=1, about=(0, 0)):
-        """A convenience wrapper around resize to scale by a ratio.
+    def rescale (self, w=1, h=1):
+        """A convenience wrapper around :meth:`resize` to scale by a ratio.
 
-rescale(w=1, h=1, about=(0, 0)) -> self
+rescale(w=1, h=1) -> self
 
 :arg w: the new width; ratio of the width before scaling.
 :arg h: the new height; ratio of the height before scaling.
-:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
-            scale about.
 
 """
-        return self.resize(None, None, about, (w, h))
+        return self.resize(None, None, (w, h))
 
-    def resize_both (self, w=None, h=None, about=(0, 0)):
+    def resize_both (self, w=False, h=False):
         """Resize with constant aspect ratio.
 
-resize_both([w][, h], about=(0, 0)) -> self
+resize_both([w][, h]) -> self
 
 :arg w: the new width; pass only one of ``w`` and ``h``.
 :arg h: the new height.
-:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
-            scale about.
 
 """
-        if w is None:
-            w = False
-        elif h is None:
-            h = False
-        else:
+        if w is False and h is False:
             raise TypeError('expected only one of w or h')
-        return self.resize(w, h, about)
+        return self.resize(w, h)
 
-    def rescale_both (self, scale=1, about=(0, 0)):
-        """A convenience wrapper around rescale to scale the same on both axes.
+    def rescale_both (self, scale=1):
+        """A convenience wrapper around :meth:`rescale` to scale the same on
+both axes.
 
-rescale_both(scale=1, about=(0, 0)) -> self
+rescale_both(scale=1) -> self
 
 :arg scale: ratio to scale both width and height by.
-:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
-            scale about.
 
 """
-        return self.rescale(scale, scale, about)
+        return self.rescale(scale, scale)
 
     def _gen_mods_crop (self, src_sz, first_time, last_args, rect):
         rect = Rect(rect)
@@ -1157,8 +1155,7 @@ flip(x = False, y = False) -> self
 """
         return self.transform('opacify', opacity)
 
-    def _gen_mods_rotate (self, src_sz, first_time, last_args, angle,
-                          about=None):
+    def _gen_mods_rotate (self, src_sz, first_time, last_args, angle):
         # - dest_sz will never get used: all following transforms are
         #   guaranteed to be non-builtins, if the user does nothing silly
         # - mods are size-dependent, so they always change
@@ -1176,20 +1173,17 @@ flip(x = False, y = False) -> self
 
         return ((apply_fn, undo_fn), src_sz)
 
-    def _rotate (self, src, dest, dirty, last_args, angle, about=None):
+    def _rotate (self, src, dest, dirty, last_args, angle):
         if abs(angle) < self.rotate_threshold:
             # transform does nothing
             return (src, dirty)
         w, h = src.get_size()
         cx, cy = w / 2., h / 2.
-        ax, ay = (cx, cy) if about is None else about
         if not dirty and last_args is not None:
-            last_angle, last_about = last_args
+            last_angle = last_args[0]
             # if last_angle == angle, then surface size didn't change, so
             # neither did the centre point
-            last_ax, last_ay = (cx, cy) if last_about is None else last_about
-            if abs(angle - last_angle) < self.rotate_threshold and \
-            (ax, ay) == (last_ax, last_ay):
+            if abs(angle - last_angle) < self.rotate_threshold:
                 # no change to result
                 return (dest, False)
         # do a full transform
@@ -1200,18 +1194,18 @@ flip(x = False, y = False) -> self
         new_sfc = self.rotate_fn(src, angle)
         return (new_sfc, True)
 
-    def rotate (self, angle, about = None):
+    def rotate (self, angle):
         """Rotate the graphic.
 
-rotate(angle[, about]) -> self
+rotate(angle) -> self
 
 :arg angle: the angle in radians to rotate to, anti-clockwise from the original
             graphic.
-:arg about: the ``(x, y)`` position relative to the top-left of the graphic to
-            rotate about; defaults to the graphic's centre.
+
+Also see :attr:`rot_anchor`.
 
 """
-        return self.transform('rotate', angle, about)
+        return self.transform('rotate', angle)
 
     # drawing
 
@@ -1238,7 +1232,8 @@ state*.
         sfc = self._surface.copy() if copy else self._surface
         g = Graphic(sfc, self._postrot_rect.topleft, self._layer,
                     self.blit_flags)
-        for attr in ('visible', 'scale_fn', 'rotate_fn', 'rotate_threshold'):
+        for attr in ('visible', 'scale_fn', 'rotate_fn', 'rotate_threshold',
+                     'anchor', 'rot_anchor'):
             setattr(g, attr, getattr(self, attr))
         return g
 
@@ -1290,9 +1285,10 @@ surface.
                 # grab surface to start next transform at
                 sfc = ts[fn][2]
                 if not passed_rot:
-                    before_rot = sfc
                     if fn == 'rotate':
                         passed_rot = True
+                    else:
+                        before_rot = sfc
             if j < i:
                 continue
             if fn in ts:
@@ -1318,9 +1314,10 @@ surface.
                 ts[fn] = (args, sfc, new_sfc, apply_fn, undo_fn)
             sfc = new_sfc
             if not passed_rot:
-                before_rot = sfc
                 if fn == 'rotate':
                     passed_rot = True
+                else:
+                    before_rot = sfc
         if len(last_t_ks) > len(t_ks):
             # might have just removed transforms from the end
             dirty = True
@@ -1329,14 +1326,13 @@ surface.
         if self._must_apply_rot:
             self._must_apply_rot = False
             # compute draw offset due to rotation
-            angle, about = ts['rotate'][0]
+            angle = ts['rotate'][0][0]
             w_orig, h_orig = before_rot.get_size()
-            cx, cy = w_orig / 2., h_orig / 2.
             w, h = sfc.get_size()
-            ax, ay = (cx, cy) if about is None else about
+            ax, ay = pos_in_rect(self.rot_anchor, (w_orig, h_orig))
             # v = c - about
-            vx = cx - ax
-            vy = cy - ay
+            vx = w_orig / 2. - ax
+            vy = h_orig / 2. - ay
             # c_new - about_new = v.rotate(angle)
             s = sin(angle)
             c = cos(angle)
