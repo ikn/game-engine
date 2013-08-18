@@ -25,8 +25,8 @@ from ..util import (ir, pos_in_rect, align_rect, normalise_colour, has_alpha,
 class Graphic (object):
     """Something that can be drawn to the screen.
 
-Graphic(img, pos=(0, 0), layer=0, resource_pool=conf.DEFAULT_RESOURCE_POOL,
-        resource_manager=conf.GAME.resources)
+Graphic(img, pos=(0, 0), layer=0, pool=conf.DEFAULT_RESOURCE_POOL,
+        res_mgr=conf.GAME.resources)
 
 :arg img: surface or filename (under :data:`conf.IMG_DIR`) to load.  If a
           surface, it should be already converted for blitting.
@@ -38,10 +38,10 @@ Graphic(img, pos=(0, 0), layer=0, resource_pool=conf.DEFAULT_RESOURCE_POOL,
             layers used in the same
             :class:`GraphicsManager <engine.gfx.container.GraphicsManager>` can
             be ordered with respect to each other.
-:arg resource_pool: :class:`ResourceManager <engine.res.ResourceManager>`
-                    resource pool name to cache any loaded images in.
-:arg resource_manager: :class:`ResourceManager <engine.res.ResourceManager>`
-                       instance to use to load any images.
+:arg pool: :class:`ResourceManager <engine.res.ResourceManager>` resource pool
+           name to cache any loaded images in.
+:arg res_mgr: :class:`ResourceManager <engine.res.ResourceManager>` instance to
+              use to load any images.
 
 Many properties of a graphic, such as :attr:`pos` and :attr:`size`, can be
 changed in two main ways: by setting the attribute directly, or by calling the
@@ -61,10 +61,9 @@ correspond to builtin transforms (see :meth:`transform`).
     _builtin_transforms = ('crop', 'flip', 'tint', 'resize', 'rotate')
 
     def __init__ (self, img, pos=(0, 0), layer=0,
-                  resource_pool=conf.DEFAULT_RESOURCE_POOL,
-                  resource_manager=None):
-        self._resource_pool = resource_pool
-        self._resource_manager = resource_manager
+                  pool=conf.DEFAULT_RESOURCE_POOL, res_mgr=None):
+        self._resource_pool = pool
+        self._resource_manager = res_mgr
         if isinstance(img, basestring):
             #: Filename of the loaded image, or ``None`` if a surface was
             #: given.

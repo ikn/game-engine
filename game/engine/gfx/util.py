@@ -4,7 +4,7 @@ import pygame as pg
 from pygame import Rect
 
 from ..conf import conf
-from ..util import align_rect
+from ..util import align_rect, has_alpha, blank_sfc
 from .graphic import Graphic
 
 
@@ -193,9 +193,8 @@ align(self, graphic, col, row, alignment=0, pad=0, offset=0) -> aligned_rect
 class Spritemap (object):
     """A wrapper for spritesheets.
 
-Spritemap(img[, sw][, sh], pad=0[, nsprites],
-          resource_pool=conf.DEFAULT_RESOURCE_POOL,
-          resource_manager=conf.GAME.resources)
+Spritemap(img[, sw][, sh], pad=0[, nsprites], pool=conf.DEFAULT_RESOURCE_POOL,
+          res_mgr=conf.GAME.resources)
 
 :arg img: a surface or filename to load from; this is a grid of sprites with
           the same size.
@@ -210,10 +209,10 @@ Spritemap(img[, sw][, sh], pad=0[, nsprites],
                taken to be the maximum number of sprites that could fit on the
                spritesheet; if passed, and smaller than the maximum, the last
                sprites are ignored (see below for ordering).
-:arg resource_pool: :class:`ResourceManager <engine.res.ResourceManager>`
-                    resource pool name to cache any loaded images in.
-:arg resource_manager: :class:`ResourceManager <engine.res.ResourceManager>`
-                       instance to use to load any images.
+:arg pool: :class:`ResourceManager <engine.res.ResourceManager>` resource pool
+           name to cache any loaded images in.
+:arg res_mgr: :class:`ResourceManager <engine.res.ResourceManager>` instance to
+              use to load any images.
 
 A spritemap provides ``__len__`` and ``__getitem__`` to obtain sprites, and so
 iterating over all sprites is also supported.  Sprites are obtained from top to
@@ -222,21 +221,17 @@ bottom, left to right, in that order, and slices are as follows::
     spritemap[sprite_index] -> (sfc, rect)
     spritemap[col, row] -> (sfc, rect)
 
-where ``sfc`` is a surface containing the sprite, and ``rect`` is the rect it
-is contained in, within that surface.  (The latter form is an implicit tuple,
-so ``spritemap[(col, row)]`` works as well.)
+where ``sfc`` is a surface containing the sprite.  (The latter form is an
+implicit ``tuple``, so ``spritemap[(col, row)]`` works as well.)
 
 """
 
     def __init__ (self, img, sw=None, sh=None, pad=0, nsprites=None,
-                  resource_pool=conf.DEFAULT_RESOURCE_POOL,
-                  resource_manager=None):
+                  pool=conf.DEFAULT_RESOURCE_POOL, res_mgr=None):
         if isinstance(img, basestring):
-            if resource_manager is None:
-                resource_manager = conf.GAME.resources
-            img = resource_manager.img(img, pool=resource_pool)
-        #: Surface containing the original spritesheet image.
-        self.sfc = img
+            if res_mgr is None:
+                res_mgr = conf.GAME.resources
+            img = res_mgr.img(img, pool=pool)
         img_sz = img.get_size()
         if isinstance(pad, int):
             pad = (pad, pad)
@@ -269,31 +264,33 @@ so ``spritemap[(col, row)]`` works as well.)
             if ncells[axis] is None:
                 ncells[axis] = (img_sz[axis] + pad[axis]) // \
                                (ss[axis] + pad[axis])
-        self._grid = Grid(ncells, ss, pad)
-        ncells = ncells[0] * ncells[1]
+        self._ncells = ncells
+        ncols, nrows = ncells
+        ncells = ncols * nrows
         if nsprites is None or nsprites > ncells:
             nsprites = ncells
-        self._nsprites = nsprites
+        # copy to separate surfaces
+        self._sfcs = sfcs = []
+        tile_rect = Grid(ncells, ss, pad).tile_rect
+        mk_sfc = blank_sfc if has_alpha(img) else pg.Surface
+        for i in xrange(nsprites):
+            rect = tile_rect(i % ncols, i // ncols)
+            sfc = mk_sfc(rect.size)
+            sfc.blit(img, (0, 0), rect)
+            sfcs.append(sfc)
 
     def __len__ (self):
-        return self._nsprites
+        return len(self._sfcs)
 
     def __getitem__ (self, i):
-        ncols, nrows = self._grid.ntiles
-        if isinstance(i, int):
-            if i < 0:
-                i += self._nsprites
-            if i < 0:
-                raise IndexError('spritemap index out of bounds')
-            col = i % ncols
-            row = i // ncols
-        else:
+        ncols, nrows = self._ncells
+        if not isinstance(i, int):
             col, row = i
-        if col < 0:
-            col += ncols
-        if row < 0:
-            row += nrows
-        if col < 0 or col >= ncols or row < 0 or row >= nrows or \
-           row * ncols + col >= self._nsprites:
-            raise IndexError('spritemap index out of bounds')
-        return (self.sfc, self._grid.tile_rect(col, row))
+            if col < 0:
+                col += ncols
+            if row < 0:
+                row += nrows
+            if (col < 0 or col >= ncols or row < 0 or row >= nrows):
+                raise IndexError('spritemap index out of bounds')
+            i = row * ncols + col
+        return self._sfcs[i]

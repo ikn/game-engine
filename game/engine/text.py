@@ -38,30 +38,29 @@ option_defaults = {
 class TextRenderer (object):
     """Render text to a surface.
 
-TextRenderer(font, options={}, resource_pool=conf.DEFAULT_RESOURCE_POOL,
-             resource_manager=conf.GAME.resources)
+TextRenderer(font, options={}, pool=conf.DEFAULT_RESOURCE_POOL,
+             res_mgr=conf.GAME.resources)
 
 :arg font: font filename to use, under :data:`conf.FONT_DIR`.
 :arg options: dict giving rendering parameters.  These act as default values in
               the same argument to :meth:`render`.  All options can be
               retrieved as properties of this instance (and all are guaranteed
               to exist), but cannot be changed.
-:arg resource_pool: :class:`ResourceManager <engine.res.ResourceManager>`
-                    resource pool name to cache any loaded Pygame fonts in.
-:arg resource_manager: :class:`ResourceManager <engine.res.ResourceManager>`
-                       instance to use to load any Pygame fonts.
+:arg pool: :class:`ResourceManager <engine.res.ResourceManager>` resource pool
+           name to cache any loaded Pygame fonts in.
+:arg res_mgr: :class:`ResourceManager <engine.res.ResourceManager>` instance to
+              use to load any Pygame fonts.
 
 """
 
-    def __init__ (self, font, options={},
-                  resource_pool=conf.DEFAULT_RESOURCE_POOL,
-                  resource_manager=None):
+    def __init__ (self, font, options={}, pool=conf.DEFAULT_RESOURCE_POOL,
+                  res_mgr=None):
         self._font = font
         self._defaults = option_defaults.copy()
         self._defaults.update(options)
         self.normalise_options(self._defaults)
-        self._resource_pool = resource_pool
-        self._resource_manager = resource_manager
+        self._resource_pool = pool
+        self._resource_manager = res_mgr
 
     def __eq__ (self, other):
         # equal if we would render the exact same thing
@@ -120,14 +119,14 @@ Options available:
 :arg pad: ``(left, top, right, bottom)`` padding in pixels.  Can also be one
           number for all sides or ``(left_and_right, top_and_bottom)``.  This
           treats shadow as part of the text.
-:arg wrap: text wrapping mode (only used if ``width`` is given); one of:
+:arg wrap:
+    text wrapping mode (only used if ``width`` is given); one of:
 
-           - ``'char'`` (default): wrap words and wrap within words if
-             necessary.
-           - ``'word'``: wrap words only; raises ``ValueError`` if any words
-             won't fit on a single line.
-           - ``'none'``: don't wrap: if ``width`` is given, allow text to fall
-             off the end of the surface.
+        - ``'char'`` (default): wrap words and wrap within words if necessary.
+        - ``'word'``: wrap words only; raises ``ValueError`` if any words won't
+          fit on a single line.
+        - ``'none'``: don't wrap: if ``width`` is given, allow text to fall off
+          the end of the surface.
 
 :return: ``surface`` is the ``pygame.Surface`` containing the rendered text and
          ``num_lines`` is the final number of lines of text.
