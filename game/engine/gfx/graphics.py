@@ -4,9 +4,8 @@
 
 TODO:
  - tiled graphic
- - Animation(sequence of surfaces/filenames/graphics/(surface, rect))
-    - note spritemap fulfills conditions for the argument
-    - be careful with graphics - need to change as they change, both dirty and rect
+ - Animation, Tilemap: should change if given Graphics change (imgs/tile_types)
+    - Graphic.on_change(cb(rects=None)) # and cb gets no args if takes none
  - particle system
 
 ---NODOC---
@@ -20,7 +19,7 @@ from pygame import Rect
 
 from ..conf import conf
 from ..text import option_defaults as text_option_defaults
-from ..util import normalise_colour, align_rect, blank_sfc
+from ..util import normalise_colour, align_rect, blank_sfc, has_alpha
 from .graphic import Graphic
 from .util import Grid
 
@@ -33,7 +32,8 @@ Colour(colour, rect, layer=0)
 
 :arg colour: a colour to draw, as accepted by
              :func:`engine.util.normalise_colour`.
-:arg rect: Pygame-style rect to draw in.
+:arg rect: Pygame-style rect to draw in, or just a ``(width, height)`` size to
+           use a rect with position ``(0, 0)``.
 :arg layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
 :meth:`fill` corresponds to a builtin transform.
@@ -45,6 +45,9 @@ Colour(colour, rect, layer=0)
                           Graphic._builtin_transforms[_i:]
 
     def __init__ (self, colour, rect, layer=0):
+        if len(rect) == 2 and isinstance(rect[0], (int, float)):
+            # just got size
+            rect = ((0, 0), rect)
         rect = Rect(rect)
         # converts surface and sets opaque to True
         Graphic.__init__(self, pg.Surface(rect.size), rect.topleft, layer)
@@ -225,13 +228,387 @@ use."""
         Graphic.render(self)
 
 
+class Animation (Graphic):
+    """An animated graphic (:class:`Graphic <engine.gfx.graphic.Graphic>`
+subclass).
+
+Animation(imgs, pos=(0, 0), layer=0[, scheduler],
+          pool=conf.DEFAULT_RESOURCE_POOL, res_mgr=conf.GAME.resources)
+
+:arg imgs:
+    a sequence of images as part of the animation; each can be a Pygame
+    surface, a filename to load an surface from, or a
+    :class:`Graphic <engine.gfx.graphic.Graphic>` instance. Note that a
+    :class:`util.Spritemap <engine.gfx.util.Spritemap>` instance is a valid
+    form for this argument.
+:arg scheduler: :class:`sched.Scheduler <engine.sched.Scheduler>` instance to
+                use for timing; if not given, animations can only be played
+                when the graphic is contained by a manager (and trying to do so
+                otherwise raises ``RuntimeError``).
+
+Other arguments are as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+
+Note that when an animation is playing and the image changes,
+:attr:`Graphic.anchor <engine.gfx.graphic.Graphic.anchor>` is respected.
+
+For example, to play the frames in a spritemap consisting of a single row::
+
+    Animation(Spritemap('map.png', 32)).add('run', frame_time=.1).play('run')
+
+"""
+    def __init__ (self, imgs, pos=(0, 0), layer=0, scheduler=None,
+                  pool=conf.DEFAULT_RESOURCE_POOL, res_mgr=None):
+        self._resource_pool = pool
+        self._resource_manager = res_mgr
+        if len(imgs) == 0:
+            raise ValueError('animation requires at least one image')
+        load_img = self._load_img
+        #: ``list`` of ``imgs`` as passed to the constructor, except that they
+        #: are never filenames.
+        self.graphics = [load_img(img) if isinstance(img, basestring) else img
+              for img in imgs]
+        # graphics is non-empty due to the exception above
+        self._graphic = 0
+        Graphic.__init__(self, self._get_sfc(0), pos, layer, pool, res_mgr)
+        #: ``{name: (indices, frame_time)}`` frame sequences ('animations') as
+        #: added through :meth:`add`.
+        self.sequences = {}
+        self._frame_time = None
+        self._speed = 1
+        self._scheduler = scheduler
+
+        #: The currently playing sequence (name), or ``None``.
+        self.playing = None
+        #: ``list`` of queued sequences to play after the current sequence has
+        #: finished, each ``(name, repeat, frame_time, cb)`` as added through
+        #: :meth:`queue`, starting with the first to be played.  Items may be
+        #: removed manually.
+        self.queued = []
+        #: The current repeat of the playing sequence, starting from ``0`` if
+        #: it hasn't started repeating yet, or ``None``.
+        self.repeat = None
+        #: The total number of repeats that will be performed for the currently
+        #: playing sequence (not including the first playthrough), or ``True``
+        #: if it will play forever, or ``None``.
+        self.repeats = None
+        #: The current frame in the currently playing sequence (within the
+        #: current repeat), as an integer starting from ``0``, or ``None``.
+        self.frame = None
+        self._timer_id = None # scheduler timeout ID
+        self._frame_time_source = None # 'default', 'sequence' or 'runtime'
+        self._playing_frame_time = None # set when we start playing
+        self._new_frame_time = None # set to flag a frame time change
+        self._playing_cb = None
+
+    @property
+    def graphic (self):
+        """The currently visible graphic, as an index in :attr:`graphics`."""
+        return self._graphic
+
+    @graphic.setter
+    def graphic (self, i):
+        if i == self._graphic:
+            return
+        self.orig_sfc = self._get_sfc(i)
+        self._graphic = i
+
+    @property
+    def frame_time (self):
+        """A default for the time between animation frames.
+
+This is a value in seconds, that applies for all animation sequences.  If not
+set, a value must be defined for each sequence.  Changes do not take effect
+until the current frame has finished, if any is running.
+
+"""
+        return self._frame_time
+
+    @frame_time.setter
+    def frame_time (self, t):
+        self._frame_time = t
+        if self._frame_time_source == 'default':
+            self._update_timer()
+
+    @property
+    def speed (self):
+        """Running speed of any animation.
+
+This is a multiplier, where ``1`` is the default speed, and anything higher
+decreases frame times.  Changes do not take effect until the current frame has
+finished, if any.
+
+"""
+        return self._speed
+
+    @speed.setter
+    def speed (self, speed):
+        if speed <= 0:
+            raise ValueError('speed must be positive')
+        if speed != self._speed:
+            self._speed = speed
+            self._update_timer()
+
+    def _get_sfc (self, i):
+        # get the surface corresponding to the given index in self.graphics
+        sfc = self.graphics[i]
+        if isinstance(sfc, Graphic):
+            sfc = sfc.surface
+        return sfc
+
+    def _get_sched (self):
+        s = self._scheduler
+        if s is None:
+            if self._manager is None:
+                raise RuntimeError('no scheduler is available')
+            s = self._manager.scheduler
+        return s
+
+    def _update_timer (self):
+        # update timer speed from data
+        if self.playing is None:
+            # nothing to do
+            return
+        if self._frame_time_source == 'default':
+            t = self._frame_time
+        else:
+            # don't change if from sequence/runtime
+            t = self._playing_frame_time
+        # schedule for application next time we get a callback
+        self._new_frame_time = float(t) / self._speed
+
+    def add (self, name, indices=None, frame_time=None):
+        """Add a sequence to :attr:`sequences` to play back later.
+
+add(name, indices=None[, frame_time]) -> self
+
+:arg name: the name to give the sequence (any hashable object).  If a sequence
+           with this name already exists, it is overwritten; if it is currently
+           playing or queued, it is stopped/unqueued.
+:arg indices: sequence of indices in :attr:`graphics`, defining the sequence of
+              frames, or ``None`` for all frames in order.
+:arg frame_time: a default for the time between animation frames in seconds
+                 whenever this sequence is played.  If not given, a value must
+                 be defined either through the constructor or each time the
+                 sequence is played.
+
+"""
+        if indices is None:
+            indices = range(len(self.graphics))
+        if not indices:
+            raise ValueError('a sequence must contain at least one frame')
+        self.unqueue(name)
+        if name == self.playing:
+            self.stop()
+        self.sequences[name] = (indices, frame_time)
+        return self
+
+    def add_multi (self, sequences):
+        """Add a number of frame sequences.
+
+add_multi(sequences) -> self
+
+:arg sequences: ``{name: data}``, where ``data`` can be an ``indices`` ``list``
+                or ``(indices[, frame_time])``, and each of these is as taken
+                by :meth:`add`.
+
+"""
+        add = self.add
+        for name, data in sequences.iteritems():
+            if (data and (hasattr(data[0], '__len__') and
+                          hasattr(data[0], '__getitem__'))):
+                # got (indices, ...)
+                if len(data) == 1:
+                    indices = data[0]
+                    frame_time = None
+                elif len(data) == 2:
+                    indices, frame_time = data
+                else:
+                    raise TypeError('invalid arguments: {0}'.format(data))
+            else:
+                # got indices
+                indices = data
+                frame_time = None
+            self.add(name, *data)
+        return self
+
+    def rm (self, *names):
+        """Remove sequences with the given names.
+
+rm(*names) -> self
+
+Missing items are ignored.
+
+"""
+        seqs = self.sequences
+        for name in names:
+            if name in seqs:
+                del seqs[name]
+        return self
+
+    def _next_frame (self):
+        # called through scheduler to move to the next frame
+        assert self.playing is not None
+        indices = self.sequences[self.playing][0]
+        self.frame += 1
+        if self.frame == len(indices):
+            # reached the end of the sequence
+            if self.repeats is not True and self.repeat == self.repeats:
+                # no repeats left
+                self.playing = self.repeat = self.repeats = self.frame = None
+                # no need to reset other attributes, since they're private
+                if self._playing_cb is not None:
+                    self._playing_cb()
+                if self.playing is None and self.queued:
+                    self.play(*self.queued.pop())
+                return False
+            else:
+                self.repeat += 1
+                self.frame = 0
+        self.graphic = indices[self.frame]
+        if self._new_frame_time is not None:
+            # adjust speed for next frame
+            self._timer_id = self._get_sched().add_timeout(
+                self._next_frame, seconds=self._new_frame_time
+            )
+            self._new_frame_time = None
+            return False
+        else:
+            return True
+
+    def play (self, name, repeat=True, frame_time=None, cb=None):
+        """Play a frame sequence.
+
+play(name, repeat=True[, frame_time][, cb]) -> self
+
+:arg name: sequence name to play.
+:arg repeat: whether to repeat the sequence once it has finished.  ``True`` to
+             repeat forever, else a number of repeats to perform (that is, the
+             sequence is played ``(repeats + 1)`` times).  (``False`` is also
+             valid.)
+:arg frame_time: the time between animation frames in seconds.  If not given, a
+                 value must be defined either as through the constructor or
+                 in :meth:`add`.
+:arg cb: a function to call when the animation ends (but not if it is stopped
+         through :meth:`stop` or by starting another animation).
+
+If a sequence is already being played, that sequence is canceled.
+
+"""
+        # cancel current sequence
+        s = self._get_sched()
+        if self.playing is not None:
+            s.rm_timeout(self._timer_id)
+        # initialise attributes
+        self.playing = name
+        self.repeat = 0
+        if repeat is False:
+            repeat = 0
+        self.repeats = repeat
+        self.frame = 0
+        indices, seq_t = self.sequences[name]
+        # show first frame now (sequences are guaranteed to have non-0 length)
+        self.graphic = indices[0]
+        if frame_time is None:
+            if seq_t is None:
+                if self._frame_time is None:
+                    raise RuntimeError('no frame_time is defined (sequence: '
+                                       '\'{0})\''.format(name))
+                else:
+                    frame_time = self._frame_time
+                self._frame_time_source = 'default'
+            else:
+                frame_time = seq_t
+                self._frame_time_source = 'sequence'
+        else:
+            self._frame_time_source = 'runtime'
+        frame_time = float(frame_time) / self._speed
+        # start the scheduler
+        self._timer_id = s.add_timeout(self._next_frame, seconds=frame_time)
+        self._playing_frame_time = frame_time
+        self._playing_cb = cb
+        return self
+
+    #def pause (self):
+        #"""Pause the currently running sequence, if any."""
+        #if self.playing is not None:
+            #self._get_sched().pause_timeout(self._timer_id)
+
+    #def unpause (self):
+        #"""Unpause the currently running sequence, if paused."""
+        #if self.playing is not None:
+            #self._get_sched().unpause_timeout(self._timer_id)
+
+    def stop (self, n_queued=0):
+        """Stop the currently running sequence, if any.
+
+stop(n_queued) -> self
+
+:arg n_queued: the number of subsequent queued sequences to cancel after
+               stopping the running sequence.
+
+"""
+        if self.playing:
+            self._get_sched().rm_timeout(self._timer_id)
+            self.playing = self.repeat = self.repeats = self.frame = None
+            # no need to reset other attributes, since they're private
+        for i in xrange(n_queued):
+            self.queued.pop(0)
+        if self.queued:
+            self.play(*self.queued.pop())
+        return self
+
+    def queue (self, name, repeat=True, frame_time=None, cb=None):
+        """Queue a frame sequence for playing after any running sequence.
+
+queue(name, repeat=True[, frame_time][, cb]) -> self
+
+Arguments are as taken by :meth:`play`.
+
+"""
+        if self.playing:
+            self.queued.append((name, repeat, frame_time, cb))
+        else:
+            self.play(name, repeat, frame_time, cb)
+        return self
+
+    def queue_multi (self, *sequences):
+        """Queue multiple frame sequences.
+
+queue_multi(*sequences) -> self
+
+:arg sequences: any number of ``(name, repeat=True[, frame_time][, cb])``
+                tuples, where arguments are as taken by :meth:`play`.
+
+"""
+        queue = self.queue
+        for args in sequences:
+            queue(*args)
+        return self
+
+    def unqueue (self, *names):
+        """Remove frame sequences from the queue by name.
+
+unqueue(*names) -> self
+
+:arg names: any number of sequence names; missing items are ignored.
+
+"""
+        queued = self.queued
+        for name in names:
+            # iterate in reverse to avoid changing indices as we remove items
+            for i, data in reversed(list(enumerate(queued))):
+                if data[0] == name:
+                    queued.pop(i)
+        return self
+
+
 class Tilemap (Graphic):
     """A finite, flat grid of tiles
 (:class:`Graphic <engine.gfx.graphic.Graphic>` subclass).
 
 Tilemap(grid, tile_data, tile_types, pos=(0, 0), layer=0[, translate_type],
-        cache_tile_data=False, resource_pool=conf.DEFAULT_RESOURCE_POOL,
-        resource_manager=conf.GAME.resources)
+        cache_tile_data=False, pool=conf.DEFAULT_RESOURCE_POOL,
+        res_mgr=conf.GAME.resources)
 
 :arg grid: a :class:`util.Grid <engine.gfx.util.Grid>` defining the size and
            shape of the tiles in the tilemap, or the ``tile_size`` argument to
@@ -257,7 +634,7 @@ Tilemap(grid, tile_data, tile_types, pos=(0, 0), layer=0[, translate_type],
         - if ``grid`` is a :class:`util.Grid <engine.gfx.util.Grid>`: a
           function that takes ``col`` and ``row`` arguments as column and row
           indices in the grid, and returns the corresponding tile type ID; or
-        - if ``grid`` is not a :class:`util.Grid <engine.gfx.util.Grid>`,
+        - if ``grid`` is not a :class:`util.Grid <engine.gfx.util.Grid>`:
           ``(get_tile_type, w, h)``, where get_tile_type is a function as
           defined previously, and ``w`` and ``h`` are the width and height of
           the grid, in tiles.
@@ -272,30 +649,29 @@ Tilemap(grid, tile_data, tile_types, pos=(0, 0), layer=0[, translate_type],
           with;
         - a :class:`Graphic <engine.gfx.graphic.Graphic>` or Pygame surface to
           copy aligned to the centre of the tile, clipped to fit; or
-        - ``(graphic[, alignment][, rect])`` with ``alignment`` or ``rect`` in
-          any order or omitted, and ``graphic`` as in the above form.
-          ``alignment`` is as taken by :func:`engine.util.align_rect`, and
-          ``rect`` is the Pygame-style rect within the source surface of
+        - ``(graphic, alignment=0, rect=graphic_rect)`` with ``alignment`` or
+          ``rect`` in any order or omitted, and ``graphic`` as in the above
+          form.  ``alignment`` is as taken by :func:`engine.util.align_rect`,
+          and ``rect`` is the Pygame-style rect within the source surface of
           ``graphic`` to copy from.  Regardless of ``alignment``, ``rect`` is
           clipped to fit in the tile around its centre.
 
-    Note that indexing a :class:`util.Spritemap <engine.gfx.util.Spritemap>`
-    instance gives a valid ``tile_graphic`` form, making them valid forms for
-    this argument.
+    Note that a :class:`util.Spritemap <engine.gfx.util.Spritemap>` is a valid
+    form for this argument.
 
 :arg pos: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 :arg layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 :arg translate_type: a function that takes tile type IDs obtained from the
                      ``tile_data`` argument and returns the ID to use with the
-                     ``tile_types`` argument in obtaining ``tile_graphic``.
+                     ``tile_types`` argument in obtaining ``tile_graphic``;
+                     does nothing by default.
 :arg cache_graphic: whether to cache and reuse ``tile_graphic`` for each tile
                     type.  You might want to pass ``True`` if requesting
                     ``tile_graphic`` from ``tile_types`` generates a surface.
                     If ``True``, tile type IDs must be hashable (after
-                    translation
-:arg resource_pool: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
-:arg resource_manager: as taken by
-                       :class:`Graphic <engine.gfx.graphic.Graphic>`.
+                    translation by ``translate_type``).
+:arg pool: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg res_mgr: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
 This is meant to be used for static tilemaps---that is, where the appearance of
 each tile type never changes.
@@ -304,16 +680,20 @@ each tile type never changes.
 
     def __init__ (self, grid, tile_data, tile_types, pos=(0, 0), layer=0,
                   translate_type=None, cache_graphic=False,
-                  resource_pool=conf.DEFAULT_RESOURCE_POOL,
-                  resource_manager=None):
+                  pool=conf.DEFAULT_RESOURCE_POOL, res_mgr=None):
         if not callable(tile_types):
-            tile_types = lambda tile_type_id: tile_types[tile_type_id]
+            types = tile_types
+            tile_types = lambda tile_type_id: types[tile_type_id]
         self._type_to_graphic = tile_types
         if translate_type is None:
             translate_type = lambda tile_type_id: tile_type_id
         self._translate_type = translate_type
         self._cache_graphic = cache_graphic
         self._cache = {}
+        # set these before _parse_data, since it calls _load_img which uses
+        # them - but can't init Graphic yet because we don't know the size
+        self._resource_pool = pool
+        self._resource_manager = res_mgr
         self._tile_data, ncols, nrows = self._parse_data(tile_data, grid,
                                                          False)
         if not isinstance(grid, Grid):
@@ -321,8 +701,7 @@ each tile type never changes.
         #: The :class:`util.Grid <engine.gfx.util.Grid>` covered.
         self.grid = grid
         # apply initial data
-        Graphic.__init__(self, blank_sfc(grid.size), pos, layer, resource_pool,
-                         resource_manager)
+        Graphic.__init__(self, blank_sfc(grid.size), pos, layer, pool, res_mgr)
         update = self._update
         for i, col in enumerate(self._tile_data):
             for j, tile_type_id in enumerate(col):
@@ -330,11 +709,14 @@ each tile type never changes.
 
     def _parse_data (self, tile_data, grid, force_load):
         # parse tile data
+        if not tile_data:
+            return ([], 0, 0)
         if isinstance(tile_data, basestring):
-            if len(tile_data.split()) == 1 and \
-               splitext(tile_data)[1][1:] in ('png', 'jpg', 'jpeg', 'gif'):
+            if (len(tile_data.split()) == 1 and
+                splitext(tile_data)[1][1:].lower() in
+                ('png', 'jpg', 'jpeg', 'gif')):
                 # image file
-                tile_data = self._load_img(tile_data, force_load = force_load)
+                tile_data = self._load_img(tile_data, force_load=force_load)
             else:
                 # string/text file
                 tile_data = (tile_data, None, None)
@@ -446,7 +828,7 @@ each tile type never changes.
             self._tile_data[col][row] = tile_type_id
             self.dirty(rect)
 
-    def update_from (self, tile_data, from_disk = False):
+    def update_from (self, tile_data, from_disk=False):
         """Update tiles from a new set of data.
 
 :arg tile_data: as taken by the constructor.
