@@ -415,10 +415,10 @@ Timer(fps = 60)
     def __init__ (self, fps = 60):
         #: The current length of a frame in seconds.
         self.frame = None
-        self.fps = fps
         #: The current average frame time in seconds (like
         #: :attr:`current_fps`).
-        self.current_frame_time = self.frame
+        self.current_frame_time = None
+        self.fps = fps
         #: The amount of time in seconds that has elapsed since the start of
         #: the current call to :meth:`run`, if any.
         self.t = 0
@@ -435,7 +435,7 @@ Timer(fps = 60)
     @fps.setter
     def fps (self, fps):
         self._fps = int(round(fps))
-        self.frame = 1. / fps
+        self.current_frame_time = self.frame = 1. / fps
 
     @property
     def current_fps (self):

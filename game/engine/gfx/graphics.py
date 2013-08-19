@@ -6,6 +6,7 @@ TODO:
  - tiled graphic
  - Animation, Tilemap: should change if given Graphics change (imgs/tile_types)
     - Graphic.on_change(cb(rects=None)) # and cb gets no args if takes none
+ - Animation.*pause
  - particle system
 
 ---NODOC---
