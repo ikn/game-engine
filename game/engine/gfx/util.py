@@ -193,15 +193,19 @@ align(self, graphic, col, row, alignment=0, pad=0, offset=0) -> aligned_rect
 class Spritemap (object):
     """A wrapper for spritesheets.
 
-Spritemap(img[, sw][, sh], pad=0[, nsprites], pool=conf.DEFAULT_RESOURCE_POOL,
-          res_mgr=conf.GAME.resources)
+Spritemap(img[, ncols][, nrows][, sw][, sh], pad=0[, nsprites],
+          pool=conf.DEFAULT_RESOURCE_POOL, res_mgr=conf.GAME.resources)
 
 :arg img: a surface or filename to load from; this is a grid of sprites with
           the same size.
-:arg sw: the width of individual sprites, in pixels.  May be omitted if the
-         spritesheet is a single column.
-:arg sh: the height of individual sprites.  May be omitted if the spritesheet
-         is a single row.
+:arg ncols,sw: determines the the number of columns in the spritesheet;
+               ``ncols`` is the number of columns and ``sw`` is the width of
+               individual sprites, in pixels.  Only one is required, and both
+               may be omitted if the spritesheet is a single column.
+:arg nrows,sh: determines the the number of rows in the spritesheet; ``nrows``
+               is the number of rows and ``sh`` is the height of individual
+               sprites.  Only one is required, and both may be omitted if the
+               spritesheet is a single row.
 :arg pad: padding in pixels between each sprite.  This may be
           ``(col_gap, row_gap)``, or a single number for the same gap in both
           cases.
@@ -226,8 +230,9 @@ implicit ``tuple``, so ``spritemap[(col, row)]`` works as well.)
 
 """
 
-    def __init__ (self, img, sw=None, sh=None, pad=0, nsprites=None,
-                  pool=conf.DEFAULT_RESOURCE_POOL, res_mgr=None):
+    def __init__ (self, img, ncols=None, nrows=None, sw=None, sh=None, pad=0,
+                  nsprites=None, pool=conf.DEFAULT_RESOURCE_POOL,
+                  res_mgr=None):
         if isinstance(img, basestring):
             if res_mgr is None:
                 res_mgr = conf.GAME.resources
@@ -237,38 +242,42 @@ implicit ``tuple``, so ``spritemap[(col, row)]`` works as well.)
             pad = (pad, pad)
         if pad[0] < 0 or pad[1] < 0:
             raise ValueError('padding must be positive')
-        # get number of columns and rows
-        ncells = [None, None]
-        expected_size = [None, None]
-        if sw is None:
-            if sh is None:
-                raise ValueError('expected at least one of sw and sh')
-            ncells[0] = 1
-            expected_size[0] = sw = img_sz[0]
-        elif sh is None:
-            ncells[1] = 1
-            expected_size[1] = sh = img_sz[1]
-        ss = (sw, sh)
-        err = False
+        # get number of columns and rows and sprite size
+        ncells = [ncols, nrows]
+        ss = [sw, sh]
         for axis in (0, 1):
+            n = ncells[axis]
+            s_sz = ss[axis]
+            i_sz = img_sz[axis]
             p = pad[axis]
-            if expected_size[axis] is None:
-                expected_size[axis] = '({0}n-{1})'.format(ss[axis] + p, p)
-            if (img_sz[axis] + p) % (ss[axis] + p) != 0:
-                err = True
-        if err:
-            raise ValueError('invalid image height: expected {2}*{3}, got ' \
-                             '{0}*{1}'.format(img_sz[0], img_sz[1],
-                                              *expected_size))
-        for axis in (0, 1):
-            if ncells[axis] is None:
-                ncells[axis] = (img_sz[axis] + pad[axis]) // \
-                               (ss[axis] + pad[axis])
+            if n is not None:
+                if (i_sz + p) % n != 0:
+                    raise ValueError(
+                        'invalid image size (dimension {0}): expected '
+                        '({1}n-{2}), got {3}'.format(axis, n, p, i_sz)
+                    )
+                ss[axis] = (i_sz + p) // n - p
+            elif s_sz is not None:
+                if (i_sz + p) % (s_sz + p) != 0:
+                    raise ValueError(
+                        'invalid image size (dimension {0}): expected '
+                        '({1}n-{2}), got {3}'.format(axis, s_sz + p, p, i_sz)
+                    )
+                ncells[axis] = (i_sz + p) // (s_sz + p)
+            else:
+                ncells[axis] = 1
+                ss[axis] = i_sz
         self._ncells = ncells
         ncols, nrows = ncells
         ncells = ncols * nrows
         if nsprites is None or nsprites > ncells:
             nsprites = ncells
+        #: The width of each sprite, in pixels.
+        self.sprite_w = ss[0]
+        #: The height of each sprite, in pixels.
+        self.sprite_h = ss[1]
+        #: ``(``:attr:`sprite_w` ``,`` :attr:`sprite_h` ``)``.
+        self.sprite_size = tuple(ss)
         # copy to separate surfaces
         self._sfcs = sfcs = []
         tile_rect = Grid(ncells, ss, pad).tile_rect
