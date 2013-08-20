@@ -595,18 +595,35 @@ will not be called again.
             repeat_seconds = seconds
             repeat_frames = frames
         self._cbs[self._max_id] = [seconds, frames, repeat_seconds,
-                                   repeat_frames, cb, args]
+                                   repeat_frames, True, cb, args]
         self._max_id += 1
         # ID is key in self._cbs
         return self._max_id - 1
 
     def rm_timeout (self, *ids):
-        """Remove the timeouts with the given identifiers."""
+        """Remove the timeouts with the given identifiers.
+
+Missing IDs are ignored.
+
+"""
+        cbs = self._cbs
         for i in ids:
-            try:
-                del self._cbs[i]
-            except KeyError:
-                pass
+            if i in cbs:
+                del cbs[i]
+
+    def pause_timeout (self, *ids):
+        """Pause the timeouts with the given identifiers."""
+        cbs = self._cbs
+        for i in ids:
+            if i in cbs:
+                cbs[i][4] = False
+
+    def unpause_timeout (self, *ids):
+        """Continue the paused timeouts with the given identifiers."""
+        cbs = self._cbs
+        for i in ids:
+            if i in cbs:
+                cbs[i][4] = True
 
     def _update (self):
         """Handle callbacks this frame."""
@@ -623,16 +640,17 @@ will not be called again.
             else:
                 remain = 1
                 dt = 1
-            data[remain] -= dt
-            if data[remain] <= 0:
-                # call callback
-                if data[4](*data[5]):
-                    # add on delay
-                    total = 0 if data[2] is not None else 1
-                    data[not total] = None
-                    data[total] += data[total + 2]
-                elif i in cbs: # else removed in above call
-                    del cbs[i]
+            if data[4]:
+                data[remain] -= dt
+                if data[remain] <= 0:
+                    # call callback
+                    if data[5](*data[6]):
+                        # add on delay
+                        total = data[2] is None
+                        data[total] += data[total + 2]
+                    elif i in cbs: # else removed in above call
+                        del cbs[i]
+            # else paused
 
     def interp (self, get_val, set_val, t_max = None, bounds = None,
                 end = None, round_val = False, multi_arg = False,

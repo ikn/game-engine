@@ -6,7 +6,6 @@ TODO:
  - tiled graphic
  - Animation, Tilemap: should change if given Graphics change (imgs/tile_types)
     - Graphic.on_change(cb(rects=None)) # and cb gets no args if takes none
- - Animation.*pause
  - particle system
 
 ---NODOC---
@@ -529,15 +528,15 @@ If a sequence is already being played, that sequence is canceled.
         self._playing_cb = cb
         return self
 
-    #def pause (self):
-        #"""Pause the currently running sequence, if any."""
-        #if self.playing is not None:
-            #self._get_sched().pause_timeout(self._timer_id)
+    def pause (self):
+        """Pause the currently running sequence, if any."""
+        if self.playing is not None:
+            self._get_sched().pause_timeout(self._timer_id)
 
-    #def unpause (self):
-        #"""Unpause the currently running sequence, if paused."""
-        #if self.playing is not None:
-            #self._get_sched().unpause_timeout(self._timer_id)
+    def unpause (self):
+        """Unpause the currently running sequence, if paused."""
+        if self.playing is not None:
+            self._get_sched().unpause_timeout(self._timer_id)
 
     def stop (self, n_queued=0):
         """Stop the currently running sequence, if any.
