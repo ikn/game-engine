@@ -33,7 +33,7 @@ Some notes:
     def __init__ (self, scheduler):
         #: As passed to the constructor.
         self.scheduler = scheduler
-        #: A ``set`` of domains that will recieve relevant events.
+        #: A ``set`` of domains that will receive relevant events.
         self.active_domains = set()
         #: A ``set`` of domains that have been disabled through
         #: :meth:`disable`.

@@ -224,7 +224,6 @@ PyObject* fastdraw (PyObject* self, PyObject* args) {
                     g, attrs[2 + (vis_tmp[1] == Py_True)]
                 );
                 PyList_SET_ITEM(g_dirty, 0, g_rect); // NOTE: ref[-6]
-                PyObject_SetAttrString(g, "_dirty", g_dirty);
             }
             n = PyList_GET_SIZE(g_dirty);
             for (k = 0; k < 2; k++) { // last/current

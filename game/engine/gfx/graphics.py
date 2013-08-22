@@ -3,9 +3,11 @@
 ---NODOC---
 
 TODO:
+ - Tilemap: should change if given Graphics change (tile_types), like Animation
+    - graphic.require(tilemap)
+    - see Animation.render()
+    - note that any graphics passed have their managers removed (and so mustn't be locked)
  - tiled graphic
- - Animation, Tilemap: should change if given Graphics change (imgs/tile_types)
-    - Graphic.on_change(cb(rects=None)) # and cb gets no args if takes none
  - particle system
 
 ---NODOC---
@@ -265,8 +267,13 @@ For example, to play the frames in a spritemap consisting of a single row::
         load_img = self._load_img
         #: ``list`` of ``imgs`` as passed to the constructor, except that they
         #: are never filenames.
-        self.graphics = [load_img(img) if isinstance(img, basestring) else img
-              for img in imgs]
+        self.graphics = gs = []
+        for img in imgs:
+            if isinstance(img, basestring):
+                img = load_img(img)
+            elif isinstance(img, Graphic):
+                img.require(self)
+            gs.append(img)
         # graphics is non-empty due to the exception above
         self._graphic = 0
         Graphic.__init__(self, self._get_sfc(0), pos, layer, pool, res_mgr)
@@ -468,7 +475,7 @@ Missing items are ignored.
         if self._new_frame_time is not None:
             # adjust speed for next frame
             self._timer_id = self._get_sched().add_timeout(
-                self._next_frame, seconds=self._new_frame_time
+                self._next_frame, self._new_frame_time
             )
             self._new_frame_time = None
             return False
@@ -523,7 +530,7 @@ If a sequence is already being played, that sequence is canceled.
             self._frame_time_source = 'runtime'
         frame_time = float(frame_time) / self._speed
         # start the scheduler
-        self._timer_id = s.add_timeout(self._next_frame, seconds=frame_time)
+        self._timer_id = s.add_timeout(self._next_frame, frame_time)
         self._playing_frame_time = frame_time
         self._playing_cb = cb
         return self
@@ -600,6 +607,28 @@ unqueue(*names) -> self
                 if data[0] == name:
                     queued.pop(i)
         return self
+
+    def render (self):
+        """:meth:`Graphic.render() <engine.gfx.graphic.Graphic.render>`."""
+        # set orig_dirty where the graphic is dirty, if a graphic
+        g = self.graphics[self.graphic]
+        if isinstance(g, Graphic):
+            sfc = g.surface
+            # after render() and before _pre_draw(), ._dirty is relative to
+            # top-left = (0, 0)
+            if g._dirty:
+                orig_sfc = self._orig_sfc
+                if sfc is orig_sfc:
+                    # same, so need to flag dirty areas
+                    if g._dirty is True:
+                        self._orig_dirty = True
+                    else:
+                        self.dirty(*g._dirty)
+                else:
+                    # different, so change out the surface
+                    self.orig_sfc = sfc
+                g._dirty = []
+        Graphic.render(self)
 
 
 class Tilemap (Graphic):

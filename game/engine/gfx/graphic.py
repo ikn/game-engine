@@ -7,6 +7,7 @@ TODO:
     - if the average > x or current length < n, do some things:
         - turn opacity into a list of rects the graphic is opaque in (x = 4?)
         - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 2?)
+ - transform calls untransform, so transforms never get passed dest
 
 ---NODOC---
 
@@ -97,6 +98,7 @@ correspond to builtin transforms (see :meth:`transform`).
         #: Whether the graphic is completely opaque; do not change.
         self.opaque = not has_alpha(img)
         self._manager = None
+        self._mgr_requires = False
         self._layer = layer
         #: When blitting the surface, this is passed as the ``special_flags``
         #: argument.
@@ -459,22 +461,31 @@ Defaults to ``2 * pi / 500``."""
 
     @property
     def manager (self):
-        """The :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`
-this graphic is associated with.
+        """The thing that 'owns' this graphic.
 
-May be ``None``.  This may be changed directly.  (A graphic should only be used with one manager at a time.)
+This is usually a
+:class:`GraphicsManager <engine.gfx.container.GraphicsManager>` instance, or
+``None``, but may be any other object (only really useful with
+:meth:`require`).  If this object has ``'add'``, ``'rm'`` or ``'orig_sz'``
+attributes, these must be implemented like in
+:class:`GraphicsManager <engine.gfx.container.GraphicsManager>`.
+
+This property may be changed directly.
 
 """
         return self._manager
 
     @manager.setter
     def manager (self, manager):
-        if self._manager is not None:
+        if manager is not self._manager and self._mgr_requires:
+            raise RuntimeError('tried to change manager on manager-locked '
+                               'graphic')
+        if hasattr(self._manager, 'rm'):
             self._manager.rm(self)
-        if manager is not None:
+        if hasattr(self._manager, 'add'):
             manager.add(self) # sets ._manager
         else:
-            self._manager = None
+            self._manager = manager
 
     @property
     def layer (self):
@@ -485,12 +496,22 @@ May be ``None``.  This may be changed directly.  (A graphic should only be used 
     def layer (self, layer):
         if layer != self._layer:
             # change layer in gm by removing, setting attribute, then adding
-            m = self.manager
-            if m is not None:
+            m = self._manager
+            if hasattr(m, 'rm'):
                 m.rm(self)
             self._layer = layer
-            if m is not None:
+            if hasattr(m, 'add'):
                 m.add(self)
+
+    def require (self, manager):
+        """Set :attr:`manager` to the given manager, and lock it.
+
+If the graphic's manager is locked, trying to change its manager raises
+RuntimeError.
+
+"""
+        self.manager = manager
+        self._mgr_requires = True
 
     # movement
 
@@ -529,8 +550,11 @@ All arguments are as taken by :func:`engine.util.align_rect`.
 
 """
         if within is None:
+            if not hasattr(self._manager, 'orig_sz'):
+                raise TypeError('received no \'within\' argument and manager '
+                                'has no \'orig_sz\' attribute')
             within = Rect((0, 0), self._manager.orig_sz)
-        self.pos = align_rect(self._rect, within, alignment, pad, offset)
+        self.pos = align_rect(self._react, within, alignment, pad, offset)
         return self
 
     # transform
@@ -1311,10 +1335,8 @@ not alter any other (transformed) surfaces.  Takes any number of rects to flag
 as dirty.  If none are given, the whole of the graphic is flagged.
 
 """
-        if not rects:
-            rects = True
-        self._orig_dirty = combine_drawn(self._orig_dirty,
-                                         [Rect(r) for r in rects])
+        dirty = [Rect(r) for r in rects] if rects else True
+        self._orig_dirty = combine_drawn(self._orig_dirty, dirty)
 
     def render (self):
         """Update the final surface.

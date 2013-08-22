@@ -552,14 +552,14 @@ Arguments and return value are as for :meth:`Timer.run`.
         return Timer.run(self, self._update, seconds = seconds,
                          frames = frames)
 
-    def add_timeout (self, cb, *args, **kwargs):
+    def add_timeout (self, cb, seconds=None, frames=None, repeat_seconds=None,
+                     repeat_frames=None):
         """Call a function after a delay.
 
-add_timeout(cb, *args[, seconds][, frames][, repeat_seconds][, repeat_frames])
+add_timeout(cb[, seconds][, frames][, repeat_seconds][, repeat_frames])
             -> ident
 
 :arg cb: the function to call.
-:arg args: list of arguments to pass to cb.
 :arg seconds: how long to wait before calling, in seconds (respects changes to
               :attr:`Timer.fps`).  If passed, ``frames`` is ignored.
 :arg frames: how long to wait before calling, in frames (same number of frames
@@ -581,10 +581,6 @@ between calls is actually an average over a large enough number of frames.
 will not be called again.
 
 """
-        seconds = kwargs.get('seconds')
-        frames = kwargs.get('frames')
-        repeat_seconds = kwargs.get('repeat_seconds')
-        repeat_frames = kwargs.get('repeat_frames')
         if seconds is not None:
             frames = None
         elif frames is None:
@@ -595,7 +591,7 @@ will not be called again.
             repeat_seconds = seconds
             repeat_frames = frames
         self._cbs[self._max_id] = [seconds, frames, repeat_seconds,
-                                   repeat_frames, True, cb, args]
+                                   repeat_frames, True, cb]
         self._max_id += 1
         # ID is key in self._cbs
         return self._max_id - 1
@@ -644,7 +640,7 @@ Missing IDs are ignored.
                 data[remain] -= dt
                 if data[remain] <= 0:
                     # call callback
-                    if data[5](*data[6]):
+                    if data[5]():
                         # add on delay
                         total = data[2] is None
                         data[total] += data[total + 2]
@@ -747,7 +743,7 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
                 else:
                     yield True
 
-        return self.add_timeout(timeout_cb().next, frames = 1)
+        return self.add_timeout(timeout_cb().next, frames=1)
 
     def interp_simple (self, obj, attr, target, t, end_cb = None,
                        round_val = False):

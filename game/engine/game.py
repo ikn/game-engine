@@ -334,7 +334,7 @@ should be passed to that base class).
 
 """
         scheduler = Scheduler()
-        scheduler.add_timeout(self._update, frames = 1, repeat_frames = 1)
+        scheduler.add_timeout(self._update, frames=1)
         eh = evt.EventHandler(scheduler)
         eh.add(
             (pg.QUIT, self.quit),
