@@ -805,12 +805,14 @@ blitting.
         else:
             if transform_fn in q:
                 data = q[transform_fn]
-                self.untransform(transform_fn)
             elif transform_fn in ts:
                 data = ts[transform_fn]
-                self.untransform(transform_fn)
             else:
                 exists = False
+            if exists:
+                old_data = self.untransform(transform_fn)
+                if old_data is not None:
+                    ts[transform_fn] = old_data
             if transform_fn in t_ks:
                 # has to be a builtin: untransform won't remove it
                 t_ks.pop(last_index)
@@ -908,8 +910,7 @@ untransform(transform_fn) -> self
         if transform_fn not in ts and transform_fn not in q:
             return
         if isinstance(transform_fn, basestring):
-            # no need to handle mods if not builtin, since then _gen_mods args
-            # don't change for any builtins
+            # don't remove builtins from transforms list
             self._undo_transforms(transform_fn)
             if transform_fn in q:
                 src_sz, dest_sz = q[transform_fn][1:3]
@@ -919,14 +920,13 @@ untransform(transform_fn) -> self
                 dest_sz = dest.get_size()
             self._apply_transforms(transform_fn, src_sz != dest_sz, False)
         else:
-            # don't remove builtins from transforms list
-            self.transforms.remove(transform_fn)
+            # no need to handle mods if not builtin, since then _gen_mods args
+            # don't change for any builtins
+            t_ks.remove(transform_fn)
         # remove data
-        if transform_fn in ts:
-            del ts[transform_fn]
         if transform_fn in q:
             del q[transform_fn]
-        return self
+        return ts.pop(transform_fn, None)
 
     def size_changed (self, size):
         """Tell the graphic that the original size has changed.
@@ -1020,14 +1020,11 @@ If successful, all transformations are reapplied afterwards, if any.
             # transform does nothing
             return (src, dirty)
         if not dirty and last_args is not None:
-            last_w, last_h, last_about = last
-            last_ax, last_ay = pos_in_rect(self.anchor, (0, 0, last_w, last_h),
-                                           True)
-            if w == last_w and h == last_h and ax == last_ax and ay == last_ay:
+            if last_args == (w, h, ax, ay):
                 # same as last time
                 return (dest, False)
         # full transform
-        return (self.scale_fn(src, (w, h)), True)
+        return (self.scale_fn(src, (w, h)), True, (w, h, ax, ay))
 
     def resize (self, w=None, h=None, scale=False):
         """Resize the graphic.
@@ -1079,7 +1076,7 @@ rescale_both(scale=1) -> self
 
     def _gen_mods_crop (self, src_sz, first_time, last_args, rect):
         rect = Rect(rect)
-        if first_time or Rect(last_args[0]) != rect:
+        if first_time or last_args[0] != rect:
 
             def apply_fn (g):
                 g._rect = g._rect.move(rect.x, rect.y)
@@ -1101,8 +1098,7 @@ rescale_both(scale=1) -> self
             # no cropping occurs
             return (src, dirty)
         if dirty is not True and last_args is not None:
-            last = Rect(last_args[0])
-            if last == rect:
+            if last_args[0] == rect:
                 # same size as last time
                 if dirty:
                     # clip dirty rects inside cropped rect; if there's a
@@ -1125,7 +1121,7 @@ rescale_both(scale=1) -> self
             # not (no longer) opaque
             new_sfc = blank_sfc(rect.size)
         new_sfc.blit(src, ((0, 0), rect.size), rect)
-        return (new_sfc, True)
+        return (new_sfc, True, (rect,))
 
     def crop (self, rect):
         """Crop the surface to the given rect.
@@ -1196,7 +1192,7 @@ flip(x = False, y = False) -> self
 
     def _gen_mods_tint (self, src_sz, first_time, last_args, colour):
         colour = normalise_colour(colour)
-        if first_time or normalise_colour(last_args[0]) != colour:
+        if first_time or last_args[0] != colour:
 
             def apply_fn (g):
                 g._tint_colour = colour
@@ -1214,14 +1210,14 @@ flip(x = False, y = False) -> self
         if colour == (255, 255, 255, 255):
             return (src, dirty)
         if (dirty is False and last_args is not None and
-            normalise_colour(last_args[0]) == colour):
+            last_args[0] == colour):
             return (dest, False)
         if not has_alpha(src):
             src = src.convert_alpha()
         new_sfc = pg.Surface(src.get_size()).convert_alpha()
         new_sfc.fill(colour)
         new_sfc.blit(src, (0, 0), special_flags=self._tint_mode)
-        return (new_sfc, True)
+        return (new_sfc, True, (colour,))
 
     def tint (self, colour):
         """Set tint colour, as taken by :func:`engine.util.normalise_colour`.
@@ -1270,10 +1266,9 @@ opacify(opacity) -> self
         w, h = src.get_size()
         cx, cy = w / 2., h / 2.
         if not dirty and last_args is not None:
-            last_angle = last_args[0]
             # if last_angle == angle, then surface size didn't change, so
             # neither did the centre point
-            if abs(angle - last_angle) < self.rotate_threshold:
+            if abs(angle - last_args[0]) < self.rotate_threshold:
                 # no change to result
                 return (dest, False)
         # do a full transform
@@ -1368,7 +1363,7 @@ surface.
                 # differ from last transform order at this point
                 dirty = True
                 i = j
-            if not dirty and fn in ts:
+            if not dirty and fn not in q and fn in ts:
                 # nothing is different at this point
                 # grab surface to start next transform at
                 sfc = ts[fn][2]
@@ -1394,12 +1389,14 @@ surface.
                 # does nothing
                 continue
             f = getattr(self, '_' + fn) if isinstance(fn, basestring) else fn
-            new_sfc, dirty = f(sfc, dest, dirty, last_args, *args)
+            rtn = f(sfc, dest, dirty, last_args, *args)
+            new_sfc, dirty = rtn[:2]
+            new_args = rtn[2] if len(rtn) >= 3 else args
             if dirty or dest is None:
                 # transformed for the first time or something changed in
                 # retransforming
                 # have modifier functions following code above
-                ts[fn] = (args, sfc, new_sfc, apply_fn, undo_fn)
+                ts[fn] = (new_args, sfc, new_sfc, apply_fn, undo_fn)
             sfc = new_sfc
             if not passed_rot:
                 if fn == 'rotate':
