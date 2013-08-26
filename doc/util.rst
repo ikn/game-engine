@@ -29,3 +29,9 @@ Graphics
 .. autofunction:: engine.util.convert_sfc
 .. autofunction:: engine.util.combine_drawn
 .. autofunction:: engine.util.blank_sfc
+
+Layouts
+-------
+
+.. autoclass:: engine.util.Grid
+.. autoclass:: engine.util.InfiniteGrid

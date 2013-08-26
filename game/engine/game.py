@@ -143,8 +143,8 @@ Called before removal---when the :attr:`Game.world` is still this world.
         pass
 
     def add (self, *entities):
-        """Add any number of :class:`Entity <engine.entity.Entity> instances to
-the world.
+        """Add any number of :class:`Entity <engine.entity.Entity>` instances
+to the world.
 
 An entity may be in only one world at a time.  If a given entity is already in
 another world, it is removed from that world.

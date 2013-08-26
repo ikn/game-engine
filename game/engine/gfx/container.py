@@ -8,6 +8,7 @@ TODO:
     - allow for transforms
     - internal layers (has allowed range in manager, and distributes graphics within it)
  - ignore off-screen (OoB) things (clip all dirty rects and discard zero-size ones)
+    - do it before _pre_draw
  - GraphicsManager.offset to offset the viewing window (Surface.scroll is fast?)
     - supports parallax: set to {layer: ratio} or (function(layer) -> ratio) or set a Graphic property (make GraphicView have its own copy)
  - do something with/like dispman
@@ -324,7 +325,7 @@ all graphics to be drawn/updated first.
                     del self._init_as_graphic_args
 
     @property
-    def orig_sz (self):
+    def orig_size (self):
         """The size of the surface before any transforms."""
         return self._orig_sfc.get_size()
 

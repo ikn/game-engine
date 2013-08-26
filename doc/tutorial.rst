@@ -116,8 +116,8 @@ Converting the tile surfaces is necessary if the loaded image has transparency
 (otherwise transparent areas will appear black).
 
 For positioning the tiles easily, I'll create a
-:class:`Grid <engine.gfx.util.Grid>`.  You can set the position of a graphic
-using a number of attributes and methods; here, I use
+:class:`Grid <engine.util.Grid>`.  You can set the position of a graphic using
+a number of attributes and methods; here, I use
 :attr:`Graphic.pos <engine.gfx.graphic.Graphic.pos>`.  Again, the rest of this
 code should contain nothing unfamiliar:
 
@@ -131,7 +131,7 @@ code should contain nothing unfamiliar:
     self.missing = [missing // ny, missing % ny]
     imgs[missing] = (imgs[missing][0], None)
     # create grid for positioning
-    grid = gfx.util.Grid(conf.N_TILES, conf.TILE_SIZE, conf.TILE_GAP)
+    grid = util.Grid(conf.N_TILES, conf.TILE_SIZE, conf.TILE_GAP)
     self.grid = grid
     # position graphics
     # and turn the tile list into a grid for easier access
@@ -361,7 +361,7 @@ and define the callback::
             self.move_tile(x, y)
 
 The only new thing here is the call to
-:meth:`Grid.tile_at() <engine.gfx.util.Grid.tile_at>`---it saves a bit of work,
+:meth:`Grid.tile_at() <engine.util.Grid.tile_at>`---it saves a bit of work,
 and handles the edge cases for us.
 
 You might notice you can't see the cursor.  This is the default behaviour, so

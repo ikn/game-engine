@@ -21,9 +21,8 @@ from pygame import Rect
 
 from ..conf import conf
 from ..text import option_defaults as text_option_defaults
-from ..util import normalise_colour, align_rect, blank_sfc, has_alpha
+from .. import util as gameutil
 from .graphic import Graphic
-from .util import Grid
 
 
 class Colour (Graphic):
@@ -66,8 +65,8 @@ Colour(colour, rect, layer=0)
         self.fill(colour)
 
     def _gen_mods_fill (self, src_sz, first_time, last_args, colour):
-        colour = normalise_colour(colour)
-        if first_time or normalise_colour(last_args[0]) != colour:
+        colour = gameutil.normalise_colour(colour)
+        if first_time or gameutil.normalise_colour(last_args[0]) != colour:
 
             def apply_fn (g):
                 g._colour = colour
@@ -81,13 +80,13 @@ Colour(colour, rect, layer=0)
         return (mods, src_sz)
 
     def _fill (self, src, dest, dirty, last_args, colour):
-        colour = normalise_colour(colour)
+        colour = gameutil.normalise_colour(colour)
         if colour == (0, 0, 0, 255):
             return (src, dirty)
         if dest is not None and src.get_size() == dest.get_size():
             # we can reuse dest
-            last_colour = normalise_colour(last_args[0])
-            if last_colour[3] == 255 and colour[3] < 255:
+            last_colour = gameutil.normalise_colour(last_args[0])
+            if colour[3] < 255 and not gameutil.has_alpha(dest):
                 # newly transparent
                 dest = dest.convert_alpha()
             if dirty is True or last_colour != colour:
@@ -639,9 +638,9 @@ Tilemap(grid, tile_data, tile_types, pos=(0, 0), layer=0[, translate_type],
         cache_tile_data=False, pool=conf.DEFAULT_RESOURCE_POOL,
         res_mgr=conf.GAME.resources)
 
-:arg grid: a :class:`util.Grid <engine.gfx.util.Grid>` defining the size and
-           shape of the tiles in the tilemap, or the ``tile_size`` argument to
-           :class:`util.Grid <engine.gfx.util.Grid>` to create a new one with
+:arg grid: a :class:`util.Grid <engine.util.Grid>` defining the size and shape
+           of the tiles in the tilemap, or the ``tile_size`` argument to
+           :class:`util.Grid <engine.util.Grid>` to create a new one with
            standard parameters.
 :arg tile_data: a way of determining the tile type ID for each ``(x, y)`` tile
     in the grid, which is any object.  This can be:
@@ -660,10 +659,10 @@ Tilemap(grid, tile_data, tile_types, pos=(0, 0), layer=0[, translate_type],
           filename (may not contain whitespace) to load an image from, and use
           the ``(r, g, b[, a])`` colour tuples of the pixels in the surface as
           IDs;
-        - if ``grid`` is a :class:`util.Grid <engine.gfx.util.Grid>`: a
-          function that takes ``col`` and ``row`` arguments as column and row
-          indices in the grid, and returns the corresponding tile type ID; or
-        - if ``grid`` is not a :class:`util.Grid <engine.gfx.util.Grid>`:
+        - if ``grid`` is a :class:`util.Grid <engine.util.Grid>`: a function
+          that takes ``col`` and ``row`` arguments as column and row indices in
+          the grid, and returns the corresponding tile type ID; or
+        - if ``grid`` is not a :class:`util.Grid <engine.util.Grid>`:
           ``(get_tile_type, w, h)``, where get_tile_type is a function as
           defined previously, and ``w`` and ``h`` are the width and height of
           the grid, in tiles.
@@ -688,8 +687,7 @@ Tilemap(grid, tile_data, tile_types, pos=(0, 0), layer=0[, translate_type],
     Note that a :class:`util.Spritemap <engine.gfx.util.Spritemap>` is a valid
     form for this argument.
 
-:arg pos: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
-:arg layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg pos,layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 :arg translate_type: a function that takes tile type IDs obtained from the
                      ``tile_data`` argument and returns the ID to use with the
                      ``tile_types`` argument in obtaining ``tile_graphic``;
@@ -699,8 +697,7 @@ Tilemap(grid, tile_data, tile_types, pos=(0, 0), layer=0[, translate_type],
                     ``tile_graphic`` from ``tile_types`` generates a surface.
                     If ``True``, tile type IDs must be hashable (after
                     translation by ``translate_type``).
-:arg pool: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
-:arg res_mgr: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+:arg pool,res_mgr: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
 This is meant to be used for static tilemaps---that is, where the appearance of
 each tile type never changes.
@@ -725,12 +722,13 @@ each tile type never changes.
         self._resource_manager = res_mgr
         self._tile_data, ncols, nrows = self._parse_data(tile_data, grid,
                                                          False)
-        if not isinstance(grid, Grid):
-            grid = Grid(ncols * nrows, grid)
-        #: The :class:`util.Grid <engine.gfx.util.Grid>` covered.
+        if not isinstance(grid, gameutil.Grid):
+            grid = gameutil.Grid(ncols * nrows, grid)
+        #: The :class:`util.Grid <engine.util.Grid>` covered.
         self.grid = grid
         # apply initial data
-        Graphic.__init__(self, blank_sfc(grid.size), pos, layer, pool, res_mgr)
+        Graphic.__init__(self, gameutil.blank_sfc(grid.size), pos, layer, pool,
+                         res_mgr)
         update = self._update
         for i, col in enumerate(self._tile_data):
             for j, tile_type_id in enumerate(col):
@@ -770,7 +768,7 @@ each tile type never changes.
             # list of rows -> list of columns
             tile_data = zip(*tile_data)
         if callable(tile_data):
-            if not isinstance(grid, Grid):
+            if not isinstance(grid, gameutil.Grid):
                 raise ValueError('got function for tile_data, but grid is ' \
                                  'not a Grid instance')
             tile_data = (tile_data, grid.ncols, grid.nrows)
@@ -785,7 +783,7 @@ each tile type never changes.
         # now tile_data is a list of columns
         ncols = len(tile_data)
         nrows = len(tile_data[0])
-        if isinstance(grid, Grid) and grid.ntiles != (ncols, nrows):
+        if isinstance(grid, gameutil.Grid) and grid.ntiles != (ncols, nrows):
             msg = 'tile_data has invalid dimensions: got {0}, expected {1}'
             raise ValueError(msg.format((ncols, nrows), grid.ntiles))
         translate_type = self._translate_type
@@ -836,13 +834,13 @@ each tile type never changes.
             rect.move_ip(fit.x - dest_rect.x, fit.y - dest_rect.y)
             rect.size = dest_rect.size
             # copy rect to tile_rect with alignment
-            pos = align_rect(rect, tile_rect, alignment)
+            pos = gameutil.align_rect(rect, tile_rect, alignment)
             dest.blit(sfc, pos, rect)
         else:
             if g is None:
                 g = (0, 0, 0, 0)
             # now we have a colour
-            dest.fill(normalise_colour(g), tile_rect)
+            dest.fill(gameutil.normalise_colour(g), tile_rect)
         return tile_rect
 
     def __getitem__ (self, i):
@@ -869,3 +867,141 @@ each tile type never changes.
         for i, col in enumerate(tile_data):
             for j, tile_type_id in enumerate(col):
                 self[(i, j)] = tile_type_id
+
+
+class Grid (Graphic):
+    """Drawable wrapper for :class:`util.Grid <engine.util.Grid>`.
+
+Grid(grid, gap_colour='aaa', bg_colour='0000', pos=(0, 0), layer=0)
+
+:arg grid: a :class:`util.Grid <engine.util.Grid>` instance.
+:arg gap_colour: colour in-between tiles, as accepted by
+                 :func:`engine.util.normalise_colour`; may have alpha.
+:arg bg_colour: colour within tiles, as accepted by
+                :func:`engine.util.normalise_colour`.
+:arg pos,layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+
+"""
+
+    def __init__ (self, grid, gap_colour='aaa', bg_colour='0000', pos=(0, 0),
+                  layer=0):
+        gap_colour = gameutil.normalise_colour(gap_colour)
+        bg_colour = gameutil.normalise_colour(bg_colour)
+        sfc = pg.Surface(grid.size)
+        sfc = (sfc.convert_alpha() if gap_colour[3] < 255 or bg_colour[3] < 255
+                                   else sfc.convert())
+        # fill with gaps and add in tiles
+        sfc.fill(gap_colour)
+        for rect in grid.tile_rects():
+            sfc.fill(bg_colour, rect)
+        Graphic.__init__(self, sfc, pos, layer)
+
+
+class InfiniteGrid (Graphic):
+    """Drawable wrapper for
+:class:`util.InfiniteGrid <engine.util.InfiniteGrid>`.
+
+InfiniteGrid(grid, rect, gap_colour='aaa', bg_colour='0000', pos=(0, 0),
+             layer=0)
+
+:arg grid: a :class:`util.InfiniteGrid<engine.util.InfiniteGrid>` instance.
+:arg rect: Pygame-style rect within ``grid`` to draw.
+:arg gap_colour: colour in-between tiles, as accepted by
+                 :func:`engine.util.normalise_colour`; may have alpha.
+:arg bg_colour: colour within tiles, as accepted by
+                :func:`engine.util.normalise_colour`.
+:arg pos,layer: as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
+
+"""
+
+    def __init__ (self, grid, rect, gap_colour='aaa', bg_colour='0000',
+                  pos=(0, 0), layer=0):
+        #: As passed to the constructor.
+        self.grid = grid
+        self._view_rect = self._gap_colour = self._bg_colour = None
+        rect = Rect(rect)
+        Graphic.__init__(self, pg.Surface(rect.size), pos, layer)
+        self.gap_colour = gap_colour
+        self.bg_colour = bg_colour
+        self.view_rect = rect
+
+    def _get_alpha (self):
+        # determine whether orig_sfc will have any alpha
+        return self._gap_colour[3] < 255 or self._bg_colour[3] < 255
+
+    def _fix_alpha (self, sfc):
+        # convert given surface (to be orig_sfc) to alpha if necessary
+        if self._get_alpha() and not gameutil.has_alpha(sfc):
+            sfc = sfc.convert_alpha()
+        return sfc
+
+    def _draw_tiles (self, sfc):
+        # draw tiles on the given surface
+        ir = gameutil.ir
+        c = self._bg_colour
+        offset = (-self._view_rect.x, -self._view_rect.y)
+        for r in self.grid.tile_rects(self._view_rect):
+            sfc.fill(c, Rect([ir(x) for x in r]).move(offset))
+
+    def _render_grid (self):
+        # draw grid to a surface and set as orig_sfc
+        size = self._view_rect.size
+        if size != self._orig_sfc.get_size():
+            sfc = pg.Surface(size)
+            if self._get_alpha():
+                sfc = sfc.convert_alpha()
+        else:
+            sfc = self._fix_alpha(self._orig_sfc)
+        # draw grid to surface
+        sfc.fill(self._gap_colour)
+        self._draw_tiles(sfc)
+        self.orig_sfc = sfc
+
+    @property
+    def view_rect (self):
+        """As the ``rect`` argument taken by the constructor.
+
+:attr:`Graphic.anchor <engine.gfx.graphic.Graphic.anchor>` is respected when
+this is changed.
+
+"""
+        return self._view_rect
+
+    @view_rect.setter
+    def view_rect (self, rect):
+        rect = Rect(rect)
+        if rect != self._view_rect:
+            self._view_rect = rect
+            self._render_grid()
+
+    @property
+    def gap_colour (self):
+        """As passed to the constructor."""
+        return self._gap_colour
+
+    @gap_colour.setter
+    def gap_colour (self, colour):
+        colour = gameutil.normalise_colour(colour)
+        old_colour = self._gap_colour
+        if colour != old_colour:
+            self._gap_colour = colour
+            if old_colour is not None:
+                self._render_grid()
+            # else we're still in the constructor
+
+    @property
+    def bg_colour (self):
+        """As passed to the constructor."""
+        return self._bg_colour
+
+    @bg_colour.setter
+    def bg_colour (self, colour):
+        colour = gameutil.normalise_colour(colour)
+        old_colour = self._bg_colour
+        if colour != old_colour:
+            self._bg_colour = colour
+            if old_colour is not None:
+                # no need to re-render: just re-fill tiles
+                self._draw_tiles(self._fix_alpha(self._orig_sfc))
+                self.dirty()
+            # else we're still in the constructor

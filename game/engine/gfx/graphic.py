@@ -3,11 +3,8 @@
 ---NODOC---
 
 TODO:
- - in graphics, store n (5?) last # draws between changes to the surface (by transform or altering the original)
-    - if the average > x or current length < n, do some things:
-        - turn opacity into a list of rects the graphic is opaque in (x = 4?)
-        - if a Colour, put into blit mode (also do so if transformed in a certain way) (x = 2?)
- - transform calls untransform, so transforms never get passed dest
+ - use subsurface for crop transform (but requires rect to be within surface)
+ - GraphicView probably doesn't work if in different manager - need to have own _dirty?
 
 ---NODOC---
 
@@ -114,7 +111,6 @@ correspond to builtin transforms (see :meth:`transform`).
         self._tint_colour = (255, 255, 255, 255)
         self._angle = 0
         self._scale_fn = pg.transform.smoothscale
-        self._tint_mode = pg.BLEND_RGBA_MULT
         self._rotate_fn = lambda sfc, angle: \
             pg.transform.rotozoom(sfc, angle * 180 / pi, 1)
         self._rotate_threshold = 2 * pi / 500
@@ -416,21 +412,6 @@ signature as this default).
         self.retransform('resize')
 
     @property
-    def tint_mode (self):
-        """Mode of the ``'tint'`` transform.
-
-One of the Pygame ``special_flags`` to ``Surface.blit``; defaults to
-``BLEND_RGBA_MULT``.
-
-"""
-        return self._tint_mode
-
-    @tint_mode.setter
-    def tint_mode (self, mode):
-        self._tint_mode = mode
-        self.retransform('tint')
-
-    @property
     def rotate_fn (self):
         """Function to use for rotating.
 
@@ -466,7 +447,7 @@ Defaults to ``2 * pi / 500``."""
 This is usually a
 :class:`GraphicsManager <engine.gfx.container.GraphicsManager>` instance, or
 ``None``, but may be any other object (only really useful with
-:meth:`require`).  If this object has ``'add'``, ``'rm'`` or ``'orig_sz'``
+:meth:`require`).  If this object has ``'add'``, ``'rm'`` or ``'orig_size'``
 attributes, these must be implemented like in
 :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`.
 
@@ -550,10 +531,10 @@ All arguments are as taken by :func:`engine.util.align_rect`.
 
 """
         if within is None:
-            if not hasattr(self._manager, 'orig_sz'):
+            if not hasattr(self._manager, 'orig_size'):
                 raise TypeError('received no \'within\' argument and manager '
-                                'has no \'orig_sz\' attribute')
-            within = Rect((0, 0), self._manager.orig_sz)
+                                'has no \'orig_size\' attribute')
+            within = Rect((0, 0), self._manager.orig_size)
         self.pos = align_rect(self._react, within, alignment, pad, offset)
         return self
 
@@ -1216,7 +1197,8 @@ flip(x = False, y = False) -> self
             src = src.convert_alpha()
         new_sfc = pg.Surface(src.get_size()).convert_alpha()
         new_sfc.fill(colour)
-        new_sfc.blit(src, (0, 0), special_flags=self._tint_mode)
+        if colour[3] > 0:
+            new_sfc.blit(src, (0, 0), special_flags=pg.BLEND_RGBA_MULT)
         return (new_sfc, True, (colour,))
 
     def tint (self, colour):
