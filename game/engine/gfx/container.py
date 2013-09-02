@@ -355,6 +355,13 @@ previous overlay from the :class:`GraphicsManager`.
             # add to this manager
             self.add(overlay)
 
+    def _set_layers_from_set (self, ls):
+        if None in ls:
+            ls.remove(None)
+            self.layers = [None] + sorted(ls)
+        else:
+            self.layers = sorted(ls)
+
     def add (self, *graphics):
         """Add graphics.
 
@@ -376,7 +383,7 @@ and returns a list of added graphics.
             g._manager = self
             # don't draw over any possible previous location
             g.was_visible = False
-        self.layers = sorted(ls)
+        self._set_layers_from_set(ls)
         return graphics
 
     def rm (self, *graphics):
@@ -404,7 +411,7 @@ Missing graphics are ignored.
                         del all_graphics[l]
                         ls.remove(l)
             # else not added: fail silently
-        self.layers = sorted(ls)
+        self._set_layers_from_set(ls)
 
     def fade_to (self, t, colour=(0, 0, 0), resolution = None):
         """Fade to a colour.

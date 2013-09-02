@@ -180,8 +180,8 @@ from . import inputs, evts
 #: :class:`Input <engine.evt.inputs.Input>` subclasses.
 inputs_by_name = {}
 for i in vars(inputs).values(): # copy or it'll change size during iteration
-    if (isinstance(i, type) and issubclass(i, inputs.Input) and
-        hasattr(i, 'name')):
+    if (isinstance(i, type) and not i.__name__.startswith('_') and
+        issubclass(i, inputs.Input) and hasattr(i, 'name')):
         inputs_by_name.setdefault(i.device, {})[i.name] = i
 del i
 #: A ``{cls.name: cls}`` dict of usable named
