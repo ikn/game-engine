@@ -544,6 +544,7 @@ PadButton(device_id, button, *mods)
     def __init__ (self, device_id, button, *mods):
         ButtonInput.__init__(self, button, *mods)
         if isinstance(device_id, basestring):
+            self.device_id = None
             self.device_var = device_id
         else:
             self.device_id = device_id
@@ -758,6 +759,7 @@ PadAxis(device_id, axis[, thresholds], *mods)
     def __init__ (self, device_id, axis, thresholds = None, *mods):
         AxisInput.__init__(self, axis, thresholds, *mods)
         if isinstance(device_id, basestring):
+            self.device_id = None
             self.device_var = device_id
         else:
             self.device_id = device_id
@@ -810,6 +812,7 @@ PadHat(device_id, axis[, thresholds], *mods)
     def __init__ (self, device_id, hat, thresholds = None, *mods):
         AxisInput.__init__(self, hat, thresholds, *mods)
         if isinstance(device_id, basestring):
+            self.device_id = None
             self.device_var = device_id
         else:
             self.device_id = device_id

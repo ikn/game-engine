@@ -227,9 +227,9 @@ align_rect(rect, within, alignment = 0, pad = 0, offset = 0) -> pos
 
 :arg rect: the Pygame-style rect to align.
 :arg within: the rect to align ``rect`` within.
-:arg alignment: ``(x, y)`` alignment; each is ``< 0`` for left-aligned, ``0``
-                for centred, ``> 0`` for right-aligned.  Can be just one number
-                to use on both axes.
+:arg alignment: ``(x, y)`` alignment; each is ``< 0`` for left-/top-aligned,
+                ``0`` for centred, ``> 0`` for right-/bottom-aligned.  Can be
+                just one number to use on both axes.
 :arg pad: ``(x, y)`` padding to leave around the inner edge of ``within``.  Can
           be negative to allow positioning outside of ``within``, and can be
           just one number to use on both axes.
@@ -444,18 +444,24 @@ This is relative to the top-left corner of the grid.
 """
         return Rect(self.tile_pos(col, row), self.tile_size(col, row))
 
-    def tile_rects (self):
+    def tile_rects (self, pos=False):
         """Iterator over :meth:`tile_rect <engine.util.Grid.tile_rect>` for all
-tiles."""
-        # FIXME: :meth:`tile_rect` doesn't work for the above
+tiles.
+
+:arg pos: whether to yield ``(col, row, tile_rect)`` instead of just
+          ``tile_rect``.
+
+"""
+        # FIXME: :meth:`tile_rect` doesn't work in doc
         ts = self._tile_size
         gap = self._gap
         x = 0
         # add extra element to gap so we iterate over the last tile
-        for w, gap_x in zip(ts[0], gap[0] + (0,)):
+        for col, (w, gap_x) in enumerate(zip(ts[0], gap[0] + (0,))):
             y = 0
-            for h, gap_y in zip(ts[1], gap[1] + (0,)):
-                yield Rect(x, y, w, h)
+            for row, (h, gap_y) in enumerate(zip(ts[1], gap[1] + (0,))):
+                r = Rect(x, y, w, h)
+                yield (col, row, r) if pos else r
                 y += h + gap_y
             x += w + gap_x
 
@@ -584,14 +590,16 @@ This is relative to tile ``(0, 0)``, and elements can be floats.
 """
         return self.tile_pos(col, row) + self.tile_size
 
-    def tile_rects (self, rect):
+    def tile_rects (self, rect, pos=False):
         """Iterator over :meth:`tile_rect <engine.util.InfiniteGrid.tile_rect>`
 for tiles that intersect ``rect``.
 
 :arg rect: ``(x, y, w, h)`` with elements possibly floats.
+:arg pos: whether to yield ``(col, row, tile_rect)`` instead of just
+          ``tile_rect``.
 
 """
-        # FIXME: :meth:`tile_rect` doesn't work for the above
+        # FIXME: :meth:`tile_rect` doesn't work in doc
         ts = self.tile_size
         gap = self.gap
         # compute offsets
@@ -601,16 +609,20 @@ for tiles that intersect ``rect``.
         xr = rect[0] + rect[2]
         yb = rect[1] + rect[3]
         x = x0
+        col = 0
         while True:
             y = y0
+            row = 0
             while True:
-                yield (x, y) + ts
+                yield (col, row, r) if pos else r
                 y += ts[1] + gap[1]
                 if y >= yb:
                     break
+                row += 1
             x += ts[0] + gap[0]
             if x >= xr:
                 break
+            col += 1
 
     def tile_at (self, x, y):
         """Return the ``(col, row)`` tile at the point ``(x, y)``, or

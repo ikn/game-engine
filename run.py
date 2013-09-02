@@ -11,7 +11,7 @@ from game.level import Level as entry_world
 if __name__ == '__main__':
     engine.init()
 
-    args = ()
+    args = []
     if len(argv) > 1:
         # got some command-line arguments
         from optparse import OptionParser
@@ -29,8 +29,9 @@ if __name__ == '__main__':
                       help = 'profile stats sort mode; defaults to ' \
                       '\'cumulative\' (see pstats.Stats.sort_stats doc)')
         op.set_defaults(debug = False, time = None, num_stats = 30,
-                        profile_file = '.profile_stats', sort_stats = 'cumulative')
-        options = op.parse_args()[0]
+                        profile_file = '.profile_stats',
+                        sort_stats = 'cumulative')
+        options, argv = op.parse_args()
         # debug
         engine.conf.DEBUG = options.debug
         # construct world args

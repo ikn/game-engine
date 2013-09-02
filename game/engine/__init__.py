@@ -1,6 +1,6 @@
 import pygame as pg
 
-from . import game, sched, evt, gfx, txt, util, settings
+from . import game, sched, evt, gfx, text, util, settings
 from .conf import conf
 
 __all__ = ('conf', 'init', 'quit')

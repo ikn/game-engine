@@ -51,8 +51,8 @@ class Conf (object):
     FONT_DIR = DATA_DIR + 'font' + sep
 
     # display
-    WINDOW_ICON = None
     WINDOW_TITLE = ''
+    WINDOW_ICON = None
     MOUSE_VISIBLE = dd(False) # per-backend
     FLAGS = 0
     FULLSCREEN = False

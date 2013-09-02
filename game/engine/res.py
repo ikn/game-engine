@@ -145,7 +145,7 @@ load(loader, *args, **kwargs, pool=conf.DEFAULT_RESOURCE_POOL,
 :arg loader: resource loader to use, as found in :attr:`resource_loaders`.
 :arg args: positional arguments to pass to the resource loader.
 :arg kwargs: keyword arguments to pass the the resource loader.
-:arg pool: keyword-only argument giving the pool to cache the resource in.
+:arg pool: the pool to cache the resource in.
 :arg force_load: whether to bypass the cache and reload the object through
                  ``loader``.
 

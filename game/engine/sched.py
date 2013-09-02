@@ -455,10 +455,10 @@ run(cb, *args[, seconds][, frames]) -> remain
 
 :arg cb: a function to call every frame.
 :arg args: extra arguments to pass to cb.
-:arg seconds: keyword-only argument that determines how many seconds to run
-              for; can be a float.  Accounts for changes to :attr:`fps`.
-:arg frames: keyword-only argument that determines how many frames to run for;
-             can be a float.  Ignored if ``seconds`` is passed.
+:arg seconds: the number of seconds to run for; can be a float.  Accounts for
+              changes to :attr:`fps`.
+:arg frames: the number of frames to run for; can be a float.  Ignored if
+             ``seconds`` is passed.
 
 If neither ``seconds`` nor ``frames`` is given, run forever (until :meth:`stop`
 is called).  Time passed is based on the number of frames that have passed, so

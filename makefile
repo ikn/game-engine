@@ -27,3 +27,4 @@ doc-clean:
 
 distclean: clean
 	find -regex '.*\.py[co]' -delete
+	find -regex '\(.*/\)?__pycache__' -delete

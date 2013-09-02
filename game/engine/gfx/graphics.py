@@ -8,7 +8,9 @@ TODO:
     - see Animation.render()
     - note that any graphics passed have their managers removed (and so mustn't be locked)
  - tiled graphic
+    - graphic form is like Tilemap's tile_graphic
  - particle system
+ - *Grid take (tiled graphic)/(args thereto) instead of just colour for bg
 
 ---NODOC---
 
@@ -244,8 +246,9 @@ Animation(imgs, pos=(0, 0), layer=0[, scheduler],
     form for this argument.
 :arg scheduler: :class:`sched.Scheduler <engine.sched.Scheduler>` instance to
                 use for timing; if not given, animations can only be played
-                when the graphic is contained by a manager (and trying to do so
-                otherwise raises ``RuntimeError``).
+                when the graphic is contained by a
+                :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`
+                (and trying to do so otherwise raises ``RuntimeError``).
 
 Other arguments are as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 
@@ -264,9 +267,10 @@ For example, to play the frames in a spritemap consisting of a single row::
         if len(imgs) == 0:
             raise ValueError('animation requires at least one image')
         load_img = self._load_img
+        gs = []
         #: ``list`` of ``imgs`` as passed to the constructor, except that they
         #: are never filenames.
-        self.graphics = gs = []
+        self.graphics = gs
         for img in imgs:
             if isinstance(img, basestring):
                 img = load_img(img)
@@ -281,7 +285,8 @@ For example, to play the frames in a spritemap consisting of a single row::
         self.sequences = {}
         self._frame_time = None
         self._speed = 1
-        self._scheduler = scheduler
+        #: The ``scheduler`` argument passed to the constructor.
+        self.scheduler = scheduler
 
         #: The currently playing sequence (name), or ``None``.
         self.playing = None
@@ -313,6 +318,7 @@ For example, to play the frames in a spritemap consisting of a single row::
 
     @graphic.setter
     def graphic (self, i):
+        i = int(i)
         if i == self._graphic:
             return
         self.orig_sfc = self._get_sfc(i)
@@ -362,7 +368,7 @@ finished, if any.
         return sfc
 
     def _get_sched (self):
-        s = self._scheduler
+        s = self.scheduler
         if s is None:
             if self._manager is None:
                 raise RuntimeError('no scheduler is available')
@@ -382,30 +388,30 @@ finished, if any.
         # schedule for application next time we get a callback
         self._new_frame_time = float(t) / self._speed
 
-    def add (self, name, indices=None, frame_time=None):
+    def add (self, name, *indices, **kwargs):
         """Add a sequence to :attr:`sequences` to play back later.
 
-add(name, indices=None[, frame_time]) -> self
+add(name, *indices[, frame_time]) -> self
 
 :arg name: the name to give the sequence (any hashable object).  If a sequence
            with this name already exists, it is overwritten; if it is currently
            playing or queued, it is stopped/unqueued.
-:arg indices: sequence of indices in :attr:`graphics`, defining the sequence of
-              frames, or ``None`` for all frames in order.
+:arg indices: any number of indices in :attr:`graphics`, defining the sequence
+              of frames, or pass none for all frames in order.
 :arg frame_time: a default for the time between animation frames in seconds
                  whenever this sequence is played.  If not given, a value must
                  be defined either through the constructor or each time the
                  sequence is played.
 
 """
-        if indices is None:
+        if not indices:
             indices = range(len(self.graphics))
         if not indices:
             raise ValueError('a sequence must contain at least one frame')
         self.unqueue(name)
         if name == self.playing:
             self.stop()
-        self.sequences[name] = (indices, frame_time)
+        self.sequences[name] = (indices, kwargs.get('frame_time'))
         return self
 
     def add_multi (self, sequences):
@@ -434,7 +440,7 @@ add_multi(sequences) -> self
                 # got indices
                 indices = data
                 frame_time = None
-            self.add(name, *data)
+            self.add(name, *indices, frame_time=frame_time)
         return self
 
     def rm (self, *names):
@@ -634,8 +640,8 @@ class Tilemap (Graphic):
     """A finite, flat grid of tiles
 (:class:`Graphic <engine.gfx.graphic.Graphic>` subclass).
 
-Tilemap(grid, tile_data, tile_types, pos=(0, 0), layer=0[, translate_type],
-        cache_tile_data=False, pool=conf.DEFAULT_RESOURCE_POOL,
+Tilemap(grid, tile_data[, tile_types], pos=(0, 0), layer=0[, translate_type],
+        cache_graphic=False, pool=conf.DEFAULT_RESOURCE_POOL,
         res_mgr=conf.GAME.resources)
 
 :arg grid: a :class:`util.Grid <engine.util.Grid>` defining the size and shape
@@ -668,15 +674,17 @@ Tilemap(grid, tile_data, tile_types, pos=(0, 0), layer=0[, translate_type],
           the grid, in tiles.
 
 :arg tile_types: a ``tile_type_id -> tile_graphic`` mapping---either a function
-    or an object that supports indexing.  ``tile_type_id`` is the tile type ID
-    obtained from the ``tile_data`` argument.  ``tile_graphic`` determines how
-    the tile should be drawn; it may be:
+    or an object that supports indexing.  If not given, the identity function
+    is used.  ``tile_type_id`` is the tile type ID obtained from the
+    ``tile_data`` argument.  ``tile_graphic`` determines how the tile should be
+    drawn; it may be:
 
         - ``None`` for an an empty (transparent) tile;
         - a colour (as taken by :func:`engine.util.normalise_colour`) to fill
           with;
-        - a :class:`Graphic <engine.gfx.graphic.Graphic>` or Pygame surface to
-          copy aligned to the centre of the tile, clipped to fit; or
+        - a :class:`Graphic <engine.gfx.graphic.Graphic>`, Pygame surface or
+          filename to load from, to copy aligned to the centre of the tile,
+          clipped to fit; or
         - ``(graphic, alignment=0, rect=graphic_rect)`` with ``alignment`` or
           ``rect`` in any order or omitted, and ``graphic`` as in the above
           form.  ``alignment`` is as taken by :func:`engine.util.align_rect`,
@@ -704,10 +712,12 @@ each tile type never changes.
 
 """
 
-    def __init__ (self, grid, tile_data, tile_types, pos=(0, 0), layer=0,
+    def __init__ (self, grid, tile_data, tile_types=None, pos=(0, 0), layer=0,
                   translate_type=None, cache_graphic=False,
                   pool=conf.DEFAULT_RESOURCE_POOL, res_mgr=None):
-        if not callable(tile_types):
+        if tile_types is None:
+            tile_types = lambda g: g
+        elif not callable(tile_types):
             types = tile_types
             tile_types = lambda tile_type_id: types[tile_type_id]
         self._type_to_graphic = tile_types
@@ -723,16 +733,16 @@ each tile type never changes.
         self._tile_data, ncols, nrows = self._parse_data(tile_data, grid,
                                                          False)
         if not isinstance(grid, gameutil.Grid):
-            grid = gameutil.Grid(ncols * nrows, grid)
+            grid = gameutil.Grid((ncols, nrows), grid)
         #: The :class:`util.Grid <engine.util.Grid>` covered.
         self.grid = grid
         # apply initial data
         Graphic.__init__(self, gameutil.blank_sfc(grid.size), pos, layer, pool,
                          res_mgr)
         update = self._update
-        for i, col in enumerate(self._tile_data):
-            for j, tile_type_id in enumerate(col):
-                update(i, j, tile_type_id)
+        tile_data = self._tile_data
+        for col, row, tile_rect in grid.tile_rects(True):
+            update(col, row, tile_data[col][row], tile_rect)
 
     def _parse_data (self, tile_data, grid, force_load):
         # parse tile data
@@ -791,7 +801,7 @@ each tile type never changes.
                      for col in tile_data]
         return (tile_data, ncols, nrows)
 
-    def _update (self, col, row, tile_type_id):
+    def _update (self, col, row, tile_type_id, tile_rect=None):
         if self._cache_graphic:
             if tile_type_id in self._cache:
                 g = self._cache[tile_type_id]
@@ -801,12 +811,16 @@ each tile type never changes.
         else:
             g = self._type_to_graphic(tile_type_id)
         dest = self._orig_sfc
-        tile_rect = self.grid.tile_rect(col, row)
-        if isinstance(g, (Graphic, pg.Surface)):
+        if tile_rect is None:
+            tile_rect = self.grid.tile_rect(col, row)
+        if isinstance(g, (Graphic, pg.Surface, basestring)):
             g = (g,)
-        if isinstance(g[0], (Graphic, pg.Surface)):
+        if (g is not None and
+            isinstance(g[0], (Graphic, pg.Surface, basestring))):
             sfc = g[0]
-            if isinstance(sfc, Graphic):
+            if isinstance(sfc, basestring):
+                sfc = self._load_img(sfc)
+            elif isinstance(sfc, Graphic):
                 sfc = sfc.surface
             if len(g) == 1:
                 alignment = rect = None
@@ -892,8 +906,9 @@ Grid(grid, gap_colour='aaa', bg_colour='0000', pos=(0, 0), layer=0)
                                    else sfc.convert())
         # fill with gaps and add in tiles
         sfc.fill(gap_colour)
-        for rect in grid.tile_rects():
-            sfc.fill(bg_colour, rect)
+        if bg_colour != gap_colour:
+            for rect in grid.tile_rects():
+                sfc.fill(bg_colour, rect)
         Graphic.__init__(self, sfc, pos, layer)
 
 
@@ -939,9 +954,10 @@ InfiniteGrid(grid, rect, gap_colour='aaa', bg_colour='0000', pos=(0, 0),
         # draw tiles on the given surface
         ir = gameutil.ir
         c = self._bg_colour
-        offset = (-self._view_rect.x, -self._view_rect.y)
-        for r in self.grid.tile_rects(self._view_rect):
-            sfc.fill(c, Rect([ir(x) for x in r]).move(offset))
+        if c != self._gap_colour:
+            offset = (-self._view_rect.x, -self._view_rect.y)
+            for r in self.grid.tile_rects(self._view_rect):
+                sfc.fill(c, Rect([ir(x) for x in r]).move(offset))
 
     def _render_grid (self):
         # draw grid to a surface and set as orig_sfc

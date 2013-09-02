@@ -372,13 +372,13 @@ Button(*items[, initial_delay][, repeat_delay][, dbl_click_time])
             button mode (one of :data:`bmode.DOWN`, :data:`bmode.UP`,
             :data:`bmode.HELD` and :data:`bmode.REPEAT`) or a bitwise-OR of
             button modes.
-:arg initial_delay: keyword-only argument.  If the :data:`bmode.REPEAT` mode is
-                    given, this is the initial delay in seconds before a button
-                    starts repeating while held.
+:arg initial_delay: if the :data:`bmode.REPEAT` mode is given, this is the
+                    initial delay in seconds before a button starts repeating
+                    while held.
 :arg repeat_delay: like initial_delay, the time between repeats in seconds.
-:arg dbl_click_time: keyword-only argument.  If the :data:`bmode.DBLCLICK` mode
-                     is given, this is the maximum delay in seconds between
-                     down events for a double-click event to be registered.
+:arg dbl_click_time: if the :data:`bmode.DBLCLICK` mode is given, this is the
+                     maximum delay in seconds between down events for a
+                     double-click event to be registered.
 
 Callbacks are called with ``{mode: count}`` for each ``mode`` given, where
 ``count`` is the number of occurrences of events corresponding to that mode

@@ -56,6 +56,7 @@ correspond to builtin transforms (see :meth:`transform`).
 
 """
 
+    is_view = False
     _builtin_transforms = ('crop', 'flip', 'tint', 'resize', 'rotate')
 
     def __init__ (self, img, pos=(0, 0), layer=0,
@@ -535,7 +536,7 @@ All arguments are as taken by :func:`engine.util.align_rect`.
                 raise TypeError('received no \'within\' argument and manager '
                                 'has no \'orig_size\' attribute')
             within = Rect((0, 0), self._manager.orig_size)
-        self.pos = align_rect(self._react, within, alignment, pad, offset)
+        self.pos = align_rect(self._rect, within, alignment, pad, offset)
         return self
 
     # transform
@@ -727,16 +728,15 @@ transform(transform_fn, *args[, position][, before][, after]) -> self
                    transform such as ``'resize'`` (see class documentation).
 :arg args: passed to the transformation function as positional arguments, after
            compulsory arguments.
-:arg position: a keyword-only argument giving the index in :attr:`transforms`
-               to insert this transform at.  If not given, the transform is
-               appended to the end if new (not in transforms already), else
-               left where it is.
-:arg before: (keyword-only) if ``position`` is not given, this gives the
-             transform function (as in :attr:`transforms`) to insert this
-             transform before.  If ``before`` is not in :attr:`transforms`, the
-             transform is put at the end.
-:arg after: (keyword-only) if ``position`` and ``before`` are not given, insert
-            after this transform function, or at the end if it doesn't exist.
+:arg position: the index in :attr:`transforms` to insert this transform at.  If
+               not given, the transform is appended to the end if new (not in
+               transforms already), else left where it is.
+:arg before: if ``position`` is not given, this gives the transform function
+             (as in :attr:`transforms`) to insert this transform before.  If
+             ``before`` is not in :attr:`transforms`, the transform is put at
+             the end.
+:arg after: if ``position`` and ``before`` are not given, insert after this
+            transform function, or at the end if it doesn't exist.
 
 Builtin transforms should not be moved after rotation (``'rotate'``); behaviour
 in this case is undefined.
@@ -1304,6 +1304,56 @@ state*.
             setattr(g, attr, getattr(self, attr))
         return g
 
+    def view (self):
+        parent_cls = type(self)
+
+        class GraphicView (parent_cls):
+            """'View' to a :class:`Graphic` (:class:`Graphic` subclass).
+
+GraphicView(graphic)
+
+:arg graphic: the :class:`Graphic` (or subclass) instance to provide a wrapper
+            for.
+
+This is a wrapper around a graphic that allows assigning a different position
+and visibility (:attr:`Graphic.visible`, :attr:`Graphic.layer`, etc.) without
+affecting the original graphic (or any other wrappers).
+
+Changes to the image represented by either the wrapper or the original graphic
+affect both instances.  This includes both transformations and changes to the
+original surface.
+
+``graphic``'s class may not define a ``child`` property.
+
+"""
+
+            is_view = True
+            _faked_attrs = ('_rect', 'last_rect', '_postrot_rect',
+                            '_last_postrot_rect', '_manager', 'visible',
+                            'was_visible', '_layer')
+
+            def __init__ (self, graphic):
+                #: The ``graphic`` argument taken by the constructor.
+                self.child = graphic
+                for attr in self._faked_attrs:
+                    setattr(self, attr, getattr(graphic, attr))
+                self._manager = None
+
+            def __getattr__ (self, attr):
+                # existing attributes are returned without a call here
+                return getattr(self.child, attr)
+
+            def __setattr__ (self, attr, val):
+                # set on this instance if this is an outer attribute or a
+                # property, else set on the contained graphic
+                if (attr == 'child' or attr in self._faked_attrs or
+                    hasattr(type(self.child), attr)):
+                    parent_cls.__setattr__(self, attr, val)
+                else:
+                    setattr(self.child, attr, val)
+
+        return GraphicView(self)
+
     def dirty (self, *rects):
         """Mark some or all of the graphic as changed.
 
@@ -1463,45 +1513,3 @@ Should never alter any state that is not internal to the graphic.
             blit(sfc, r, r.move(offset), self.blit_flags)
         self._last_postrot_rect = pr
         self.last_rect = self._rect
-
-
-class GraphicView (Graphic):
-    """'View' to a :class:`Graphic` (:class:`Graphic` subclass).
-
-GraphicView(graphic)
-
-:arg graphic: the :class:`Graphic` to provide a wrapper for.
-
-This is a wrapper around a graphic that allows assigning a different position
-and visibility (:attr:`Graphic.visible`, :attr:`Graphic.layer`) without
-affecting the original graphic (or any other wrappers).
-
-Changes to the image represented by either the wrapper or the original graphic
-affect both instances.  This includes both transformations and changes to the
-original surface.
-
-"""
-
-    _faked_attrs = ('_rect', 'last_rect', '_postrot_rect',
-                    '_last_postrot_rect', '_manager', 'visible', 'was_visible',
-                    '_layer')
-
-    def __init__ (self, graphic):
-        #: As taken by the constructor.
-        self.graphic = graphic
-        for attr in self._faked_attrs:
-            setattr(self, attr, getattr(graphic, attr))
-        self._manager = None
-
-    def __getattr__ (self, attr):
-        # existing attributes are returned without a call here
-        return getattr(self.graphic, attr)
-
-    def __setattr__ (self, attr, val):
-        # set on this instance if this is an outer attribute or a property,
-        # else set on the contained graphic
-        if (attr == 'graphic' or attr in self._faked_attrs or
-            hasattr(Graphic, attr)):
-            Graphic.__setattr__(self, attr, val)
-        else:
-            setattr(self.graphic, attr, val)

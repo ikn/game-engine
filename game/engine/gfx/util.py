@@ -38,8 +38,8 @@ A spritemap provides ``__len__`` and ``__getitem__`` to obtain sprites, and so
 iterating over all sprites is also supported.  Sprites are obtained from top to
 bottom, left to right, in that order, and slices are as follows::
 
-    spritemap[sprite_index] -> (sfc, rect)
-    spritemap[col, row] -> (sfc, rect)
+    spritemap[sprite_index] -> sfc
+    spritemap[col, row] -> sfc
 
 where ``sfc`` is a surface containing the sprite.  (The latter form is an
 implicit ``tuple``, so ``spritemap[(col, row)]`` works as well.)

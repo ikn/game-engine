@@ -132,6 +132,7 @@ This receives the extra arguments passed in constructing the world through the
             self.init(*self._extra_args[0], **self._extra_args[1])
             self._initialised = True
             del self._extra_args
+        self.evthandler.normalise_buttons()
         self.select()
 
     def quit (self):
@@ -149,28 +150,45 @@ to the world.
 An entity may be in only one world at a time.  If a given entity is already in
 another world, it is removed from that world.
 
+Each entity passed may also be a sequence of entities to add.
+
 """
+        entities = list(entities)
         all_entities = self.entities
         for e in entities:
-            all_entities.add(e)
-            if e.world is not None:
-                e.world.rm(e)
-            elif e.graphics.manager is not None:
-                # has no world, so gm was explicitly set, so don't change it
-                continue
-            e.graphics.manager = self.graphics
+            if hasattr(e, '__len__') and hasattr(e, '__getitem__'):
+                entities.extend(e)
+            else:
+                all_entities.add(e)
+                if e.world is not None:
+                    e.world.rm(e)
+                elif e.graphics.manager is not None:
+                    # has no world, so manager was explicitly set, so don't
+                    # change it
+                    pass
+                else:
+                    e.graphics.manager = self.graphics
+                e.world = self
 
     def rm (self, *entities):
         """Remove any number of entities from the world.
 
-Raises ``KeyError`` for missing entities.
+Missing entities are ignored.
+
+Each entity passed may also be a sequence of entities to remove.
 
 """
+        entities = list(entities)
         all_entities = self.entities
         for e in entities:
-            all_entities.remove(e)
-            # unset gm even if it's not this world's main manager
-            e.graphics.manager = None
+            if hasattr(e, '__len__') and hasattr(e, '__getitem__'):
+                entities.extend(e)
+            else:
+                if e in all_entities:
+                    all_entities.remove(e)
+                e.world = None
+                # unset gm even if it's not this world's main manager
+                e.graphics.manager = None
 
     def use_pools (self, *pools):
         """Tell the resource manager that this world is using the given pools.
@@ -347,7 +365,7 @@ should be passed to that base class).
         eh['_game_minimise'].cb(self.minimise)
         eh['_game_fullscreen'].cb(self._toggle_fullscreen)
         # instantiate class
-        world = cls(scheduler, eh, self.resources, *args)
+        world = cls(scheduler, eh, self.resources, *args, **kwargs)
         scheduler.fps = conf.FPS[world.id]
         return world
 
@@ -371,7 +389,6 @@ should be passed to that base class).
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[ident])
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[ident])
         world._select()
-        world.select()
 
     def start_world (self, *args, **kwargs):
         """Store the current world (if any) and switch to a new one.
@@ -524,7 +541,7 @@ play_snd(base_id, volume = 1)
 
     def _toggle_fullscreen (self, *args):
         # callback: keyboard shortcut pressed
-        if self.RESIZABLE:
+        if conf.RESIZABLE:
             self.toggle_fullscreen()
 
     def minimise (self):
