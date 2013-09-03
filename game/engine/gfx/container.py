@@ -42,8 +42,8 @@ Arguments determine the group's position (:attr:`pos`); unlike for graphics,
 this may be floating-point.
 
 This is a ``{graphic: rel}`` mapping, where ``graphic`` is a
-:class:`GraphicView <engine.gfx.graphic.Graphic.view>` instance and ``rel`` is
-the graphic's ``(x, y)`` position relative to this group.  Adding graphics is
+:class:`Graphic <engine.gfx.graphic.Graphic>` instance and ``rel`` is the
+graphic's ``(x, y)`` position relative to this group.  Adding graphics is
 possible with something like ``group[graphic] = rel`` (instead of using
 :meth:`add`).
 
@@ -174,16 +174,15 @@ number of arguments which are ``(graphic, dx=0, dy=0)`` tuples or just
               :class:`Graphic <engine.gfx.graphic.Graphic>` to create one.
 :arg dx,dy: position relative to the group.
 
-:return: a list of created
-         :class:`GraphicView <engine.gfx.graphic.Graphic.view>` instances that
-         point to the given ``graphic`` arguments.
+:return: a list of added :class:`Graphic <engine.gfx.graphic.Graphic>`
+         instances (possibly created in this call), in the order given.
 
-If any ``graphic`` was previously returned by this function, this call changes
-its relative position (and unspecified ``dx`` and ``dy`` are unchanged, rather
-than set to ``0``).
+If any ``graphic`` is already in the group, this call changes its relative
+position (and unspecified ``dx`` and ``dy`` are unchanged, rather than set to
+``0``).
 
-Note that graphics need not be added to a :class:`GraphicsManager`---set this
-using :attr:`manager`.
+Note that graphics need not be added to a :class:`GraphicsManager` individually
+---set this using :attr:`manager`.
 
 """
         if len(graphics) >= 2 and isinstance(graphics[1], (int, float)):
@@ -200,9 +199,14 @@ using :attr:`manager`.
             if len(graphic) < 3:
                 graphic.append(None)
             graphic, dx, dy = graphic
+
+            if not isinstance(graphic, Graphic):
+                graphic = Graphic(graphic, pos)
+            if self._manager is not None:
+                self._manager.add(graphic)
+
             # determine new position for the graphic
-            got = graphic in self._graphics
-            if got:
+            if graphic in self._graphics:
                 if dx is None:
                     dx = self._graphics[graphic][0]
                 if dy is None:
@@ -214,18 +218,7 @@ using :attr:`manager`.
                     dy = 0
             rel = (ir(dx), ir(dy))
             pos = (ir(self._pos[0]) + rel[0], ir(self._pos[1]) + rel[1])
-            # create/wrap graphic
-            if not isinstance(graphic, Graphic):
-                graphic = Graphic(graphic, pos)
-            if not got:
-                # new graphic: create wrapper and add to graphics manager
-                if graphic.is_view:
-                    graphic = graphic.graphic
-                graphic = graphic.view()
-                if self._manager is not None:
-                    self._manager.add(graphic)
-            # else already in graphics, in which case we still want to change its
-            # relative position
+
             self._graphics[graphic] = rel
             graphic.pos = pos
             rtn.append(graphic)
