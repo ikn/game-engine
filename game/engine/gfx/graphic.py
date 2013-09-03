@@ -1334,6 +1334,8 @@ original surface.
 
             def __init__ (self, graphic):
                 #: The ``graphic`` argument taken by the constructor.
+                while graphic.is_view:
+                    graphic = graphic.child
                 self.child = graphic
                 for attr in self._faked_attrs:
                     setattr(self, attr, getattr(graphic, attr))
