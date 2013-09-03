@@ -169,6 +169,7 @@ Each entity passed may also be a sequence of entities to add.
                 else:
                     e.graphics.manager = self.graphics
                 e.world = self
+                e.added()
 
     def rm (self, *entities):
         """Remove any number of entities from the world.
