@@ -3,7 +3,6 @@
 ---NODOC---
 
 TODO:
- - GM can take GM to copy its args
  - make it possible for GM to have transparent BG (only if orig_sfc has alpha)
  - GG:
     - allow for transforms

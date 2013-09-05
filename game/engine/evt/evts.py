@@ -106,8 +106,7 @@ arguments, it is not passed any.
 """
         all_cbs = self.cbs
         for cb in cbs:
-            if cb not in all_cbs:
-                all_cbs[cb] = wrap_fn(cb)
+            all_cbs[cb] = wrap_fn(cb)
         return self
 
     def rm_cbs (self, *cbs):

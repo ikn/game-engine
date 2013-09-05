@@ -771,3 +771,110 @@ interp_simple(obj, attr, target, t[, end_cb], round_val = False) -> timeout_id
         get_val = interp_linear(getattr(obj, attr), (target, t))
         return self.interp(get_val, (obj, attr), end = end_cb,
                            round_val = round_val)
+
+    def counter (self, t, autoreset=False):
+        """Create and return a :class:`Counter` that uses this instance for
+timing.
+
+counter(t, autoreset=False) -> new_counter
+
+Arguments are as taken by :class:`Counter`.
+
+"""
+        return Counter(self, t, autoreset)
+
+
+class Counter (object):
+    """A simple way of counting down to an event.
+
+Counter(scheduler, t, autoreset=False)
+
+:arg scheduler: :class:`Scheduler` instance to use for timing.
+:arg t: how long a countdown lasts, in seconds.
+:arg autoreset: whether to reset and count down from the beginning again when
+                the countdown ends.  This is only useful with :attr:`cbs` (the
+                finished state never becomes ``True``).
+
+When initialised, the countdown starts immediately.
+
+An instance is boolean ``True`` if the countdown has finished, else ``False``.
+
+See also :meth:`Scheduler.counter`.
+
+"""
+
+    def __init__ (self, scheduler, t, autoreset=False):
+        self._scheduler = scheduler
+        self._t = t
+        #: As passed to the constructor.
+        self.autoreset = autoreset
+        #: ``set`` of functions to call when the countdown ends.
+        self.cbs = set()
+        self._timer_id = None
+        self._finished = False
+        self.reset()
+
+    @property
+    def t (self):
+        """How long a countdown lasts, in seconds.
+
+Changing this resets the countdown (if running).
+
+"""
+        return self._t
+
+    @t.setter
+    def t (self, t):
+        self._t = t
+        if self._timer_id is not None:
+            self.reset()
+
+    def __nonzero__ (self):
+        return self._finished
+
+    def _end_cb (self):
+        # called when the timeout ends
+        if not self.autoreset:
+            self._timer_id = None
+            self._finished = True
+        for cb in self.cbs:
+            cb()
+        return self.autoreset
+
+    def reset (self):
+        """Start counting down from the beginning again.
+
+Starts counting down even if the countdown wasn't already running.
+
+"""
+        self.cancel()
+        self._timer_id = self._scheduler.add_timeout(self._end_cb, self.t)
+
+    def cancel (self):
+        """Stop counting down and set the finished state to ``False``."""
+        if self._timer_id is not None:
+            self._scheduler.rm_timeout(self._timer_id)
+            self._timer_id = None
+            self._finished = False
+
+    def cb (self, *cbs):
+        """Add any number of callbacks to :attr:`cbs`.
+
+cb(*cbs) -> self
+
+Callbacks take no arguments.
+
+"""
+        self.cbs.update(cbs)
+        return self
+
+    def rm_cbs (self, *cbs):
+        """Remove any number of callbacks from :attr:`cbs`.
+
+rm_cbs(*cbs) -> self
+
+Missing items are ignored.
+
+"""
+        self.cbs.difference_update(cbs)
+        return self
