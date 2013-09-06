@@ -272,7 +272,27 @@ world drops the pool.
             self.resources.drop(pool, self)
 
     @property
-    def volume (self):
+    def music_volume (self):
+        """The world's music volume.
+
+This is actually :data:`conf.MUSIC_VOLUME`, and changing it alters that value,
+and also changes the volume of currently playing music.
+
+"""
+        return conf.MUSIC_VOLUME[self.id]
+
+    @music_volume.setter
+    def music_volume (self, volume):
+        i = self.id
+        if volume > 1:
+            print >> sys.stderr, 'warning: music volume greater than 1'
+        if volume != conf.MUSIC_VOLUME[i]:
+            conf.MUSIC_VOLUME[self.id] = volume
+            conf.changed('MUSIC_VOLUME')
+            pg.mixer.music.set_volume(volume)
+
+    @property
+    def snd_volume (self):
         """The world's base sound volume.
 
 This is actually :data:`conf.SOUND_VOLUME`, and changing it alters that value,
@@ -281,8 +301,8 @@ and also changes the volume of currently playing sounds.
 """
         return conf.SOUND_VOLUME[self.id]
 
-    @volume.setter
-    def volume (self, volume):
+    @snd_volume.setter
+    def snd_volume (self, volume):
         i = self.id
         if volume != conf.SOUND_VOLUME[i]:
             conf.SOUND_VOLUME[i] = volume
@@ -412,16 +432,20 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         self.text_renderers = {}
 
         self._init_cbs()
-        # start first world
-        self.start_world(*args, **kwargs)
-        # start playing music
+        # set up music
         pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
         #: Filenames for known music.
-        self.music = []
-        self.find_music()
-        self.play_music()
-        if not conf.MUSIC_AUTOPLAY:
-            pg.mixer.music.pause()
+        self._music = []
+        d = conf.MUSIC_DIR
+        try:
+            files = os.listdir(d)
+        except OSError:
+            # no directory
+            self._music = []
+        else:
+            self._music = [d + f for f in files if os.path.isfile(d + f)]
+        # start first world
+        self.start_world(*args, **kwargs)
 
     def _init_cbs (self):
         # set up settings callbacks
@@ -499,6 +523,10 @@ should be passed to that base class).
             self.text_renderers[name] = r
         pg.event.set_grab(conf.GRAB_EVENTS[ident])
         pg.mouse.set_visible(conf.MOUSE_VISIBLE[ident])
+        if conf.MUSIC_AUTOPLAY[ident]:
+            self.play_music()
+        else:
+            pg.mixer.music.stop()
         pg.mixer.music.set_volume(conf.MUSIC_VOLUME[ident])
         world._select()
 
@@ -578,26 +606,12 @@ If this quits the last (root) world, exit the game.
         self.resources.use(new_pool, self)
         self._using_pool = new_pool
 
-    def find_music (self):
-        """Store a list of the available music files in :attr:`music`."""
-        d = conf.MUSIC_DIR
-        try:
-            files = os.listdir(d)
-        except OSError:
-            # no directory
-            self.music = []
-        else:
-            self.music = [d + f for f in files if os.path.isfile(d + f)]
-
     def play_music (self):
         """Play the next piece of music, chosen randomly from :attr:`music`."""
-        if self.music:
-            f = choice(self.music)
+        if self._music:
+            f = choice(self._music)
             pg.mixer.music.load(f)
             pg.mixer.music.play()
-        else:
-            # stop currently playing music if there's no music to play
-            pg.mixer.music.stop()
 
     # display
 

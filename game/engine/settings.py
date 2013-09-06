@@ -192,7 +192,7 @@ properly.
 """
         if settings:
             for k in settings:
-                self._call_after_cbs(k, self._settings[v])
+                self._call_after_cbs(k, self._settings[k])
             self.dump()
 
     def on_change (self, setting, after_cb=None, before_cb=None, source=None):

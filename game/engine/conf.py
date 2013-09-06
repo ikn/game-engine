@@ -78,7 +78,7 @@ button _game_fullscreen DOWN
 '''
 
     # audio
-    MUSIC_AUTOPLAY = dd(False) # just pauses music; per-world
+    MUSIC_AUTOPLAY = dd(False) # False just pauses music; per-world
     MUSIC_VOLUME = dd(.5) # per-world
     SOUND_VOLUME = dd(.5) # per-world
     EVENT_ENDMUSIC = pg.USEREVENT
