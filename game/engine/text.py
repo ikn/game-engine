@@ -82,8 +82,8 @@ TextRenderer(font, options={}, pool=conf.DEFAULT_RESOURCE_POOL,
             resources = conf.GAME.resources
         else:
             resources = self._resource_manager
-        return resources.pgfont(self._font, opts['text_size'],
-                                pool=self._resource_pool)
+        return resources.font(self._font, opts['text_size'],
+                              pool=self._resource_pool)
 
     def render (self, text, options={}, **kwargs):
         """Render text to a surface.

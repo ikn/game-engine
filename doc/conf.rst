@@ -30,8 +30,8 @@ Timing
 .. data:: FPS
 
    Frames per second to aim for, as a
-   ``{`` :attr:`game.World.id <engine.game.World.id>` ``: fps}``
-   defaultdict, with a default value of ``60``.
+   ``{`` :attr:`World.id <engine.game.World.id>` ``: fps}`` defaultdict, with
+   default value ``60``.
 
 .. data:: DROP_FRAMES
    :annotation: = True
@@ -42,8 +42,8 @@ Timing
 .. data:: MIN_FPS
 
    If :data:`DROP_FRAMES` is ``True``, this gives the minimum frames per second
-   allowed, as a ``{`` :attr:`game.World.id <engine.game.World.id>` ``: fps}``
-   defaultdict, with a default value of ``25``.  (That is, frames are not
+   allowed, as a ``{`` :attr:`World.id <engine.game.World.id>` ``: fps}``
+   defaultdict, with default value ``25``.  (That is, frames are not
    dropped if the real draw rate would fall below this number.)
 
 .. data:: FPS_AVERAGE_RATIO
@@ -101,8 +101,8 @@ Display
 .. data:: MOUSE_VISIBLE
 
    Whether the mouse is visible when inside the game window.  This is a
-   ``{`` :attr:`game.World.id <engine.game.World.id>` ``: visible}``
-   defaultdict, defaulting to ``False``.
+   ``{`` :attr:`World.id <engine.game.World.id>` ``: visible}`` defaultdict,
+   with default value ``False``.
 
 .. data:: FLAGS
    :annotation: = 0
@@ -153,8 +153,8 @@ Input
 
    Whether to grab all input events (in which case operating system and window
    manager shortcuts like alt-tab will not work).  This is a
-   ``{`` :attr:`game.World.id <engine.game.World.id>` ``: grab}`` defaultdict,
-   defaulting to ``False``.
+   ``{`` :attr:`World.id <engine.game.World.id>` ``: grab}`` defaultdict, with
+   default value ``False``.
 
 .. data:: GAME_EVENTS
 
@@ -164,17 +164,20 @@ Audio
 -----
 
 .. data:: MUSIC_AUTOPLAY
-   :annotation: = False
 
-   If ``False``, music is loaded, but initially paused.
+   If ``False``, music is loaded, but initially paused.  This is a
+   ``{`` :attr:`World.id <engine.game.World.id>` ``: volume}`` defaultdict,
+   with default value ``False``.
 
 .. data:: MUSIC_VOLUME
 
-   ``{`` :attr:`game.World.id <engine.game.World.id>` ``: volume}``
-   defaultdict, with default value ``0.5``.
+   ``{`` :attr:`World.id <engine.game.World.id>` ``: volume}`` defaultdict,
+   with default value ``0.5``.
 
 .. data:: SOUND_VOLUME
-   :annotation: = 0.5
+
+   ``{`` :attr:`World.id <engine.game.World.id>` ``: volume}`` defaultdict,
+   with default value ``0.5``.
 
 .. data:: SOUND_VOLUMES
 
@@ -201,6 +204,6 @@ Resources
 .. data:: REQUIRED_FONTS
 
    Fonts to automatically load as a
-   ``{`` :attr:`game.World.id <engine.game.World.id>` ``: fonts}`` defaultdict,
+   ``{`` :attr:`World.id <engine.game.World.id>` ``: fonts}`` defaultdict,
    where ``fonts`` is a ``{name: (filename, size)}`` dict giving fonts to load
    into the default resource pool.

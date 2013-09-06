@@ -2,10 +2,11 @@
 
 Only one :class:`Game` instance should ever exist, and it stores itself in
 :data:`conf.GAME`.  Start the game with :func:`run` and use the :class:`Game`
-instance for changing worlds, handling the display and playing audio.
+instance for changing worlds and handling the display.
 
 """
 
+import sys
 import os
 from random import choice, randrange
 
@@ -85,6 +86,8 @@ World(scheduler, evthandler)
 
         self._initialised = False
         self._extra_args = (args, kwargs)
+        # {sound_id: [(sound, vol)]}, vol excluding the world's sound volume
+        self._sounds = {}
         self._avg_draw_time = scheduler.frame
         self._since_last_draw = 0
 
@@ -135,10 +138,72 @@ This receives the extra arguments passed in constructing the world through the
         self.evthandler.normalise_buttons()
         self.select()
 
+    def pause (self):
+        """Called to pause the game when the window loses focus."""
+        pass
+
+    def update (self):
+        """Called every frame to makes any necessary changes."""
+        pass
+
+    def _update (self):
+        """Called by the game to update."""
+        for e in self.entities:
+            e.update()
+        self.update()
+
+    def _handle_slowdown (self):
+        """Return whether to draw this frame."""
+        s = self.scheduler
+        elapsed = s.elapsed
+        if elapsed is None:
+            # haven't completed a frame yet
+            return True
+        frame_t = s.current_frame_time
+        target_t = s.frame
+        # compute rolling frame average for drawing, but don't store it just
+        # yet
+        r = conf.FPS_AVERAGE_RATIO
+        draw_t = ((1 - r) * self._avg_draw_time +
+                  r * (self._since_last_draw + elapsed))
+
+        if frame_t <= target_t or abs(frame_t - target_t) / target_t < .1:
+            # running at (near enough (within 1% of)) full speed, so draw
+            draw = True
+        else:
+            if draw_t >= 1. / conf.MIN_FPS[self.id]:
+                # not drawing would make the draw FPS too low, so draw anyway
+                draw = True
+            else:
+                draw = False
+        draw |= not conf.DROP_FRAMES
+        if draw:
+            # update rolling draw frame average
+            self._avg_draw_time = draw_t
+            self._since_last_draw = 0
+        else:
+            # remember frame time for when we next draw
+            self._since_last_draw += elapsed
+        return draw
+
+    def draw (self):
+        """Draw to the screen.
+
+:return: a flag indicating what changes were made: ``True`` if the whole
+         display needs to be updated, something falsy if nothing needs to be
+         updated, else a list of rects to update the display in.
+
+This method should not change the state of the world, because it is not
+guaranteed to be called every frame.
+
+"""
+        dirty = self.graphics.draw(False)
+        return dirty
+
     def quit (self):
         """Called when this is removed from the currently running worlds.
 
-Called before removal---when the :attr:`Game.world` is still this world.
+Called before removal---when :attr:`Game.world` is still this world.
 
 """
         pass
@@ -206,67 +271,113 @@ world drops the pool.
         for pool in pools:
             self.resources.drop(pool, self)
 
-    def update (self):
-        """Called every frame to makes any necessary changes."""
-        pass
+    @property
+    def volume (self):
+        """The world's base sound volume.
 
-    def _update (self):
-        """Called by the game to update."""
-        for e in self.entities:
-            e.update()
-        self.update()
-
-    def _handle_slowdown (self):
-        """Return whether to draw this frame."""
-        s = self.scheduler
-        elapsed = s.elapsed
-        if elapsed is None:
-            # haven't completed a frame yet
-            return True
-        frame_t = s.current_frame_time
-        target_t = s.frame
-        # compute rolling frame average for drawing, but don't store it just
-        # yet
-        r = conf.FPS_AVERAGE_RATIO
-        draw_t = ((1 - r) * self._avg_draw_time +
-                  r * (self._since_last_draw + elapsed))
-
-        if frame_t <= target_t or abs(frame_t - target_t) / target_t < .1:
-            # running at (near enough (within 1% of)) full speed, so draw
-            draw = True
-        else:
-            if draw_t >= 1. / conf.MIN_FPS[self.id]:
-                # not drawing would make the draw FPS too low, so draw anyway
-                draw = True
-            else:
-                draw = False
-        draw |= not conf.DROP_FRAMES
-        if draw:
-            # update rolling draw frame average
-            self._avg_draw_time = draw_t
-            self._since_last_draw = 0
-        else:
-            # remember frame time for when we next draw
-            self._since_last_draw += elapsed
-        return draw
-
-    def pause (self):
-        """Called to pause the game when the window loses focus."""
-        pass
-
-    def draw (self):
-        """Draw to the screen.
-
-:return: a flag indicating what changes were made: ``True`` if the whole
-         display needs to be updated, something falsy if nothing needs to be
-         updated, else a list of rects to update the display in.
-
-This method should not change the state of the world, because it is not
-guaranteed to be called every frame.
+This is actually :data:`conf.SOUND_VOLUME`, and changing it alters that value,
+and also changes the volume of currently playing sounds.
 
 """
-        dirty = self.graphics.draw(False)
-        return dirty
+        return conf.SOUND_VOLUME[self.id]
+
+    @volume.setter
+    def volume (self, volume):
+        i = self.id
+        if volume != conf.SOUND_VOLUME[i]:
+            conf.SOUND_VOLUME[i] = volume
+            conf.changed('SOUND_VOLUME')
+            # reset playing sound volumes
+            for base_id, snds in self._sounds.iteritems():
+                for snd, vol in snds:
+                    # vol excludes the world's volume
+                    vol *= volume
+                    if vol > 1:
+                        print >> sys.stderr, ('warning: sound volume greater '
+                                              'than 1')
+                    snd.set_volume(volume * vol)
+
+    def play_snd (self, base_id, volume=1):
+        """Play a sound.
+
+play_snd(base_id, volume=1)
+
+:arg base_id: the identifier of the sound to play (we look for ``base_id + i``
+              for a number ``i``---there are as many sounds as set in
+              :data:`conf.SOUNDS`).
+:arg volume: amount to scale the playback volume by.
+
+"""
+        volume *= conf.SOUND_VOLUMES[base_id]
+        # load sound, and make a copy so we can play/stop instances separately
+        ident = randrange(conf.SOUNDS[base_id])
+        snd = self.resources.snd(base_id + str(ident) + '.ogg')
+        snd = pg.mixer.Sound(snd.get_buffer())
+        # store sound, and stop oldest if necessary
+        mx = conf.MAX_SOUNDS[base_id]
+        if mx is not None:
+            playing = self._sounds.setdefault(base_id, [])
+            assert len(playing) <= mx
+            if len(playing) == mx:
+                playing.pop(0).stop()
+            playing.append((snd, volume))
+        # play
+        volume *= conf.SOUND_VOLUME[self.id]
+        if volume > 1:
+            print >> sys.stderr, 'warning: sound volume greater than 1'
+        snd.set_volume(volume)
+        snd.play()
+
+    def _get_playing_snds (self):
+        # get {sound: channel} for all playing sounds
+        C = pg.mixer.Channel
+        snds = {}
+        for i in xrange(pg.mixer.get_num_channels()):
+            c = C(i)
+            s = c.get_sound()
+            if s is not None:
+                snds[s] = c
+
+    def _with_channels (self, method, *base_ids):
+        # call a method on matching sounds' channels
+        # avoids code duplication in .*pause_snds()
+        playing = self._get_playing_snds()
+        all_snds = self._sounds
+        if not base_ids:
+            base_ids = self._sounds.keys()
+        for base_id in base_ids:
+            for snd, vol in all_snds[base_id]:
+                if snd in playing:
+                    getattr(playing[snd], method)()
+
+    def pause_snds (self, *base_ids):
+        """Pause sounds with the given IDs, else pause all sounds.
+
+:arg base_ids: any number of ``base_id``s as taken by :meth:`play_snd`.
+
+"""
+        self._with_channels('pause', *base_ids)
+
+    def unpause_snds (self, *base_ids):
+        """Unpause sounds with the given IDs, else unpause all sounds.
+
+:arg base_ids: any number of ``base_id``s as taken by :meth:`play_snd`.
+
+"""
+        self._with_channels('unpause', *base_ids)
+
+    def stop_snds (self, *base_ids):
+        """Stop all playing sounds with the given IDs, else stop all sounds.
+
+:arg base_ids: any number of ``base_id``s as taken by :meth:`play_snd`.
+
+"""
+        all_snds = self._sounds
+        if not base_ids:
+            base_ids = self._sounds.keys()
+        for base_id in base_ids:
+            for snd, vol in all_snds.pop(base_id, ()):
+                snd.stop()
 
 
 class Game (object):
@@ -466,28 +577,6 @@ If this quits the last (root) world, exit the game.
         self.resources.drop(self._using_pool, self)
         self.resources.use(new_pool, self)
         self._using_pool = new_pool
-
-    def play_snd (self, base_id, volume = 1):
-        """Play a sound.
-
-play_snd(base_id, volume = 1)
-
-:arg base_id: the identifier of the sound to play (we look for ``base_id + i``
-              for a number ``i``---there are as many sounds as set in
-              :data:`conf.SOUNDS`).
-:arg volume: amount to scale the playback volume by.
-
-"""
-        ident = randrange(conf.SOUNDS[base_id])
-        # load sound
-        snd = conf.SOUND_DIR + base_id + str(ident) + '.ogg'
-        snd = pg.mixer.Sound(snd)
-        if snd.get_length() < 10 ** -3:
-            # no way this is valid
-            return
-        volume *= conf.SOUND_VOLUME * conf.SOUND_VOLUMES[base_id]
-        snd.set_volume(volume)
-        snd.play()
 
     def find_music (self):
         """Store a list of the available music files in :attr:`music`."""

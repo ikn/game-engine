@@ -17,6 +17,10 @@ from .conf import conf
 from .util import convert_sfc, normalise_colour
 
 
+def _identity_keys (arg):
+    yield arg
+
+
 def _unit_measure (resource):
     return 1
 
@@ -24,22 +28,18 @@ def _unit_measure (resource):
 def load_img (fn):
     """:class:`ResourceManager` loader for images (``'img'``).
 
-Takes the filename to load from, under :attr:`conf.IMG_DIR`.
+Takes the filename to load from, under :data:`conf.IMG_DIR`.
 
 """
     return convert_sfc(pg.image.load(conf.IMG_DIR + fn))
-
-
-def _mk_img_keys (fn):
-    yield fn
 
 
 def _measure_img (sfc):
     return sfc.get_bytesize() * sfc.get_width() * sfc.get_height()
 
 
-def load_pgfont (fn, size):
-    """:class:`ResourceManager` loader for Pygame fonts (``'pgfont'``).
+def load_font (fn, size):
+    """:class:`ResourceManager` loader for Pygame fonts (``'font'``).
 
 mk_font_keys(fn, size)
 
@@ -50,7 +50,7 @@ mk_font_keys(fn, size)
     return pg.font.Font(conf.FONT_DIR + fn, size)
 
 
-def _mk_pgfont_keys (fn, size):
+def _mk_font_keys (fn, size):
     yield (fn, int(size))
 
 
@@ -93,6 +93,23 @@ def _measure_text (text):
     return _measure_img(text[0])
 
 
+def load_snd (snd):
+    """:class:`ResourceManager` loader for rendering sounds (``'snd'``).
+
+load_snd(snd) -> new_sound
+
+:arg snd: sound filename under :data:`conf.SOUND_DIR` to load.
+
+:return: ``pygame.mixer.Sound`` object.
+
+"""
+    return pg.mixer.Sound(conf.SOUND_DIR + snd)
+
+
+def _measure_snd (snd):
+    return snd.get_length()
+
+
 class ResourceManager (object):
     """Manage the loading and caching of resources.
 
@@ -111,9 +128,10 @@ in this module.
     def __init__ (self):
         # {name: (load, mk_keys, measure)}
         self._loaders = {
-            'img': (load_img, _mk_img_keys, _measure_img),
-            'pgfont': (load_pgfont, _mk_pgfont_keys, _unit_measure),
-            'text': (load_text, _mk_text_keys, _measure_text)
+            'img': (load_img, _identity_keys, _measure_img),
+            'font': (load_font, _mk_font_keys, _unit_measure),
+            'text': (load_text, _mk_text_keys, _measure_text),
+            'snd': (load_snd, _identity_keys, _measure_snd)
         }
         # {name: (cache, users)}, where cache is {loader: {cache_key: data}}
         # and users is a set

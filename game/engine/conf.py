@@ -16,9 +16,9 @@ class Conf (object):
     GAME = None
     IDENT = 'game'
     DEBUG = False
-    FPS = dd(60) # per-backend
+    FPS = dd(60) # per-world
     DROP_FRAMES = True
-    MIN_FPS = dd(25) # per-backend
+    MIN_FPS = dd(25) # per-world
     FPS_AVERAGE_RATIO = .3
 
     # paths
@@ -53,7 +53,7 @@ class Conf (object):
     # display
     WINDOW_TITLE = ''
     WINDOW_ICON = None
-    MOUSE_VISIBLE = dd(False) # per-backend
+    MOUSE_VISIBLE = dd(False) # per-world
     FLAGS = 0
     FULLSCREEN = False
     RESIZABLE = False # also determines whether fullscreen togglable
@@ -78,9 +78,9 @@ button _game_fullscreen DOWN
 '''
 
     # audio
-    MUSIC_AUTOPLAY = False # just pauses music
-    MUSIC_VOLUME = dd(.5) # per-backend
-    SOUND_VOLUME = .5
+    MUSIC_AUTOPLAY = dd(False) # just pauses music; per-world
+    MUSIC_VOLUME = dd(.5) # per-world
+    SOUND_VOLUME = dd(.5) # per-world
     EVENT_ENDMUSIC = pg.USEREVENT
     SOUND_VOLUMES = dd(1)
     # generate SOUNDS = {ID: num_sounds}
@@ -99,7 +99,7 @@ button _game_fullscreen DOWN
 
     # resources
     DEFAULT_RESOURCE_POOL = 'global'
-    # per-backend, each {name: renderer}, where renderer is TextRenderer,
+    # per-world, each {name: renderer}, where renderer is TextRenderer,
     # (font_filename, options) or just font_filename
     TEXT_RENDERERS = dd({'main': 'Ubuntu-R.ttf'})
 
