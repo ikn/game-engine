@@ -844,18 +844,36 @@ Changing this resets the countdown (if running).
     def reset (self):
         """Start counting down from the beginning again.
 
+reset() -> self
+
 Starts counting down even if the countdown wasn't already running.
 
 """
         self.cancel()
         self._timer_id = self._scheduler.add_timeout(self._end_cb, self.t)
+        return self
 
     def cancel (self):
-        """Stop counting down and set the finished state to ``False``."""
+        """Stop counting down and set the finished state to ``False``.
+
+cancel() -> self
+
+"""
         if self._timer_id is not None:
             self._scheduler.rm_timeout(self._timer_id)
             self._timer_id = None
             self._finished = False
+        return self
+
+    def finish (self):
+        """Stop counting down and set the finished state to ``True``.
+
+finish() -> self
+
+"""
+        self.cancel()
+        self._finished = True
+        return self
 
     def cb (self, *cbs):
         """Add any number of callbacks to :attr:`cbs`.
