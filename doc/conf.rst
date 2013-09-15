@@ -184,6 +184,19 @@ Audio
    ``{sound_id: volume}`` defaultdict, with default value ``1``, for
    ``sound_id`` in :data:`SOUNDS`.
 
+.. data:: MAX_SOUNDS
+   :annotation: = {}
+
+   ``{sound_id: num}`` dict giving limits on the number of simultaneously
+   playing instances of sounds, for ``sound_id`` in :data:`SOUNDS`.
+
+.. data:: SOUND_ALIASES
+   :annotation: = {}
+
+   An ``{alias: sound_id}`` mapping for ``sound_id`` in :data:`SOUNDS` to allow
+   using ``alias`` as a sound base ID when playing a sound, with its own value
+   in :data:`SOUND_VOLUMES`, etc..
+
 .. data:: SOUNDS
 
    Automatically generated ``{sound_id: num_sounds}`` dict for sounds present

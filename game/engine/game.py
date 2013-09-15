@@ -324,22 +324,28 @@ play_snd(base_id, volume=1)
 
 :arg base_id: the identifier of the sound to play (we look for ``base_id + i``
               for a number ``i``---there are as many sounds as set in
-              :data:`conf.SOUNDS`).
+              :data:`conf.SOUNDS`).  If this is not in :data:`conf.SOUNDS`, it
+              is used as the whole filename (without ``'.ogg'``).
 :arg volume: amount to scale the playback volume by.
 
 """
-        volume *= conf.SOUND_VOLUMES[base_id]
+        alias = base_id
+        if base_id in conf.SOUND_ALIASES:
+            base_id = conf.SOUND_ALIASES[base_id]
+        volume *= conf.SOUND_VOLUMES[alias]
+        if base_id in conf.SOUNDS:
+            ident = randrange(conf.SOUNDS[base_id])
+            base_id += str(ident)
+        # else not a random sound
         # load sound, and make a copy so we can play/stop instances separately
-        ident = randrange(conf.SOUNDS[base_id])
-        snd = self.resources.snd(base_id + str(ident) + '.ogg')
+        snd = self.resources.snd(base_id + '.ogg')
         snd = pg.mixer.Sound(snd.get_buffer())
         # store sound, and stop oldest if necessary
-        mx = conf.MAX_SOUNDS[base_id]
-        if mx is not None:
-            playing = self._sounds.setdefault(base_id, [])
-            assert len(playing) <= mx
-            if len(playing) == mx:
-                playing.pop(0).stop()
+        if alias in conf.MAX_SOUNDS:
+            playing = self._sounds.setdefault(alias, [])
+            assert len(playing) <= conf.MAX_SOUNDS[alias]
+            if len(playing) == conf.MAX_SOUNDS[alias] and playing:
+                playing.pop(0)[0].stop()
             playing.append((snd, volume))
         # play
         volume *= conf.SOUND_VOLUME[self.id]
@@ -373,7 +379,8 @@ play_snd(base_id, volume=1)
     def pause_snds (self, *base_ids):
         """Pause sounds with the given IDs, else pause all sounds.
 
-:arg base_ids: any number of ``base_id``s as taken by :meth:`play_snd`.
+:arg base_ids: any number of ``base_id`` arguments as taken by
+               :meth:`play_snd`.
 
 """
         self._with_channels('pause', *base_ids)
@@ -381,7 +388,8 @@ play_snd(base_id, volume=1)
     def unpause_snds (self, *base_ids):
         """Unpause sounds with the given IDs, else unpause all sounds.
 
-:arg base_ids: any number of ``base_id``s as taken by :meth:`play_snd`.
+:arg base_ids: any number of ``base_id`` arguments as taken by
+               :meth:`play_snd`.
 
 """
         self._with_channels('unpause', *base_ids)
@@ -389,7 +397,8 @@ play_snd(base_id, volume=1)
     def stop_snds (self, *base_ids):
         """Stop all playing sounds with the given IDs, else stop all sounds.
 
-:arg base_ids: any number of ``base_id``s as taken by :meth:`play_snd`.
+:arg base_ids: any number of ``base_id`` arguments as taken by
+               :meth:`play_snd`.
 
 """
         all_snds = self._sounds
@@ -434,7 +443,6 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         self._init_cbs()
         # set up music
         pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
-        #: Filenames for known music.
         self._music = []
         d = conf.MUSIC_DIR
         try:
@@ -607,7 +615,8 @@ If this quits the last (root) world, exit the game.
         self._using_pool = new_pool
 
     def play_music (self):
-        """Play the next piece of music, chosen randomly from :attr:`music`."""
+        """Play the next piece of music, chosen randomly from
+:data:`conf.MUSIC_DIR`."""
         if self._music:
             f = choice(self._music)
             pg.mixer.music.load(f)

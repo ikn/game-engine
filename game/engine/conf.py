@@ -83,6 +83,8 @@ button _game_fullscreen DOWN
     SOUND_VOLUME = dd(.5) # per-world
     EVENT_ENDMUSIC = pg.USEREVENT
     SOUND_VOLUMES = dd(1)
+    MAX_SOUNDS = {}
+    SOUND_ALIASES = {}
     # generate SOUNDS = {ID: num_sounds}
     SOUNDS = {}
     ss = glob(join_path(SOUND_DIR, '*.ogg'))
