@@ -399,8 +399,11 @@ play_snd(base_id, volume=1)
     def pause_snds (self, *base_ids, **kwargs):
         """Pause sounds with the given IDs, else pause all sounds.
 
+pause_snds(*base_ids, exclude=False)
+
 :arg base_ids: any number of ``base_id`` arguments as taken by
                :meth:`play_snd`; if none are given, apply to all.
+:arg exclude: if ``True``, apply to all but those in ``base_ids``.
 
 """
         self._with_channels('pause', *base_ids,
@@ -409,8 +412,11 @@ play_snd(base_id, volume=1)
     def unpause_snds (self, *base_ids, **kwargs):
         """Unpause sounds with the given IDs, else unpause all sounds.
 
+unpause_snds(*base_ids, exclude=False)
+
 :arg base_ids: any number of ``base_id`` arguments as taken by
                :meth:`play_snd`; if none are given, apply to all.
+:arg exclude: if ``True``, apply to all but those in ``base_ids``.
 
 """
         self._with_channels('unpause', *base_ids,
@@ -419,8 +425,11 @@ play_snd(base_id, volume=1)
     def stop_snds (self, *base_ids, **kwargs):
         """Stop all playing sounds with the given IDs, else stop all sounds.
 
+stop_snds(*base_ids, exclude=False)
+
 :arg base_ids: any number of ``base_id`` arguments as taken by
                :meth:`play_snd`; if none are given, apply to all.
+:arg exclude: if ``True``, apply to all but those in ``base_ids``.
 
 """
         all_snds = self._sounds

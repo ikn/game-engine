@@ -462,7 +462,7 @@ played.  Volume works with something like::
     conf.SOUND_VOLUMES['name'] = .3
 
 It might be worth finding an appropriate sound effect and getting it to play
-when a tile is moved (see :meth:`Game.play_snd() <engine.game.Game.play_snd>`).
+when a tile is moved (see :meth:`World.play_snd() <engine.game.World.play_snd>`).
 
 Victory condition
 #################
