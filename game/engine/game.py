@@ -338,21 +338,39 @@ play_snd(base_id, volume=1)
             base_id += str(ident)
         # else not a random sound
         # load sound, and make a copy so we can play/stop instances separately
+        # (without managing channels, at least)
         snd = self.resources.snd(base_id + '.ogg')
         snd = pg.mixer.Sound(snd.get_buffer())
         # store sound, and stop oldest if necessary
+        playing = self._sounds.setdefault(alias, [])
         if alias in conf.MAX_SOUNDS:
-            playing = self._sounds.setdefault(alias, [])
             assert len(playing) <= conf.MAX_SOUNDS[alias]
             if len(playing) == conf.MAX_SOUNDS[alias] and playing:
                 playing.pop(0)[0].stop()
-            playing.append((snd, volume))
+        else:
+            i = 0
+            while i < len(playing):
+                if playing[i][0].get_num_channels() == 0:
+                    # sound is no longer playing, so remove it
+                    playing.pop(i)
+                else:
+                    i += 1
+        playing.append((snd, volume))
         # play
         volume *= conf.SOUND_VOLUME[self.id]
         if volume > 1:
             print >> sys.stderr, 'warning: sound volume greater than 1'
         snd.set_volume(volume)
         snd.play()
+
+    def _get_base_ids (self, *base_ids, **kwargs):
+        # takes (*base_ids, exclude=False) to get the base_ids this represents
+        if not base_ids:
+            return self._sounds.keys()
+        if kwargs.get('exclude', False):
+            return list(set(self._sounds.keys()).difference(base_ids))
+        else:
+            return base_ids
 
     def _get_playing_snds (self):
         # get {sound: channel} for all playing sounds
@@ -364,9 +382,11 @@ play_snd(base_id, volume=1)
             if s is not None:
                 snds[s] = c
 
-    def _with_channels (self, method, *base_ids):
+    def _with_channels (self, method, *base_ids, **kwargs):
         # call a method on matching sounds' channels
         # avoids code duplication in .*pause_snds()
+        base_ids = self._get_base_ids(*base_ids,
+                                      exclude=kwargs.get('exclude', False))
         playing = self._get_playing_snds()
         all_snds = self._sounds
         if not base_ids:
@@ -376,35 +396,37 @@ play_snd(base_id, volume=1)
                 if snd in playing:
                     getattr(playing[snd], method)()
 
-    def pause_snds (self, *base_ids):
+    def pause_snds (self, *base_ids, **kwargs):
         """Pause sounds with the given IDs, else pause all sounds.
 
 :arg base_ids: any number of ``base_id`` arguments as taken by
-               :meth:`play_snd`.
+               :meth:`play_snd`; if none are given, apply to all.
 
 """
-        self._with_channels('pause', *base_ids)
+        self._with_channels('pause', *base_ids,
+                            exclude=kwargs.get('exclude', False))
 
-    def unpause_snds (self, *base_ids):
+    def unpause_snds (self, *base_ids, **kwargs):
         """Unpause sounds with the given IDs, else unpause all sounds.
 
 :arg base_ids: any number of ``base_id`` arguments as taken by
-               :meth:`play_snd`.
+               :meth:`play_snd`; if none are given, apply to all.
 
 """
-        self._with_channels('unpause', *base_ids)
+        self._with_channels('unpause', *base_ids,
+                            exclude=kwargs.get('exclude', False))
 
-    def stop_snds (self, *base_ids):
+    def stop_snds (self, *base_ids, **kwargs):
         """Stop all playing sounds with the given IDs, else stop all sounds.
 
 :arg base_ids: any number of ``base_id`` arguments as taken by
-               :meth:`play_snd`.
+               :meth:`play_snd`; if none are given, apply to all.
 
 """
         all_snds = self._sounds
-        if not base_ids:
-            base_ids = self._sounds.keys()
-        for base_id in base_ids:
+        for base_id in self._get_base_ids(
+            *base_ids, exclude=kwargs.get('exclude', False)
+        ):
             for snd, vol in all_snds.pop(base_id, ()):
                 snd.stop()
 
