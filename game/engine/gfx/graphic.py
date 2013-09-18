@@ -1005,7 +1005,7 @@ If successful, all transformations are reapplied afterwards, if any.
                 # same as last time
                 return (dest, False)
         # full transform
-        return (self.scale_fn(src, (w, h)), True, (w, h, ax, ay))
+        return (self.scale_fn(src, (w, h)), True)
 
     def resize (self, w=None, h=None, scale=False):
         """Resize the graphic.
@@ -1102,7 +1102,7 @@ rescale_both(scale=1) -> self
             # not (no longer) opaque
             new_sfc = blank_sfc(rect.size)
         new_sfc.blit(src, ((0, 0), rect.size), rect)
-        return (new_sfc, True, (rect,))
+        return (new_sfc, True)
 
     def crop (self, rect):
         """Crop the surface to the given rect.
@@ -1199,7 +1199,7 @@ flip(x = False, y = False) -> self
         new_sfc.fill(colour)
         if colour[3] > 0:
             new_sfc.blit(src, (0, 0), special_flags=pg.BLEND_RGBA_MULT)
-        return (new_sfc, True, (colour,))
+        return (new_sfc, True)
 
     def tint (self, colour):
         """Set tint colour, as taken by :func:`engine.util.normalise_colour`.
@@ -1423,14 +1423,12 @@ surface.
                 # does nothing
                 continue
             f = getattr(self, '_' + fn) if isinstance(fn, basestring) else fn
-            rtn = f(sfc, dest, dirty, last_args, *args)
-            new_sfc, dirty = rtn[:2]
-            new_args = rtn[2] if len(rtn) >= 3 else args
+            new_sfc, dirty = f(sfc, dest, dirty, last_args, *args)
             if dirty or dest is None:
                 # transformed for the first time or something changed in
                 # retransforming
                 # have modifier functions following code above
-                ts[fn] = (new_args, sfc, new_sfc, apply_fn, undo_fn)
+                ts[fn] = (args, sfc, new_sfc, apply_fn, undo_fn)
             sfc = new_sfc
             if not passed_rot:
                 if fn == 'rotate':
