@@ -40,6 +40,8 @@ if __name__ == '__main__':
             from cProfile import run
             from pstats import Stats
             args = ', '.join(repr(arg) for arg in args)
+            if args:
+                args += ', '
             code = 'engine.game.run(entry_world, {0}t = options.time)'
             run(code.format(args), options.profile_file, locals())
             Stats(options.profile_file).strip_dirs() \

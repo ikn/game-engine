@@ -75,8 +75,12 @@ World(scheduler, evthandler)
         #: taken by the constructor.
         self.evthandler = evthandler
         #: :class:`gfx.GraphicsManager <engine.gfx.container.GraphicsManager>`
-        #: instance used for drawing by default.
+        #: instance used for drawing by default (by, eg. entities).
         self.graphics = gfx.GraphicsManager(scheduler)
+        #: :class:`gfx.GraphicsManager <engine.gfx.container.GraphicsManager>`
+        #: instance used as the world's output to the screen.  This is the same
+        #: instance as :attr:`graphics` by default.
+        self.display = self.graphics
         #: :class:`res.ResourceManager <engine.res.ResourceManager>` instance
         #: taken by the constructor.
         self.resources = resources
@@ -110,14 +114,14 @@ If this is less than :data:`conf.FPS`, then we're dropping frames.
 For the current update FPS, use the
 :attr:`Timer.current_fps <engine.sched.Timer.current_fps>` of
 :attr:`scheduler`.  (If this indicates the scheduler isn't running at full
-speed, it may mean the draw rate (:attr:`fps`) is dropping to
-:data:`conf.MIN_FPS`.)
+speed, it may mean the draw rate is dropping to :data:`conf.MIN_FPS`.)
 
 """
         return 1 / self._avg_draw_time
 
     def init (self):
-        """Called when this first becomes the active world.
+        """Called when this first becomes the active world (before
+:meth:`select`).
 
 This receives the extra arguments passed in constructing the world through the
 :class:`Game` instance.
@@ -197,7 +201,7 @@ This method should not change the state of the world, because it is not
 guaranteed to be called every frame.
 
 """
-        dirty = self.graphics.draw(False)
+        dirty = self.display.draw(False)
         return dirty
 
     def quit (self):
@@ -550,8 +554,8 @@ should be passed to that base class).
             self._update_again = True
             self.world.scheduler.stop()
         self.world = world
-        world.graphics.orig_sfc = self.screen
-        world.graphics.dirty()
+        world.display.orig_sfc = self.screen
+        world.display.dirty()
         ident = world.id
         # set some per-world things
         for name, r in conf.TEXT_RENDERERS[ident].iteritems():
@@ -677,7 +681,7 @@ If this quits the last (root) world, exit the game.
         conf.RES = r
         self.screen = pg.display.set_mode(conf.RES, flags)
         if self.world is not None:
-            self.world.graphics.dirty()
+            self.world.display.dirty()
 
     def toggle_fullscreen (self):
         """Toggle fullscreen mode."""
