@@ -1000,12 +1000,26 @@ If successful, all transformations are reapplied afterwards, if any.
         if w == start_w and h == start_h:
             # transform does nothing
             return (src, dirty)
-        if not dirty and last_args is not None:
-            if last_args == (w, h, ax, ay):
+        new_dirty = True
+        if dirty is not True and last_args is not None:
+            last_w, last_h, last_about = last_args
+            last_ax, last_ay = pos_in_rect(self.anchor, (0, 0, last_w, last_h),
+                                           True)
+            if w == last_w and h == last_h and ax == last_ax and ay == last_ay:
                 # same as last time
-                return (dest, False)
+                if dirty:
+                    # transform dirty rects
+                    scale = (float(w) / start_w, float(h) / start_h)
+                    new_dirty = []
+                    for r in dirty:
+                        new_dirty.append(Rect(*(
+                            ir(x * scale[i % 2]) for i, x in enumerate(r)
+                        )).inflate(2, 2))
+                    # but do full transform
+                else:
+                    return (dest, False)
         # full transform
-        return (self.scale_fn(src, (w, h)), True)
+        return (self.scale_fn(src, (w, h)), new_dirty)
 
     def resize (self, w=None, h=None, scale=False):
         """Resize the graphic.
@@ -1057,7 +1071,7 @@ rescale_both(scale=1) -> self
 
     def _gen_mods_crop (self, src_sz, first_time, last_args, rect):
         rect = Rect(rect)
-        if first_time or last_args[0] != rect:
+        if first_time or Rect(last_args[0]) != rect:
 
             def apply_fn (g):
                 g._rect = g._rect.move(rect.x, rect.y)
@@ -1079,7 +1093,7 @@ rescale_both(scale=1) -> self
             # no cropping occurs
             return (src, dirty)
         if dirty is not True and last_args is not None:
-            if last_args[0] == rect:
+            if Rect(last_args[0]) == rect:
                 # same size as last time
                 if dirty:
                     # clip dirty rects inside cropped rect; if there's a
@@ -1173,7 +1187,7 @@ flip(x = False, y = False) -> self
 
     def _gen_mods_tint (self, src_sz, first_time, last_args, colour):
         colour = normalise_colour(colour)
-        if first_time or last_args[0] != colour:
+        if first_time or normalise_colour(last_args[0]) != colour:
 
             def apply_fn (g):
                 g._tint_colour = colour
@@ -1191,7 +1205,7 @@ flip(x = False, y = False) -> self
         if colour == (255, 255, 255, 255):
             return (src, dirty)
         if (dirty is False and last_args is not None and
-            last_args[0] == colour):
+            normalise_colour(last_args[0]) == colour):
             return (dest, False)
         if not has_alpha(src):
             src = src.convert_alpha()
