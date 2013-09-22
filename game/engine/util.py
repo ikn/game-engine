@@ -3,7 +3,7 @@
 from random import random, randrange
 from collections import defaultdict
 from bisect import bisect
-import types
+import inspect
 
 import pygame as pg
 from pygame import Rect
@@ -42,18 +42,11 @@ def takes_args (func):
          pure-Python function), else ``False``.
 
 """
-    if isinstance(func, types.MethodType):
-        # a bound method takes arguments if it takes more than one positional
-        # argument or has variadic arguments (in the latter case, we have more
-        # argument names than reported arguments)
-        code = func.im_func.func_code
-        return len(code.co_varnames) > code.co_argcount or code.co_argcount > 1
-    elif isinstance(func, types.FunctionType):
-        # takes arguments if has any argument names (argcount might still be 0)
-        return bool(func.func_code.co_varnames)
-    else:
-        # be explicit
-        return None
+    args, varargs, kwargs, defaults = inspect.getargspec(func)
+    want = len(defaults) if defaults is not None else 0
+    if inspect.ismethod(func):
+        want += 1
+    return len(args) > want
 
 
 def wrap_fn (func):

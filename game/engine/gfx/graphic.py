@@ -963,7 +963,7 @@ If successful, all transformations are reapplied afterwards, if any.
             elif w is False:
                 w = ir(ow * float(h) / oh)
             if h is None:
-                h = start_h
+                h = oh
             elif h is False:
                 h = ir(oh * float(w) / ow)
             scale = (float(w) / ow, float(h) / oh)
