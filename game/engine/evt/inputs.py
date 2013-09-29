@@ -28,6 +28,17 @@ class mbtn:
     DOWN = 5
 
 
+def _pad_matches (device_id):
+    # get the pygame.joystick.Joystick instances that match the given device_id
+    if device_id is True:
+        js = xrange(pg.joystick.get_count())
+    elif device_id is None:
+        js = ()
+    else:
+        js = (self._device_id,)
+    return [pg.joystick.Joystick(j) for j in js]
+
+
 class Input (object):
     """Base class for handling input events.  Does nothing by itself.
 
@@ -557,19 +568,17 @@ PadButton(device_id, button, *mods)
 
     def normalise (self, down_evt):
         """:meth:`Input.normalise`."""
-        if self._device_id in (None, True):
-            print >> sys.stderr, 'warning: cannot determine held state of ' \
-                                 '{0} (no device set)'.format(self)
-            return
-        j = pg.joystick.Joystick(self._device_id)
-        try:
-            held = j.get_button(self.button)
-        except pg.error:
-            print >> sys.stderr, 'warning: cannot determine held state of ' \
-                                 '{0} (gamepad not initialised or no such ' \
-                                 'button)'.format(self)
-        else:
-            ButtonInput.set_held(self, held, down_evt)
+        for j in _pad_matches(self._device_id):
+            try:
+                held = j.get_button(self.button)
+            except pg.error:
+                print >> (
+                    sys.stderr,
+                    'warning: cannot determine held state of {0} (gamepad not '
+                    'initialised or no such button)'.format(self)
+                )
+            else:
+                ButtonInput.set_held(self, held, down_evt)
 
 
 class AxisInput (ButtonInput):
@@ -773,19 +782,17 @@ PadAxis(device_id, axis[, thresholds], *mods)
 
     def normalise (self, down_evt):
         """:meth:`Input.normalise`."""
-        if self._device_id in (None, True):
-            print >> sys.stderr, 'warning: cannot determine held state of ' \
-                                 '{0} (no device set)'.format(self)
-            return
-        j = pg.joystick.Joystick(self.device_id)
-        try:
-            apos = j.get_axis(self.axis)
-        except pg.error:
-            print >> sys.stderr, 'warning: cannot determine held state of ' \
-                                 '{0} (gamepad not initialised or no such ' \
-                                 'axis)'.format(self)
-        else:
-            self.normalise_val([apos], down_evt)
+        for j in _pad_matches(self._device_id):
+            try:
+                apos = j.get_axis(self.axis)
+            except pg.error:
+                print >> (
+                    sys.stderr,
+                    'warning: cannot determine held state of {0} (gamepad not '
+                    'initialised or no such axis)'.format(self)
+                )
+            else:
+                self.normalise_val([apos], down_evt)
 
 
 class PadHat (AxisInput):
@@ -826,19 +833,17 @@ PadHat(device_id, axis[, thresholds], *mods)
 
     def normalise (self, down_evt):
         """:meth:`Input.normalise`."""
-        if self._device_id in (None, True):
-            print >> sys.stderr, 'warning: cannot determine held state of ' \
-                                 '{0} (no device set)'.format(self)
-            return
-        j = pg.joystick.Joystick(self.device_id)
-        try:
-            apos = j.get_hat(self.axis)
-        except pg.error:
-            print >> sys.stderr, 'warning: cannot determine held state of ' \
-                                 '{0} (gamepad not initialised or no such ' \
-                                 'hat)'.format(self)
-        else:
-            self.normalise_val([apos], down_evt)
+        for j in _pad_matches(self._device_id):
+            try:
+                apos = j.get_hat(self.axis)
+            except pg.error:
+                print >> (
+                    sys.stderr,
+                    'warning: cannot determine held state of {0} (gamepad not '
+                    'initialised or no such hat)'.format(self)
+                )
+            else:
+                self.normalise_val([apos], down_evt)
 
 
 class RelAxisInput (AxisInput):

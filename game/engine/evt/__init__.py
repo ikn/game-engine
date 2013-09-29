@@ -4,6 +4,7 @@
 
 TODO:
     [ESSENTIAL]
+ - extend normalise_buttons to all input types
  - eh.grab (and maybe have grab toggle for getting all input for a while)
  - eh.set_deadzones (can set by device var; can pass a default for other devices/ids)
  - auto pad(/other?) initialisation
