@@ -23,7 +23,8 @@ Some notes:
 
  - An event may be placed in a 'domain', which is represented by a string name.
  - Events are named or unnamed, and an :class:`EventHandler` acts like a
-   ``dict`` of named events (only supports setting and getting items).
+   ``dict`` of named events (only supports getting, setting and deleting
+   items).
  - The ``'domain'`` name is reserved.
  - The ``__contains__`` method (``event in event_handler``) works for
    :class:`BaseEvent <engine.evt.evts.BaseEvent>` instances as well as names.
@@ -43,8 +44,8 @@ Some notes:
         self.evts = set()
         # {name: event} for named events; wrapped by this class like a dict
         self._named_evts = {}
-        # all inputs registered with events
-        self._inputs = set()
+        #: All inputs registered with events in this handler.
+        self.inputs = set()
         # inputs prefiltered by Input.filters
         self._filtered_inputs = ('type', {inputs.UNFILTERABLE: set()})
         # all registered modifiers
@@ -245,7 +246,7 @@ Raises ``KeyError`` if any arguments are missing.
     def _add_inputs (self, *inps):
         mods = self._mods
         for i in inps:
-            if i in self._inputs:
+            if i in self.inputs:
                 # already added (might happen if events share an input)
                 continue
             if isinstance(i, inputs.ButtonInput):
@@ -263,13 +264,13 @@ Raises ``KeyError`` if any arguments are missing.
                             if not added:
                                 added = True
                                 self._add_inputs(m)
-            self._inputs.add(i)
+            self.inputs.add(i)
             self._prefilter(self._filtered_inputs, i.filters, i)
 
     def _rm_inputs (self, *inps):
         mods = self._mods
         for i in inps:
-            if i not in self._inputs:
+            if i not in self.inputs:
                 # already removed (might happen if events share an input)
                 continue
             if isinstance(i, inputs.ButtonInput):
@@ -290,7 +291,7 @@ Raises ``KeyError`` if any arguments are missing.
                                 del d1[i._device_id]
                                 if not d1:
                                     del mods[m.device]
-            self._inputs.remove(i)
+            self.inputs.remove(i)
             self._unprefilter(self._filtered_inputs, i.filters, i)
 
     def update (self):
@@ -486,7 +487,7 @@ See :attr:`Input.device_var <engine.evt.inputs.Input.device_var>` and
 (including possible device ID values).
 
 """
-        for i in self._inputs:
+        for i in self.inputs:
             if i.device_var is not None and i.device_var in devices:
                 i.device_id = devices[i.device_var]
 
@@ -507,7 +508,7 @@ either for the first time, or after a period of letting something else handle
 events.
 
 """
-        for i in self._inputs:
+        for i in self.inputs:
             if i.provides['button']:
                 i.normalise(down_evt)
 
@@ -518,11 +519,48 @@ events.
 
     def stop_monitor_deadzones (self):
         """Not implemented."""
-        # returns {(device, id, *args): deadzone}, args is axis for pad
+        # returns {(device, id, attrs): deadzone}, attrs is required attribute values on the input (pad axis: {'axis': axis_input.axis})
         # can register other deadzone events?
         pass
 
-    def set_deadzones (self, deadzones):
-        """Not implemented."""
-        # takes stop_monitor_deadzones result
-        pass
+    def set_deadzones (self, *deadzones):
+        """Set deadzones for all registered inputs that support it.
+
+:attr deadzones: any number of
+                 ``((device, device_id=True, attrs={}), deadzone)`` tuples to
+                 set the ``deadzone`` attribute of each matching input to
+                 ``deadzone``.  ``attrs`` is a dict of attributes the input
+                 must have.  See also
+                 :attr:`Input.device <engine.evt.inputs.Input.device>` and
+                 :attr:`Input.device_id <engine.evt.inputs.Input.device_id>`.
+                 An item may also be just ``(device, deadzone)``.
+
+"""
+        for ident, dz in deadzones:
+            if isinstance(ident, basestring):
+                # just got a device
+                ident = [ident]
+            else:
+                ident = list(ident)
+            if len(ident) == 0:
+                raise ValueError('invalid input identifier: empty sequence')
+            if len(ident) == 1:
+                # accept any device ID
+                ident.append(True)
+            if len(ident) == 2:
+                # no more constraints
+                ident.append({})
+            device, dev_id, attrs = ident
+
+            for i in self._inputs:
+                if (i.device == device and i.device_id is not None and
+                    (dev_id is True or i.device_id == dev_id) and
+                    all(getattr(i, attr) == val
+                        for attr, val in attrs.iteritems())):
+                    try:
+                        getattr(i, 'deadzone')
+                    except AttributeError:
+                        # doesn't have a deadzone
+                        pass
+                    else:
+                        i.deadzone = dz

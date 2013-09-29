@@ -631,12 +631,13 @@ Subclasses must have an even number of components.
 
     @property
     def deadzone (self):
-        """Axis value magnitude below which the value is mapped to ``0``.
+        """Axis value magnitude below which the value is mapped to ``0``;
+defaults to ``0``.
 
 Above this value, the mapped value increases linearly from ``0``.
 
 """
-        return self.deadzone
+        return self._deadzone
 
     @deadzone.setter
     def deadzone (self, dz):

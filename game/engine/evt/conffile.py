@@ -40,7 +40,7 @@ Input lines follow the form
 .. code-block:: none
 
     [event components...] [modifiers...] [scale*]<device> [device ID] \
-[type[:input components]] [args...]
+[type[:input components...]] [args...]
 
 where:
 
