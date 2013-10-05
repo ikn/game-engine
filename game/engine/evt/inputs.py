@@ -224,14 +224,10 @@ value as the attribute value to filter by.  If a subclass does not provide
         else:
             raise TypeError('this Input type doesn\'t support device IDs')
 
-    def normalise (self, down_evt):
-        """Determine and set the button's current state.
+    def normalise (self):
+        """Determine and set the input's current state, if any.
 
-:arg down_evt: whether to trigger a button down event if the button is found to
-               be held and it was not already set as held.
-
-This should be implemented by any input that :attr:`provides` a button
-interface (this implementation does nothing), if possible.
+This implementation does nothing.
 
 """
         pass
@@ -388,7 +384,7 @@ Each item is a bool that corresponds to the component in the same position in
             return True
         return False
 
-    def up (self, component = 0, evt = True):
+    def up (self, component=0, evt=True):
         """Set the given component's button state to up.
 
 :arg evt: whether to let the containing event know about this.
@@ -405,16 +401,15 @@ Each item is a bool that corresponds to the component in the same position in
                 return True
         return False
 
-    def set_held (self, held, down_evt = False, component = 0):
+    def set_held (self, held, evts=False, component=0):
         """Set the held state of the button on the given component.
 
-:arg down_evt: whether to trigger a button down event if the button is found to
-               be held and it was not already set as held.
+:arg evts: whether to trigger button down/up events if the held state changes.
 
 """
         if held != self._held[0]:
-            if held and down_evt:
-                self.down()
+            if evts:
+                self.down() if held else self.up()
             else:
                 self._held[0] = bool(held)
 
@@ -460,9 +455,9 @@ The ``button`` argument is required, and is the key code.
 
     _mod_btn_name = _btn_name
 
-    def normalise (self, down_evt):
+    def normalise (self):
         """:meth:`Input.normalise`."""
-        ButtonInput.set_held(self, pg.key.get_pressed()[self.button], down_evt)
+        ButtonInput.set_held(self, pg.key.get_pressed()[self.button])
 
 
 class _SneakyMultiKbdKey (KbdKey):
@@ -493,7 +488,7 @@ class _SneakyMultiKbdKey (KbdKey):
         self._update_held()
         return False
 
-    def normalise (self, down_evt):
+    def normalise (self):
         """:meth:`Input.normalise`."""
         held = pg.key.get_pressed()
         for k in self._keys:
@@ -523,13 +518,13 @@ The ``button`` argument is required, and is the mouse button ID.
     def _mod_btn_name (self):
         return 'mouse button {0}'.format(self.button)
 
-    def normalise (self, down_evt):
+    def normalise (self):
         """:meth:`Input.normalise`."""
         held = pg.mouse.get_pressed()
         if self.button >= len(held):
             print >> sys.stderr, 'warning: cannot determine held state of ' \
                                  '{0}'.format(self)
-        ButtonInput.set_held(self, held[self.button], down_evt)
+        ButtonInput.set_held(self, held[self.button])
 
 
 class PadButton (ButtonInput):
@@ -566,7 +561,7 @@ PadButton(device_id, button, *mods)
     def _mod_btn_name (self):
         return 'pad {0} button {1}'.format(self._str_dev_id(), self.button)
 
-    def normalise (self, down_evt):
+    def normalise (self):
         """:meth:`Input.normalise`."""
         for j in _pad_matches(self._device_id):
             try:
@@ -578,7 +573,7 @@ PadButton(device_id, button, *mods)
                     'initialised or no such button)'.format(self)
                 )
             else:
-                ButtonInput.set_held(self, held, down_evt)
+                ButtonInput.set_held(self, held)
 
 
 class AxisInput (ButtonInput):
@@ -611,9 +606,7 @@ Subclasses must have an even number of components.
     components = 2
 
     def __init__ (self, axis = None, thresholds = None, *mods):
-        #: Position (magnitude) in each direction of each axis, eg. for a
-        #: single axis at ``-.3``, this is ``[.3, 0]``.
-        self.pos = [0] * self.components
+        self._pos = [0] * self.components
         if mods and thresholds is None:
             raise TypeError('an AxisInput must have thresholds defined to '
                             'have modifiers')
@@ -639,6 +632,20 @@ Subclasses must have an even number of components.
         self.deadzone = 0
 
     @property
+    def pos (self):
+        """Sequence of positions for each axis."""
+        p = self._pos
+        return [p[i + 1] - p[i] for i in xrange(self.components // 2)]
+
+    @pos.setter
+    def pos (self, pos):
+        for axis, apos in enumerate(pos):
+            if self.axis_motion(True, axis, apos):
+                # HACK
+                for evt in self.evts:
+                    evt._changed = True
+
+    @property
     def deadzone (self):
         """Axis value magnitude below which the value is mapped to ``0``;
 defaults to ``0``.
@@ -662,7 +669,7 @@ Above this value, the mapped value increases linearly from ``0``.
             raise ValueError('require 0 <= deadzone < 1')
         self._deadzone = dz
 
-    def axis_motion (self, mods_match, axis, apos, btn_evts = True):
+    def axis_motion (self, mods_match, axis, apos, btn_evts=False):
         """Signal a change in axis position.
 
 :arg mods_match: as taken by :meth:`handle`.
@@ -684,7 +691,7 @@ Above this value, the mapped value increases linearly from ``0``.
             pos[i] = max(0, pos[i] - dz[axis]) / (1 - dz[axis]) # know dz != 1
         imn = 2 * axis
         imx = 2 * (axis + 1)
-        old_pos = self.pos
+        old_pos = self._pos
         if pos != old_pos[imn:imx]:
             if self.provides['button']:
                 # act as button
@@ -728,22 +735,6 @@ number).  Otherwise, this method does nothing.
                 rtn |= self.axis_motion(mods_match, i, apos)
         return rtn
 
-    def normalise_val (self, pos, down_evt):
-        """Like :meth:`Input.normalise`, but takes a value.
-
-:arg pos: a sequence of new positions for each axis.
-:arg down_evt: whether to trigger a button down event if this axis is acting as
-               a button, and the button is found to be held and it was not
-               already set as held.
-
-"""
-        if not self.provides['button']:
-            raise TypeError('{0} does not provide a button interface'
-                            .format(self))
-        for axis, apos in enumerate(pos):
-            self.pos[2 * axis] = self.pos[2 * axis + 1] = 0
-            self.axis_motion(True, axis, apos, down_evt)
-
 
 class PadAxis (AxisInput):
     """:class:`AxisInput` subclass representing a gamepad axis.
@@ -780,7 +771,7 @@ PadAxis(device_id, axis[, thresholds], *mods)
     def __str__ (self):
         return self._str('{0}, {1}'.format(self._str_dev_id(), self.axis))
 
-    def normalise (self, down_evt):
+    def normalise (self):
         """:meth:`Input.normalise`."""
         for j in _pad_matches(self._device_id):
             try:
@@ -792,7 +783,7 @@ PadAxis(device_id, axis[, thresholds], *mods)
                     'initialised or no such axis)'.format(self)
                 )
             else:
-                self.normalise_val([apos], down_evt)
+                self.pos = (apos,)
 
 
 class PadHat (AxisInput):
@@ -831,7 +822,7 @@ PadHat(device_id, axis[, thresholds], *mods)
     def __str__ (self):
         return self._str('{0}, {1}'.format(self._str_dev_id(), self.axis))
 
-    def normalise (self, down_evt):
+    def normalise (self):
         """:meth:`Input.normalise`."""
         for j in _pad_matches(self._device_id):
             try:
@@ -843,7 +834,7 @@ PadHat(device_id, axis[, thresholds], *mods)
                     'initialised or no such hat)'.format(self)
                 )
             else:
-                self.normalise_val([apos], down_evt)
+                self.pos = (apos,)
 
 
 class RelAxisInput (AxisInput):
@@ -916,8 +907,8 @@ behaviour in this case is undefined.
                 # act as axis (add relative pos to current pos)
                 for i, (bdy, rpos) in enumerate(zip(self.bdy, rpos)):
                     # normalise and restrict magnitude to 1
-                    apos = float(rpos) / bdy + self.pos[2 * i + 1] - \
-                           self.pos[2 * i]
+                    apos = float(rpos) / bdy + self._pos[2 * i + 1] - \
+                           self._pos[2 * i]
                     sgn = 1 if apos > 0 else -1
                     apos = sgn * min(sgn * apos, 1)
                     rtn |= self.axis_motion(mods_match, i, apos)
@@ -938,9 +929,10 @@ If no components are given, reset in all components.
         for c in components:
             self.rel[c] = 0
 
-    def normalise (self, down_evt):
+    def normalise (self):
         """:meth:`Input.normalise`."""
         self.reset()
+        self.pos = (0,) * (self.components // 2)
         self._held = [False] * self.components
 
 

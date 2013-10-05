@@ -595,7 +595,7 @@ over each registered input and restricting to ``-1 <= x <= 1``).
                 if i.provides['axis']:
                     # add current axis position for each component
                     for ec, ic in zip(evt_components, input_components):
-                        pos += (2 * ec - 1) * i.pos[ic]
+                        pos += (2 * ec - 1) * i._pos[ic]
                 else: # i.provides['button']
                     used_components = i.used_components[self]
                     # add 1 for each held component
@@ -705,7 +705,7 @@ calling callbacks.
             elif i.provides['axis']:
                 # use axis position
                 for ec, ic in zip(evt_components, input_components):
-                    this_rel += (2 * ec - 1) * i.pos[ic]
+                    this_rel += (2 * ec - 1) * i._pos[ic]
             else: # i.provides['button']
                 used_components = i.used_components[self]
                 # use 1 for each held component

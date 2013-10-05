@@ -139,7 +139,7 @@ This receives the extra arguments passed in constructing the world through the
             self.init(*self._extra_args[0], **self._extra_args[1])
             self._initialised = True
             del self._extra_args
-        self.evthandler.normalise_buttons()
+        self.evthandler.normalise()
         self.select()
 
     def pause (self):

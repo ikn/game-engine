@@ -16,8 +16,8 @@ EventHandler(scheduler)
 :arg scheduler: :class:`sched.Scheduler <engine.sched.Scheduler>` instance to
                 use for determining the current framerate.
 
-You probably want to call :meth:`normalise_buttons`, then call :meth:`update`
-every frame to process and progagate Pygame events and call callbacks.
+You probably want to call :meth:`normalise`, then call :meth:`update` every
+frame to process and progagate Pygame events and call callbacks.
 
 Some notes:
 
@@ -497,11 +497,10 @@ See :attr:`Input.device_var <engine.evt.inputs.Input.device_var>` and
         # types are device name or (device, type_name)
         pass
 
-    def normalise_buttons (self, down_evt = False):
-        """Determine and set held states of all buttons.
+    def normalise (self):
+        """Determine and set states of all inputs, where possible.
 
-:arg down_evt: cause button :data:`DOWN <engine.evt.evts.bmode.DOWN>` events if
-               appropriate.
+This includes axis positions, button held states, etc..
 
 You should generally call this whenever you start using this event handler,
 either for the first time, or after a period of letting something else handle
@@ -509,8 +508,7 @@ events.
 
 """
         for i in self.inputs:
-            if i.provides['button']:
-                i.normalise(down_evt)
+            i.normalise()
 
     def monitor_deadzones (self, *deadzones):
         """Not implemented."""
@@ -552,7 +550,7 @@ events.
                 ident.append({})
             device, dev_id, attrs = ident
 
-            for i in self._inputs:
+            for i in self.inputs:
                 if (i.device == device and i.device_id is not None and
                     (dev_id is True or i.device_id == dev_id) and
                     all(getattr(i, attr) == val
