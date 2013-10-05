@@ -4,6 +4,7 @@ from time import time
 from bisect import bisect
 from math import cos, atan, exp
 from random import randrange, expovariate
+from functools import partial
 
 from pygame.time import wait
 
@@ -771,6 +772,45 @@ interp_simple(obj, attr, target, t[, end_cb], round_val = False) -> timeout_id
         get_val = interp_linear(getattr(obj, attr), (target, t))
         return self.interp(get_val, (obj, attr), end = end_cb,
                            round_val = round_val)
+
+    def _interp_locked (self, interp_fn, *args, **kwargs):
+        # HACK: Python 2 closures aren't great
+        timeout_id = [None]
+
+        def interp (*args, **kwargs):
+            if timeout_id[0] is not None:
+                self.rm_timeout(timeout_id[0])
+            timeout_id[0] = interp_fn(*args, **kwargs)
+            return timeout_id[0]
+
+        return partial(interp, *args, **kwargs)
+
+    def interp_locked (self, *args, **kwargs):
+        """Generate a :meth:`interp` wrapper that allows only one running
+interpolation.
+
+With each successive call, the current interpolation is aborted and a new one
+started.
+
+The wrapper is partially applied using the positional and keyword arguments
+passed to this function.  Typical usage is as follows:
+
+# create the wrapper that knows how to set values
+interp = scheduler.interp_locked(set_val=set_val)
+[...]
+# call it at some point with an interpolation function
+interp(get_val)
+[...]
+# call it again later with a different interpolation function
+interp(get_val2)
+# only one interpolation is running
+
+"""
+        return self._interp_locked(self.interp, *args, **kwargs)
+
+    def interp_simple_locked (self, *args, **kwargs):
+        """Like :meth:`interp_locked`, but wraps :meth:`interp_simple`."""
+        return self._interp_locked(self.interp_simple, *args, **kwargs)
 
     def counter (self, t, autoreset=False):
         """Create and return a :class:`Counter` that uses this instance for
