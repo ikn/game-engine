@@ -984,28 +984,29 @@ If successful, all transformations are reapplied afterwards, if any.
 
     def _resize (self, src, dest, dirty, last_args, w, h, scale=False):
         start_w, start_h = src.get_size()
-        if scale:
-            w = ir(scale[0] * start_w)
-            h = ir(scale[1] * start_h)
-        else:
-            if w is None:
-                w = start_w
-            elif w is False:
-                w = ir(start_w * float(h) / start_h)
-            if h is None:
-                h = start_h
-            elif h is False:
-                h = ir(start_h * float(w) / start_w)
-        ax, ay = pos_in_rect(self.anchor, (0, 0, start_w, start_h), True)
+
+        def parse_args (w, h, scale):
+            if scale:
+                w = ir(scale[0] * start_w)
+                h = ir(scale[1] * start_h)
+            else:
+                if w is None:
+                    w = start_w
+                elif w is False:
+                    w = ir(start_w * float(h) / start_h)
+                if h is None:
+                    h = start_h
+                elif h is False:
+                    h = ir(start_h * float(w) / start_w)
+            return (w, h)
+
+        w, h = parse_args(w, h, scale)
         if w == start_w and h == start_h:
             # transform does nothing
             return (src, dirty)
         new_dirty = True
         if dirty is not True and last_args is not None:
-            last_w, last_h, last_about = last_args
-            last_ax, last_ay = pos_in_rect(self.anchor, (0, 0, last_w, last_h),
-                                           True)
-            if w == last_w and h == last_h and ax == last_ax and ay == last_ay:
+            if (w, h) == parse_args(*last_args):
                 # same as last time
                 if dirty:
                     # transform dirty rects
