@@ -385,16 +385,14 @@ in our ``Conf`` object, in seconds::
 
     MOVE_TIME = .2
 
-In our ``move_tile`` method, replace ::
+In our ``move_tile`` method, we end up with:
+
+.. code-block:: python
+   :emphasize-lines: 4,5
 
     def move_tile (self, start_x, start_y):
         # ...
-        graphic.pos = (screen_x, screen_y)
-
-with ::
-
-    def move_tile (self, start_x, start_y):
-        # ...
+        # move the graphic
         self.scheduler.interp_simple(graphic, 'pos', (screen_x, screen_y),
                                      conf.MOVE_TIME)
 
@@ -406,36 +404,31 @@ might end up with more than one missing tile.  This is because we're not
 bothering to stop any already-running motions on the same graphic when we start
 a new one.
 
-To fix this, we can store a variable defining whether a graphic is moving, and
-register a callback for the end of an interpolation.  We require a few changes:
+To fix this, we can use the
+:meth:`locked variants <engine.sched.Scheduler.interp_locked>` of the
+interpolation methods.  We require a few changes:
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 4,5
+   :emphasize-lines: 4-7
 
     def init (self):
         # ...
                     if graphic is not None:
                         # we'll use this for movement
-                        graphic.timeout_id = None
+                        graphic.interp_to = self.scheduler.interp_simple_locked(
+                            graphic, 'pos', t=conf.MOVE_TIME
+                        )
                         # and move the graphic there
                         graphic.pos = (x + gap_x, y + gap_y)
 
 .. code-block:: python
-   :linenos:
-   :emphasize-lines: 4-11
+   :emphasize-lines: 4
 
     def move_tile (self, start_x, start_y):
         # ...
         # move the graphic
-        if graphic.timeout_id is not None:
-            # graphic is currently moving, so stop it
-            self.scheduler.rm_timeout(graphic.timeout_id)
-        graphic.timeout_id = self.scheduler.interp_simple(
-            graphic, 'pos', (screen_x, screen_y), conf.MOVE_TIME,
-            # a function to call when the interpolation ends
-            lambda: setattr(graphic, 'timeout_id', None)
-        )
+        graphic.interp_to((screen_x, screen_y))
 
 Here's :doc:`the final code <tut-code/interpolation>`.
 

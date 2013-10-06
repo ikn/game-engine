@@ -63,8 +63,6 @@ class Puzzle (engine.game.World):
                 # get the tile's top-left corner from the grid
                 x, y = grid.tile_pos(i, j)
                 if graphic is not None:
-                    # we'll use this for movement
-                    graphic.timeout_id = None
                     # and move the graphic there
                     graphic.pos = (x + gap_x, y + gap_y)
 

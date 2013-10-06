@@ -77,7 +77,9 @@ class Puzzle (engine.game.World):
                 x, y = grid.tile_pos(i, j)
                 if graphic is not None:
                     # we'll use this for movement
-                    graphic.timeout_id = None
+                    graphic.interp_to = self.scheduler.interp_simple_locked(
+                        graphic, 'pos', t=conf.MOVE_TIME
+                    )
                     # and move the graphic there
                     graphic.pos = (x + gap_x, y + gap_y)
 
@@ -107,14 +109,7 @@ class Puzzle (engine.game.World):
         screen_x += conf.TILE_GAP[0]
         screen_y += conf.TILE_GAP[1]
         # move the graphic
-        if graphic.timeout_id is not None:
-            # graphic is currently moving, so stop it
-            self.scheduler.rm_timeout(graphic.timeout_id)
-        graphic.timeout_id = self.scheduler.interp_simple(
-            graphic, 'pos', (screen_x, screen_y), conf.MOVE_TIME,
-            # a function to call when the interpolation ends
-            lambda: setattr(graphic, 'timeout_id', None)
-        )
+        graphic.interp_to((screen_x, screen_y))
 
     def move (self, axis, dirn, evts):
         for i in xrange(evts[evt.bmode.DOWN]):
