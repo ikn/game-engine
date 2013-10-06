@@ -5,11 +5,16 @@
 TODO:
     [ESSENTIAL]
  - eh.grab (and maybe have grab toggle for getting all input for a while)
- - auto pad(/other?) initialisation
+ - eh.detect_pads() (re-initialise already-initialised ones)
+ - eh.set_{thresholds,bdys} like deadzones (but also allow global, and same with deadzones)
+    - make them setters
+    - think of a nicer system for it (some sort of InputFilter, then {filter: value}?)
     [CONFIG]
- - can do (per-device, per-(input name) or global) thresholds/bdy - and make them setters, and provide eh.set_{thresholds,bdys}
+ - can do (per-device, per-device_id/var or global) deadzones/thresholds/bdy (can already do per-input, right?)
  - conffile.generate{,_s}, eh.save{,_s}
- - how do domain filenames work?  Do we try loading from a homedir one first, then fall back to the distributed one?  Do we save to the homedir one?
+ - domain filenames
+    - try loading from a homedir one first, then fall back to the distributed one
+    - save to the homedir one
  - input groups for having the same inputs in different events, eg.
 
     [next]

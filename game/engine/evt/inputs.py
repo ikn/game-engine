@@ -19,6 +19,29 @@ mod_devices = {
     'pad': ('pad',)
 }
 
+
+def _init_pad (dev_id=True):
+    # 'pad' device initialisation function
+    done = []
+    todo = xrange(pg.joystick.get_count()) if dev_id is True else (dev_id,)
+    for i in todo:
+        try:
+            pg.joystick.Joystick(i).init()
+        except pg.error:
+            pass
+        else:
+            done.append(i)
+    return done
+
+
+#: ``{device: init_fn}`` giving initialisation functions to initialise devices
+#: where possible.  These functions take the ``Input.device_id`` to initialise
+#: for, or no argument to initialise for all devices of this type, and should
+#: return a sequence of device IDs that have been successfully initialised.
+device_init_handlers = {
+    'pad': _init_pad
+}
+
 class mbtn:
     """Contains mouse button aliases."""
     LEFT = 1
@@ -31,12 +54,18 @@ class mbtn:
 def _pad_matches (device_id):
     # get the pygame.joystick.Joystick instances that match the given device_id
     if device_id is True:
-        js = xrange(pg.joystick.get_count())
+        ids = xrange(pg.joystick.get_count())
     elif device_id is None:
-        js = ()
+        ids = ()
     else:
-        js = (device_id,)
-    return [pg.joystick.Joystick(j) for j in js]
+        ids = (device_id,)
+    js = []
+    for i in ids:
+        try:
+            js.append(pg.joystick.Joystick(i))
+        except pg.error:
+            print >> sys.stderr, 'warning: no such pad: {}'.format(i)
+    return js
 
 
 class Input (object):
@@ -222,6 +251,7 @@ value as the attribute value to filter by.  If a subclass does not provide
                 ids = (device_id,)
             self.filter(self.device_id_attr, *ids, refilter = True)
             self._device_id = device_id
+            self._init()
         else:
             raise TypeError('this Input type doesn\'t support device IDs')
 
@@ -232,6 +262,27 @@ This implementation does nothing.
 
 """
         pass
+
+    def _init (self):
+        # initialise the device/id associated with this input
+        dev_id = self._device_id
+        if dev_id is not None:
+            init_fn = device_init_handlers.get(self.device)
+            if init_fn is not None:
+                ehs = self._ehs()
+
+                if dev_id is True:
+                    done = init_fn()
+                else:
+                    key = (self.device, dev_id)
+                    if any(key in eh._init_data for eh in ehs):
+                        done = ()
+                    else:
+                        done = init_fn(dev_id)
+
+                keys = [(dev_id, dev_id) for dev_id in done]
+                for eh in ehs:
+                    eh._init_data.update(keys)
 
 
 class BasicInput (Input):
@@ -571,11 +622,9 @@ PadButton(device_id, button, *mods)
             try:
                 held = j.get_button(self.button)
             except pg.error:
-                print >> (
-                    sys.stderr,
-                    'warning: cannot determine held state of {0} (gamepad not '
-                    'initialised or no such button)'.format(self)
-                )
+                print >> sys.stderr, \
+                    'warning: cannot determine held state of {0} (gamepad ' \
+                    'not initialised or no such button)'.format(self)
             else:
                 ButtonInput.set_held(self, held)
 
@@ -781,11 +830,9 @@ PadAxis(device_id, axis[, thresholds], *mods)
             try:
                 apos = j.get_axis(self.axis)
             except pg.error:
-                print >> (
-                    sys.stderr,
-                    'warning: cannot determine held state of {0} (gamepad not '
-                    'initialised or no such axis)'.format(self)
-                )
+                print >> sys.stderr, \
+                    'warning: cannot determine held state of {0} (gamepad ' \
+                    'not initialised or no such axis)'.format(self)
             else:
                 self.pos = (apos,)
 
@@ -832,11 +879,9 @@ PadHat(device_id, axis[, thresholds], *mods)
             try:
                 apos = j.get_hat(self.axis)
             except pg.error:
-                print >> (
-                    sys.stderr,
-                    'warning: cannot determine held state of {0} (gamepad not '
-                    'initialised or no such hat)'.format(self)
-                )
+                print >> sys.stderr, \
+                    'warning: cannot determine held state of {0} (gamepad ' \
+                    'not initialised or no such hat)'.format(self)
             else:
                 self.pos = (apos,)
 

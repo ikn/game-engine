@@ -48,6 +48,8 @@ Some notes:
         self.inputs = set()
         # inputs prefiltered by Input.filters
         self._filtered_inputs = ('type', {inputs.UNFILTERABLE: set()})
+        # identifiers for initialised devices
+        self._init_data = set()
         # all registered modifiers
         self._mods = {}
         #: Whether to capture the mouse cursor by centring it on the window
@@ -249,6 +251,8 @@ Raises ``KeyError`` if any arguments are missing.
             if i in self.inputs:
                 # already added (might happen if events share an input)
                 continue
+            i._init()
+
             if isinstance(i, inputs.ButtonInput):
                 # add mods, sorted by device and device ID
                 for m in i.mods:
