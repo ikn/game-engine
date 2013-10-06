@@ -42,11 +42,12 @@ def takes_args (func):
          pure-Python function), else ``False``.
 
 """
-    args, varargs, kwargs, defaults = inspect.getargspec(func)
-    want = len(defaults) if defaults is not None else 0
-    if inspect.ismethod(func):
-        want += 1
-    return len(args) > want
+    try:
+        args, varargs, kwargs, defaults = inspect.getargspec(func)
+    except TypeError:
+        return True
+    want = 2 if inspect.ismethod(func) else 1
+    return varargs is not None or len(args) >= want
 
 
 def wrap_fn (func):

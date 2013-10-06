@@ -35,7 +35,7 @@ def _pad_matches (device_id):
     elif device_id is None:
         js = ()
     else:
-        js = (self._device_id,)
+        js = (device_id,)
     return [pg.joystick.Joystick(j) for j in js]
 
 
@@ -68,8 +68,9 @@ types may be equal).
         #: keys ``'button'``, ``'axis'``, ``'relaxis'``.
         self.provides = {'button': False, 'axis': False, 'relaxis': False}
         #: Variable representing the current device ID; may be a string as a
-        #: variable name, or ``None`` (see :meth:`EventHandler.assign_devices()
-        #: <engine.evt.handler.EventHandler.assign_devices>` for details).
+        #: variable name, or ``None``.  See also
+        #: :meth:`EventHandler.assign_devices()
+        #: <engine.evt.handler.EventHandler.assign_devices>`).
         self.device_var = None
         #: A set of :class:`Event <engine.evt.evts.Event>` instances that
         #: contain this input, or ``None``.
@@ -524,7 +525,10 @@ The ``button`` argument is required, and is the mouse button ID.
         if self.button >= len(held):
             print >> sys.stderr, 'warning: cannot determine held state of ' \
                                  '{0}'.format(self)
-        ButtonInput.set_held(self, held[self.button])
+        b = self.button - 1
+        # Pygame doesn't return states for some buttons, such as scroll wheels
+        held = held[b] if b < len(held) else False
+        ButtonInput.set_held(self, held)
 
 
 class PadButton (ButtonInput):
@@ -732,7 +736,7 @@ number).  Otherwise, this method does nothing.
                     'has the wrong number of components'
                 )
             for i, apos in enumerate(apos):
-                rtn |= self.axis_motion(mods_match, i, apos)
+                rtn |= self.axis_motion(mods_match, i, apos, True)
         return rtn
 
 

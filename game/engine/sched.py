@@ -793,17 +793,21 @@ With each successive call, the current interpolation is aborted and a new one
 started.
 
 The wrapper is partially applied using the positional and keyword arguments
-passed to this function.  Typical usage is as follows:
+passed to this function.  Typical usage is as follows::
 
-# create the wrapper that knows how to set values
-interp = scheduler.interp_locked(set_val=set_val)
-[...]
-# call it at some point with an interpolation function
-interp(get_val)
-[...]
-# call it again later with a different interpolation function
-interp(get_val2)
-# only one interpolation is running
+    # create the wrapper that knows how to set values
+    interp = scheduler.interp_locked(set_val=set_val)
+
+    [...]
+
+    # call it at some point with an interpolation function
+    interp(get_val)
+
+    [...]
+
+    # call it again later with a different interpolation function
+    interp(get_val2)
+    # only one interpolation is running
 
 """
         return self._interp_locked(self.interp, *args, **kwargs)
