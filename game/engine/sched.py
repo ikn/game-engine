@@ -942,3 +942,13 @@ Missing items are ignored.
 """
         self.cbs.difference_update(cbs)
         return self
+
+    def pause (self):
+        """Pause the counter, if running."""
+        if self._timer_id is not None:
+            self._scheduler.pause_timeout(self._timer_id)
+
+    def unpause (self):
+        """Unpause the counter, if paused."""
+        if self._timer_id is not None:
+            self._scheduler.unpause_timeout(self._timer_id)
