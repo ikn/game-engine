@@ -5,7 +5,6 @@
 TODO:
     [ESSENTIAL]
  - eh.grab (and maybe have grab toggle for getting all input for a while)
- - eh.set_deadzones (can set by device var; can pass a default for other devices/ids)
  - auto pad(/other?) initialisation
     [CONFIG]
  - can do (per-device, per-(input name) or global) thresholds/bdy - and make them setters, and provide eh.set_{thresholds,bdys}
