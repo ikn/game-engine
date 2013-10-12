@@ -4,7 +4,7 @@
 
 TODO:
  - make it possible for GM to have transparent BG (only if orig_sfc has alpha)
- - GG:
+ - GraphicsGroup:
     - allow for transforms
     - internal layers (has allowed range in manager, and distributes graphics within it)
  - ignore off-screen (OoB) things (clip all dirty rects and discard zero-size ones)

@@ -5,31 +5,19 @@
 TODO:
     [ESSENTIAL]
  - eh.grab (and maybe have grab toggle for getting all input for a while)
- - eh.detect_pads() (re-initialise already-initialised ones)
  - eh.set_{thresholds,bdys} like deadzones (but also allow global, and same with deadzones)
     - make them setters
     - think of a nicer system for it (some sort of InputFilter, then {filter: value}?)
-    [CONFIG]
+
+    [config]
  - can do (per-device, per-device_id/var or global) deadzones/thresholds/bdy (can already do per-input, right?)
  - conffile.generate{,_s}, eh.save{,_s}
  - domain filenames
     - try loading from a homedir one first, then fall back to the distributed one
     - save to the homedir one
- - input groups for having the same inputs in different events, eg.
-
-    [next]
-        kbd ENTER
-        kbd KP_RETURN
-        kbd SPACE
-
-    button next DOWN REPEAT .3 .1
-        [next]
-        kbd RIGHT
-
-    button confirm DOWN
-        [next]
 
     [FUTURE]
+ - eh.detect_pads() (make sure to re-initialise already-initialised ones)
  - Scheme [NOTE]
  - generalised input areas
     - define a rect (InputRect, InputArea subclass), has .click(cb(event_type), events_bitmask), .hover(cb(in/out))
@@ -43,6 +31,21 @@ TODO:
     - working with config
  - joy ball (seems like RelAxisInput, but need a pad with a ball to test)
     - or maybe just do it and include a warning
+
+    [config]
+ - input groups for having the same inputs in different events, eg.
+
+    [next]
+        kbd ENTER
+        kbd KP_RETURN
+        kbd SPACE
+
+    button next DOWN REPEAT .3 .1
+        [next]
+        kbd RIGHT
+
+    button confirm DOWN
+        [next]
 
 ---NODOC---
 

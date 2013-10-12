@@ -276,7 +276,8 @@ This implementation does nothing.
                 else:
                     key = (self.device, dev_id)
                     if any(key in eh._init_data for eh in ehs):
-                        done = ()
+                        # make sure every handler knows about this
+                        done = (dev_id,)
                     else:
                         done = init_fn(dev_id)
 
