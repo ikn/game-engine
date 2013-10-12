@@ -9,6 +9,7 @@ instance for changing worlds and handling the display.
 import sys
 import os
 from random import choice, randrange
+from math import exp
 
 import pygame as pg
 from pygame.display import update as update_display
@@ -135,6 +136,15 @@ This receives the extra arguments passed in constructing the world through the
 
     def _select (self):
         """Called by the game when becomes the active world."""
+        ident = self.id
+        pg.event.set_grab(conf.GRAB_EVENTS[ident])
+        pg.mouse.set_visible(conf.MOUSE_VISIBLE[ident])
+        if conf.MUSIC_AUTOPLAY[ident]:
+            self.play_music()
+        else:
+            pg.mixer.music.stop()
+        pg.mixer.music.set_volume(self.scale_volume(self.music_volume))
+
         if not self._initialised:
             self.init(*self._extra_args[0], **self._extra_args[1])
             self._initialised = True
@@ -277,7 +287,7 @@ world drops the pool.
 
     @property
     def music_volume (self):
-        """The world's music volume.
+        """The world's music volume, before scaling.
 
 This is actually :data:`conf.MUSIC_VOLUME`, and changing it alters that value,
 and also changes the volume of currently playing music.
@@ -316,6 +326,7 @@ and also changes the volume of currently playing sounds.
                 for snd, vol in snds:
                     # vol excludes the world's volume
                     vol *= volume
+                    vol = self.scale_volume(vol)
                     if vol > 1:
                         print >> sys.stderr, ('warning: sound volume greater '
                                               'than 1')
@@ -362,6 +373,7 @@ play_snd(base_id, volume=1)
         playing.append((snd, volume))
         # play
         volume *= conf.SOUND_VOLUME[self.id]
+        volume = self.scale_volume(volume)
         if volume > 1:
             print >> sys.stderr, 'warning: sound volume greater than 1'
         snd.set_volume(volume)
@@ -442,6 +454,24 @@ stop_snds(*base_ids, exclude=False)
         ):
             for snd, vol in all_snds.pop(base_id, ()):
                 snd.stop()
+
+    def scale_volume (self, vol):
+        """Called to scale audio volumes before using them.
+
+The result should be between ``0`` and ``1``.  The default implementation does
+
+::
+
+    (exp(conf.VOLUME_SCALING * vol) - 1) / (exp(conf.VOLUME_SCALING) - 1)
+
+or no scaling if :data:`conf.VOLUME_SCALING` is ``0``.
+
+"""
+        scale = conf.VOLUME_SCALING
+        if scale == 0:
+            return vol
+        else:
+            return (exp(scale * vol) - 1) / (exp(scale) - 1)
 
 
 class Game (object):
@@ -556,21 +586,13 @@ should be passed to that base class).
         self.world = world
         world.display.orig_sfc = self.screen
         world.display.dirty()
-        ident = world.id
-        # set some per-world things
-        for name, r in conf.TEXT_RENDERERS[ident].iteritems():
-            if isinstance(r, basestring):
-                r = (r,)
+        # create text renderers required by this world
+        for name, r in conf.TEXT_RENDERERS[world.id].iteritems():
             if not isinstance(r, text.TextRenderer):
+                if isinstance(r, basestring):
+                    r = (r,)
                 r = text.TextRenderer(*r)
             self.text_renderers[name] = r
-        pg.event.set_grab(conf.GRAB_EVENTS[ident])
-        pg.mouse.set_visible(conf.MOUSE_VISIBLE[ident])
-        if conf.MUSIC_AUTOPLAY[ident]:
-            self.play_music()
-        else:
-            pg.mixer.music.stop()
-        pg.mixer.music.set_volume(conf.MUSIC_VOLUME[ident])
         world._select()
 
     def start_world (self, *args, **kwargs):

@@ -204,6 +204,12 @@ Audio
    ``<sound_id><number>.ogg`` for integer numbers starting from ``0`` with no
    gaps.
 
+.. data:: VOLUME_SCALING
+   :annotation: = 2
+
+   Used in default audio volume scaling (see
+   :meth:`World.scale_volume <engine.game.World.scale_volume>`).
+
 Resources
 ---------
 
