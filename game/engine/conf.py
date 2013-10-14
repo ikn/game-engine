@@ -10,6 +10,36 @@ from . import settings
 from .util import dd
 
 
+def find_sounds (d):
+    # find sounds in the given directory and group by base ID
+    sounds = {}
+    fns = glob(join_path(d, '*.ogg'))
+    base = len(join_path(d, ''))
+    for fn in fns:
+        if os.path.isfile(fn):
+            fn = fn[base:-4]
+            for i in xrange(len(fn)):
+                if fn[i:].isdigit():
+                    # found a valid file
+                    ident = fn[:i]
+                    if ident:
+                        n = sounds.get(ident, 0)
+                        sounds[ident] = n + 1
+    return sounds
+
+
+def find_music (d):
+    # find files in the given directory and group by subdirectory (nested)
+    music = {}
+    base = len(join_path(d, ''))
+    for subdir, dirs, files in os.walk(d, followlinks=True):
+        music[subdir[base:]] = [join_path(subdir, fn) for fn in files]
+        # top-level only
+        if subdir != d:
+            del dirs[:]
+    return music
+
+
 class Conf (object):
 
     # the Game instance
@@ -40,6 +70,7 @@ class Conf (object):
         CONF_DIR = join_path(CONF_DIR, IDENT)
     else:
         CONF_DIR = join_path(os.path.expanduser(u'~'), '.config', IDENT)
+
     CONF = join_path(CONF_DIR, 'conf')
     DATA_DIR = os.path.dirname(sys.argv[0])
     if DATA_DIR:
@@ -79,26 +110,16 @@ button _game_fullscreen DOWN
 
     # audio
     VOLUME_SCALING = 2 # 0 is linear
+    MUSIC = find_music(MUSIC_DIR)
     MUSIC_AUTOPLAY = dd(False) # False just pauses music; per-world
     MUSIC_VOLUME = dd(.7) # per-world
-    SOUND_VOLUME = dd(.7) # per-world
     EVENT_ENDMUSIC = pg.USEREVENT
+
+    SOUNDS = find_sounds(SOUND_DIR)
+    SOUND_VOLUME = dd(.7) # per-world
     SOUND_VOLUMES = dd(1)
     MAX_SOUNDS = {}
     SOUND_ALIASES = {}
-    # generate SOUNDS = {ID: num_sounds}
-    SOUNDS = {}
-    ss = glob(join_path(SOUND_DIR, '*.ogg'))
-    base = len(join_path(SOUND_DIR, ''))
-    for fn in ss:
-        fn = fn[base:-4]
-        for i in xrange(len(fn)):
-            if fn[i:].isdigit():
-                # found a valid file
-                ident = fn[:i]
-                if ident:
-                    n = SOUNDS.get(ident, 0)
-                    SOUNDS[ident] = n + 1
 
     # resources
     DEFAULT_RESOURCE_POOL = 'global'

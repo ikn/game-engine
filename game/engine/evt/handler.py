@@ -81,7 +81,7 @@ add(*evts, **named_evts) -> unnamed
 Arguments are any number of events.  Keyword arguments define named events with
 the key as the name.  An event can be a
 :class:`BaseEvent <engine.evt.evts.BaseEvent>` instance, or a sequence of
-Pygame event IDs and functions to create an
+Pygame event IDs and functions to create a
 :class:`BaseEvent <engine.evt.evts.BaseEvent>` that listens for the given
 Pygame events and has the functions as callbacks.
 

@@ -91,6 +91,7 @@ World(scheduler, evthandler)
 
         self._initialised = False
         self._extra_args = (args, kwargs)
+        self._music_evt = self.evthandler.add((conf.EVENT_ENDMUSIC,))[0]
         # {sound_id: [(sound, vol)]}, vol excluding the world's sound volume
         self._sounds = {}
         self._avg_draw_time = scheduler.frame
@@ -301,7 +302,7 @@ and also changes the volume of currently playing music.
         if volume > 1:
             print >> sys.stderr, 'warning: music volume greater than 1'
         if volume != conf.MUSIC_VOLUME[i]:
-            conf.MUSIC_VOLUME[self.id] = volume
+            conf.MUSIC_VOLUME[i] = volume
             conf.changed('MUSIC_VOLUME')
             pg.mixer.music.set_volume(volume)
 
@@ -331,6 +332,37 @@ and also changes the volume of currently playing sounds.
                         print >> sys.stderr, ('warning: sound volume greater '
                                               'than 1')
                     snd.set_volume(volume * vol)
+
+    def play_music (self, group=None):
+        """Randomly play music from a group.
+
+play_music([group])
+
+:arg group: music group to play from, as keys in :data:`conf.MUSIC`; defaults
+            to :attr:`id`, and then `''` (the root directory of
+            :data:`conf.MUSIC_DIR`) if there is no such group.
+
+If the group contains music, random tracks are played sequentially until the
+world changes, music from a different group is played, or the Pygame mixer is
+manually stopped.
+
+Raises ``KeyError`` if the group does not exist.
+
+"""
+        if group is None:
+            group = self.id
+            if group not in conf.MUSIC:
+                group = ''
+        # raises KeyError
+        fns = conf.MUSIC[group]
+        if not fns:
+            # no files: do nothing
+            return
+
+        pg.mixer.music.load(choice(fns))
+        pg.mixer.music.play()
+        self._music_evt.rm_cbs(*self._music_evt.cbs)
+        self._music_evt.cb(lambda: self.play_music(group))
 
     def play_snd (self, base_id, volume=1):
         """Play a sound.
@@ -508,15 +540,6 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
         self._init_cbs()
         # set up music
         pg.mixer.music.set_endevent(conf.EVENT_ENDMUSIC)
-        self._music = []
-        d = conf.MUSIC_DIR
-        try:
-            files = os.listdir(d)
-        except OSError:
-            # no directory
-            self._music = []
-        else:
-            self._music = [d + f for f in files if os.path.isfile(d + f)]
         # start first world
         self.start_world(*args, **kwargs)
 
@@ -538,6 +561,12 @@ Takes the same arguments as :meth:`create_world` and passes them to it.
                 self.refresh_display()
 
         conf.on_change('RES_F', change_res_f, source=self)
+
+    def _change_resource_pool (self, new_pool):
+        # callback: after conf.DEFAULT_RESOURCE_POOL change
+        self.resources.drop(self._using_pool, self)
+        self.resources.use(new_pool, self)
+        self._using_pool = new_pool
 
     # world handling
 
@@ -566,8 +595,7 @@ should be passed to that base class).
         eh.add(
             (pg.QUIT, self.quit),
             (pg.ACTIVEEVENT, self._active_cb),
-            (pg.VIDEORESIZE, self._resize_cb),
-            (conf.EVENT_ENDMUSIC, self.play_music)
+            (pg.VIDEORESIZE, self._resize_cb)
         )
         eh.load_s(conf.GAME_EVENTS)
         eh['_game_quit'].cb(self.quit)
@@ -662,22 +690,6 @@ If this quits the last (root) world, exit the game.
         else:
             self.quit()
         return [old_world] + self.quit_world(depth - 1)
-
-    # resources
-
-    def _change_resource_pool (self, new_pool):
-        # callback: after conf.DEFAULT_RESOURCE_POOL change
-        self.resources.drop(self._using_pool, self)
-        self.resources.use(new_pool, self)
-        self._using_pool = new_pool
-
-    def play_music (self):
-        """Play the next piece of music, chosen randomly from
-:data:`conf.MUSIC_DIR`."""
-        if self._music:
-            f = choice(self._music)
-            pg.mixer.music.load(f)
-            pg.mixer.music.play()
 
     # display
 

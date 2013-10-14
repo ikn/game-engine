@@ -163,6 +163,20 @@ Input
 Audio
 -----
 
+.. data:: VOLUME_SCALING
+   :annotation: = 2
+
+   Used in default audio volume scaling (see
+   :meth:`World.scale_volume <engine.game.World.scale_volume>`).
+
+.. data:: MUSIC
+
+   Automatically generated ``{dir: filenames}`` dict for files present in
+   :data:`MUSIC_DIR` and subdirectories (only one level deep).  ``dir`` is the
+   empty string for the root directory, and is always a name, not necessarily a
+   path.  ``filenames`` is a list of paths relative to the working directory at
+   startup, and may be empty.
+
 .. data:: MUSIC_AUTOPLAY
 
    If ``False``, music is loaded, but initially paused.  This is a
@@ -172,7 +186,14 @@ Audio
 .. data:: MUSIC_VOLUME
 
    ``{`` :attr:`World.id <engine.game.World.id>` ``: volume}`` defaultdict,
-   with default value ``0.5``.
+   with default value ``0.5``
+
+.. data:: SOUNDS
+
+   Automatically generated ``{sound_id: num_sounds}`` dict for sounds present
+   in :data:`SOUND_DIR`.  Finds sound files of the form
+   ``<sound_id><number>.ogg`` for integer numbers starting from ``0`` with no
+   gaps.
 
 .. data:: SOUND_VOLUME
 
@@ -196,19 +217,6 @@ Audio
    An ``{alias: sound_id}`` mapping for ``sound_id`` in :data:`SOUNDS` to allow
    using ``alias`` as a sound base ID when playing a sound, with its own value
    in :data:`SOUND_VOLUMES`, etc..
-
-.. data:: SOUNDS
-
-   Automatically generated ``{sound_id: num_sounds}`` dict for sounds present
-   in :data:`SOUND_DIR`.  Finds sound files of the form
-   ``<sound_id><number>.ogg`` for integer numbers starting from ``0`` with no
-   gaps.
-
-.. data:: VOLUME_SCALING
-   :annotation: = 2
-
-   Used in default audio volume scaling (see
-   :meth:`World.scale_volume <engine.game.World.scale_volume>`).
 
 Resources
 ---------

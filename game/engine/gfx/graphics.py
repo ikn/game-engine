@@ -3,10 +3,13 @@
 ---NODOC---
 
 TODO:
- - Tilemap: should change if given Graphics change (tile_types), like Animation
-    - graphic.require(tilemap)
-    - see Animation.render()
-    - note that any graphics passed have their managers removed (and so mustn't be locked)
+ - Tilemap:
+    - should change if given Graphics change (tile_types), like Animation
+        - graphic.require(tilemap)
+        - see Animation.render()
+        - note that any graphics passed have their managers removed (and so mustn't be locked)
+    - should provide tile setters/getters
+    - .update_from from_disk=True should call Graphic.reload() on graphics
  - tiled graphic
     - graphic form is like Tilemap's tile_graphic
  - particle system
@@ -241,9 +244,11 @@ Animation(imgs, pos=(0, 0), layer=0[, scheduler],
 :arg imgs:
     a sequence of images as part of the animation; each can be a Pygame
     surface, a filename to load an surface from, or a
-    :class:`Graphic <engine.gfx.graphic.Graphic>` instance. Note that a
-    :class:`util.Spritemap <engine.gfx.util.Spritemap>` instance is a valid
-    form for this argument.
+    :class:`Graphic <engine.gfx.graphic.Graphic>` instance (in which case it is
+    removed from any
+    :class:`GraphicsManager <engine.gfx.container.GraphicsManager>` it is in).
+    Note that a :class:`util.Spritemap <engine.gfx.util.Spritemap>` instance is
+    a valid form for this argument.
 :arg scheduler: :class:`sched.Scheduler <engine.sched.Scheduler>` instance to
                 use for timing; if not given, animations can only be played
                 when the graphic is contained by a
