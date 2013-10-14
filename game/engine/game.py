@@ -333,20 +333,24 @@ and also changes the volume of currently playing sounds.
                                               'than 1')
                     snd.set_volume(volume * vol)
 
-    def play_music (self, group=None):
+    def play_music (self, group=None, loop=True, cb=None):
         """Randomly play music from a group.
 
-play_music([group])
+play_music([group], loop=True[, cb])
 
 :arg group: music group to play from, as keys in :data:`conf.MUSIC`; defaults
             to :attr:`id`, and then `''` (the root directory of
             :data:`conf.MUSIC_DIR`) if there is no such group.
+:arg loop: whether to play multiple tracks.  If ``True``, play random tracks
+           sequentially until the active world changes, music from a different
+           group is played, or the Pygame mixer is manually stopped.  If a
+           number, play that many randomly selected tracks (if falsy, do
+           nothing).
+:arg cb: a function to call when all the music has been played, according to
+         the value of ``loop``.  Called even if no music is played (if there is
+         none in this group, or ``loop`` is falsy).
 
-If the group contains music, random tracks are played sequentially until the
-world changes, music from a different group is played, or the Pygame mixer is
-manually stopped.
-
-Raises ``KeyError`` if the group does not exist.
+Raises ``KeyError`` if the given group does not exist.
 
 """
         if group is None:
@@ -355,14 +359,29 @@ Raises ``KeyError`` if the group does not exist.
                 group = ''
         # raises KeyError
         fns = conf.MUSIC[group]
-        if not fns:
-            # no files: do nothing
+        if not fns or not loop:
+            # no files or don't want to play anything: do nothing
+            if cb is not None:
+                cb()
             return
 
-        pg.mixer.music.load(choice(fns))
-        pg.mixer.music.play()
+        # modifying variables in closures is painful
+        loop = [loop]
+        def end_cb ():
+            if loop[0] is not True:
+                loop[0] -= 1
+            if loop[0]:
+                play_next()
+            elif cb is not None:
+                cb()
+
+        def play_next ():
+            pg.mixer.music.load(choice(fns))
+            pg.mixer.music.play()
+
+        play_next()
         self._music_evt.rm_cbs(*self._music_evt.cbs)
-        self._music_evt.cb(lambda: self.play_music(group))
+        self._music_evt.cb(end_cb)
 
     def play_snd (self, base_id, volume=1):
         """Play a sound.
