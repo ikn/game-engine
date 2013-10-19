@@ -468,7 +468,7 @@ entry in the ``tiles`` attribute we've defined useful.
 After you've managed that, try putting together a victory message using
 ``World.resources.text`` via ``ResourceManager.text`` via
 :func:`res.load_text <engine.res.load_text>` (take note of
-:attr:`conf.REQUIRED_FONTS` and :attr:`conf.FONT_DIR`).
+:attr:`conf.TEXT_RENDERERS` and :attr:`conf.FONT_DIR`).
 
 High scores
 ###########

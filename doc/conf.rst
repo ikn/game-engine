@@ -228,9 +228,12 @@ Resources
    name.  Resources cached in this pool are never dropped while the game is
    still running.
 
-.. data:: REQUIRED_FONTS
+.. data:: TEXT_RENDERERS
 
-   Fonts to automatically load as a
-   ``{`` :attr:`World.id <engine.game.World.id>` ``: fonts}`` defaultdict,
-   where ``fonts`` is a ``{name: (filename, size)}`` dict giving fonts to load
-   into the default resource pool.
+   :class:`text.TextRenderer <engine.text.TextRenderer>` definitions to make
+   available in :attr:`Game.text_renderers <engine.game.Game.text_renderers>`,
+   as a ``{`` :attr:`World.id <engine.game.World.id>` ``: renderers}``
+   defaultdict with default value ``{}``.  ``renderers`` is
+   ``{name: renderer}``, where ``renderer`` is a
+   :class:`TextRenderer <engine.text.TextRenderer>`, ``(font, options)`` as
+   taken by :class:`TextRenderer <engine.text.TextRenderer>`, or just ``font``.
