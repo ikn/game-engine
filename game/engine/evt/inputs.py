@@ -574,10 +574,10 @@ The ``button`` argument is required, and is the mouse button ID.
     def normalise (self):
         """:meth:`Input.normalise`."""
         held = pg.mouse.get_pressed()
-        if self.button >= len(held):
+        b = self.button - 1
+        if b >= len(held):
             print >> sys.stderr, 'warning: cannot determine held state of ' \
                                  '{0}'.format(self)
-        b = self.button - 1
         # Pygame doesn't return states for some buttons, such as scroll wheels
         held = held[b] if b < len(held) else False
         ButtonInput.set_held(self, held)
