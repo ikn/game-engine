@@ -109,7 +109,7 @@ Options available:
              ``offset`` is ``(x, y)``.
 :arg width: maximum width of returned surface (also see ``wrap``).  This
             excludes padding (``pad``).
-:arg just: if the text has multiple lines, justify: ``0`` = left, `1`` =
+:arg just: if the text has multiple lines, justify: ``0`` = left, ``1`` =
            centre, ``2`` = right.
 :arg minimise: if width is set, treat it as a minimum instead of absolute width
                (that is, shrink the surface after, if possible).
@@ -261,7 +261,7 @@ Like :meth:`render`, raises ``ValueError`` if wrapping fails.
         # compute sizes
         line_height = font.get_height()
         n = len(lines)
-        height = n * line_height + (n - 1) * opts['line_spacing']
+        height = max(n * line_height + (n - 1) * opts['line_spacing'], 0)
         sfc_size = (width + abs(offset[0]) + pad[0] + pad[2],
                     height + abs(offset[1]) + pad[1] + pad[3])
 
@@ -290,7 +290,7 @@ This involves making every option hashable and putting it in a standard format.
 
 """
         o = options
-        if 'size' in o:
+        if 'text_size' in o:
             o['text_size'] = int(o['text_size'])
         if 'colour' in o:
             o['colour'] = normalise_colour(o['colour'])

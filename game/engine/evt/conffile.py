@@ -491,8 +491,8 @@ parse(config) -> parsed
                     parsed[evt_name] = evt_cls(*args)
                 evt_cls, evt_name, args, kwargs = _parse_evthead(lnum, words)
                 if evt_name in parsed:
-                    raise ValueError('line {0}: duplicate event name'
-                                     .format(lnum))
+                    raise ValueError('line {0}: duplicate event name: \'{0}\''
+                                     .format(lnum, evt_name))
                 scalable = evt_cls.name in ('relaxis', 'relaxis2')
             else:
                 if evt_cls is None:

@@ -5,6 +5,8 @@
 TODO:
  - use subsurface for crop transform (but requires rect to be within surface)
  - GraphicView probably doesn't work if in different manager - need to have own _dirty?
+ - something that wraps a Graphic to be a copy of it, like Animation does, and has .graphic setter
+    - use in Animation, etc.
 
 ---NODOC---
 
@@ -184,8 +186,9 @@ really.  To get the real rect, use :attr:`postrot_rect`.
     def rect (self, rect):
         # need to set dirty in old and new rects (if changed)
         rect = Rect(rect)
+        old_rect = self._rect
         self._rect = Rect(rect.topleft, self._rect.size)
-        if rect.size != self.last_rect.size:
+        if rect.size != old_rect.size:
             self.resize(*rect.size)
 
     @property
