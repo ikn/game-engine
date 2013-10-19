@@ -162,7 +162,7 @@ called every time the handler is updated (which should happen every frame).
 
 
 class Event (BaseEvent):
-    """Connects inputs and callbacks (:class:`BaseEvent` subclass).
+    """Connects inputs and callbacks.
 
 Takes any number of inputs like :meth:`add`.
 
@@ -308,7 +308,7 @@ possibly wrapping it.
         return ((i,), ecs, ics)
 
     def add (self, *inps):
-        """:meth:`Event.add`"""
+        """:inherit:"""
         parse_input = self._parse_input
         # args to pass to each event's add method
         arglists = [[] for i in xrange(self.multiple)]
@@ -343,7 +343,7 @@ possibly wrapping it.
         return list(new_inputs)
 
     def rm (self, *inps):
-        """:meth:`Event.rm`."""
+        """:inherit:"""
         for evt in self.evts:
             evt.rm(*inps)
 
@@ -363,7 +363,7 @@ the first argument.
 
 
 class Button (Event):
-    """:class:`Event` subclass representing a button.
+    """Button event.
 
 Button(*items[, initial_delay][, repeat_delay][, dbl_click_time])
 
@@ -428,16 +428,16 @@ events are registered within a frame.
         self._can_dbl_click = False
 
     def input_valid (self, i):
-        """:meth:`Event.input_valid`."""
+        """:inherit:"""
         return i.provides['button']
 
     def down (self, i, component):
-        """:meth:`BaseEvent.down`."""
+        """:inherit:"""
         if component in self.inputs[i][1]:
             self._downevts += 1
 
     def up (self, i, component):
-        """:meth:`BaseEvent.up`."""
+        """:inherit:"""
         if component in self.inputs[i][1]:
             self._upevts += 1
             # stop repeating if let go of all buttons at any point
@@ -446,7 +446,7 @@ events are registered within a frame.
                 self._repeating = False
 
     def gen_cb_args (self, changed):
-        """:meth:`Event.gen_cb_args`."""
+        """:inherit:"""
         modes = self.modes
         if modes & (bmode.HELD | bmode.REPEAT):
             held = any(i.held(self)[0] for i in self.inputs)
@@ -564,7 +564,7 @@ as being (left, up, right, down).  ``axis`` corresponds to the x or y axis
 
 
 class Axis (Event):
-    """:class:`Event` subclass representing an axis.
+    """Axis event.
 
 The magnitude of the axis position for a button is ``1`` if it is held, else
 ``0``.
@@ -582,11 +582,11 @@ over each registered input and restricting to ``-1 <= x <= 1``).
         self._pos = 0
 
     def input_valid (self, i):
-        """:meth:`Event.input_valid`."""
+        """:inherit:"""
         return i.provides['axis'] or i.provides['button']
 
     def gen_cb_args (self, changed):
-        """:meth:`Event.gen_cb_args`."""
+        """:inherit:"""
         if changed:
             # compute position: sum over every input
             pos = 0
@@ -627,7 +627,7 @@ two axes.
         MultiEvent.__init__(self, inps)
 
     def gen_cb_args (self, changed):
-        """:meth:`Event.gen_cb_args`."""
+        """:inherit:"""
         pos = [0] * self.multiple
         for evt_i, this_pos in MultiEvent.gen_cb_args(self, changed):
             pos[evt_i] += this_pos
@@ -635,7 +635,7 @@ two axes.
 
 
 class RelAxis (Event):
-    """:class:`Event` subclass representing a relative axis.
+    """Relative axis event.
 
 Each input is scaled by a positive number (see :meth:`add` for details).
 
@@ -678,7 +678,7 @@ calling callbacks.
         return Event.add(self, *real_inputs)
 
     def rm (self, *inps):
-        """:meth:`Event.rm`."""
+        """:inherit:"""
         Event.rm(self, *inps)
         # remove stored scales (no KeyError means all inputs exist)
         scale = self.input_scales
@@ -686,12 +686,12 @@ calling callbacks.
             del scale[i]
 
     def input_valid (self, i):
-        """:meth:`Event.input_valid`."""
+        """:inherit:"""
         return (i.provides['relaxis'] or i.provides['axis'] or
                 i.provides['button'])
 
     def gen_cb_args (self, changed):
-        """:meth:`Event.gen_cb_args`."""
+        """:inherit:"""
         rel = 0
         scale = self.input_scales
         # sum all relative positions
@@ -744,7 +744,7 @@ relative axes.
             return ((scale,) + i, ecs, ics)
 
     def gen_cb_args (self, changed):
-        """:meth:`Event.gen_cb_args`."""
+        """:inherit:"""
         rel = [0] * self.multiple
         for evt_i, this_rel in MultiEvent.gen_cb_args(self, changed):
             rel[evt_i] += this_rel

@@ -179,7 +179,7 @@ This class's implementation does nothing.
 
 
 class SettingsManager (DummySettingsManager):
-    """An object for handling settings; :class:`DummySettingsManager` subclass.
+    """An object for handling settings.
 
 SettingsManager(settings, fn, save=(), filter_caps=False)
 

@@ -405,15 +405,15 @@ value if you can easily do so.
 
 
 class Timer (object):
-    """Simple timer.
+    """Frame-based timer.
 
-Timer(fps = 60)
+Timer(fps=60)
 
 :arg fps: frames per second to aim for.
 
 """
 
-    def __init__ (self, fps = 60):
+    def __init__ (self, fps=60):
         #: The current length of a frame in seconds.
         self.frame = None
         #: The current average frame time in seconds (like
@@ -529,7 +529,7 @@ it does not necessarily reflect real time.
 
 
 class Scheduler (Timer):
-    """Simple event scheduler (:class:`Timer` subclass).
+    """Frame-based event scheduler.
 
 Scheduler(fps = 60)
 

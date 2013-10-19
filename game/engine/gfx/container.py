@@ -254,7 +254,6 @@ to put graphics in."""
 
 class GraphicsManager (Graphic):
     """Draws things to a surface intelligently.
-:class:`Graphic <engine.gfx.graphic.Graphic>` subclass.
 
 GraphicsManager(scheduler[, sfc], pos=(0, 0), layer=0)
 
@@ -493,7 +492,7 @@ persists; set :attr:`overlay` to ``None`` to remove it.
             self.overlay = None
 
     def dirty (self, *rects):
-        """:meth:`Graphic.dirty() <engine.gfx.graphic.Graphic.dirty>`"""
+        """:inherit:"""
         if self._surface is None:
             # nothing to mark as dirty
             return
@@ -535,6 +534,6 @@ changed parts of the surface, or ``False`` if nothing changed.
         return dirty
 
     def render (self):
-        """:meth:`Graphic.render() <engine.gfx.graphic.Graphic.render>`"""
+        """:inherit:"""
         self.draw()
         Graphic.render(self)

@@ -36,7 +36,7 @@ add_module_names = False
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'style.MyStyle'
 
-autodoc_default_flags = ('members', 'undoc-members')
+autodoc_default_flags = ('members', 'undoc-members', 'show-inheritance')
 autodoc_member_order = 'bysource'
 autodoc_docstring_signature = True
 
@@ -76,11 +76,15 @@ def fix_sig (app, o_type, name, obj, options, sig, rtn):
             args = re.sub(pat2, '', re.sub(pat1, ', ', args))
             return (args, rtn)
 
+def skip (app, o_type, name, obj, skip, options):
+    return skip or obj.__doc__ == ':inherit:'
+
 def setup (app):
     app.connect('autodoc-process-docstring', rm_sig)
     app.connect('autodoc-process-docstring',
                 sphinx.ext.autodoc.between('---NODOC---', exclude=True))
     app.connect('autodoc-process-signature', fix_sig)
+    app.connect('autodoc-skip-member', skip)
 
 
 # -- Options for HTML output ---------------------------------------------------

@@ -306,7 +306,7 @@ BasicInput(pgevt)
         return self._str(pg.event.event_name(self.pgevt).upper())
 
     def handle (self, pgevt):
-        """:meth:`Input.handle`."""
+        """:inherit:"""
         Input.handle(self, pgevt)
         self._pgevts.append(pgevt)
         return True
@@ -488,7 +488,7 @@ component ``0`` for Pygame events with IDs in this list, and up on component
 
 
 class KbdKey (ButtonInput):
-    """:class:`ButtonInput` subclass representing a keyboard key.
+    """Keyboard key.
 
 The ``button`` argument is required, and is the key code.
 
@@ -509,7 +509,7 @@ The ``button`` argument is required, and is the key code.
     _mod_btn_name = _btn_name
 
     def normalise (self):
-        """:meth:`Input.normalise`."""
+        """:inherit:"""
         ButtonInput.set_held(self, pg.key.get_pressed()[self.button])
 
 
@@ -542,7 +542,7 @@ class _SneakyMultiKbdKey (KbdKey):
         return False
 
     def normalise (self):
-        """:meth:`Input.normalise`."""
+        """:inherit:"""
         held = pg.key.get_pressed()
         for k in self._keys:
             self._held_multi[k] = held[k]
@@ -550,7 +550,7 @@ class _SneakyMultiKbdKey (KbdKey):
 
 
 class MouseButton (ButtonInput):
-    """:class:`ButtonInput` subclass representing a mouse button.
+    """Mouse button.
 
 The ``button`` argument is required, and is the mouse button ID.
 
@@ -572,7 +572,7 @@ The ``button`` argument is required, and is the mouse button ID.
         return 'mouse button {0}'.format(self.button)
 
     def normalise (self):
-        """:meth:`Input.normalise`."""
+        """:inherit:"""
         held = pg.mouse.get_pressed()
         b = self.button - 1
         if b >= len(held):
@@ -584,7 +584,7 @@ The ``button`` argument is required, and is the mouse button ID.
 
 
 class PadButton (ButtonInput):
-    """:class:`ButtonInput` subclass representing a gamepad button.
+    """Gamepad button.
 
 PadButton(device_id, button, *mods)
 
@@ -618,7 +618,7 @@ PadButton(device_id, button, *mods)
         return 'pad {0} button {1}'.format(self._str_dev_id(), self.button)
 
     def normalise (self):
-        """:meth:`Input.normalise`."""
+        """:inherit:"""
         for j in _pad_matches(self._device_id):
             try:
                 held = j.get_button(self.button)
@@ -631,8 +631,7 @@ PadButton(device_id, button, *mods)
 
 
 class AxisInput (ButtonInput):
-    """Abstract base class representing 2-component axes
-(:class:`ButtonInput` subclass).
+    """Abstract base class representing 2-component axes.
 
 AxisInput([axis][, thresholds], *mods)
 
@@ -791,7 +790,7 @@ number).  Otherwise, this method does nothing.
 
 
 class PadAxis (AxisInput):
-    """:class:`AxisInput` subclass representing a gamepad axis.
+    """Gamepad axis.
 
 PadAxis(device_id, axis[, thresholds], *mods)
 
@@ -826,7 +825,7 @@ PadAxis(device_id, axis[, thresholds], *mods)
         return self._str('{0}, {1}'.format(self._str_dev_id(), self.axis))
 
     def normalise (self):
-        """:meth:`Input.normalise`."""
+        """:inherit:"""
         for j in _pad_matches(self._device_id):
             try:
                 apos = j.get_axis(self.axis)
@@ -839,7 +838,7 @@ PadAxis(device_id, axis[, thresholds], *mods)
 
 
 class PadHat (AxisInput):
-    """:class:`AxisInput` subclass representing a gamepad axis.
+    """Gamepad hat.
 
 PadHat(device_id, axis[, thresholds], *mods)
 
@@ -875,7 +874,7 @@ PadHat(device_id, axis[, thresholds], *mods)
         return self._str('{0}, {1}'.format(self._str_dev_id(), self.axis))
 
     def normalise (self):
-        """:meth:`Input.normalise`."""
+        """:inherit:"""
         for j in _pad_matches(self._device_id):
             try:
                 apos = j.get_hat(self.axis)
@@ -888,8 +887,7 @@ PadHat(device_id, axis[, thresholds], *mods)
 
 
 class RelAxisInput (AxisInput):
-    """Abstract base class representing 2-component relative axes
-(:class:`AxisInput` subclass).
+    """Abstract base class representing 2-component relative axes.
 
 RelAxisInput([relaxis][, bdy][, thresholds][, mods])
 
@@ -942,7 +940,7 @@ behaviour in this case is undefined.
         self.bdy = bdy
 
     def handle (self, pgevt, mods_match):
-        """:class:`ButtonInput.handle`."""
+        """:inherit:"""
         rtn = Input.handle(self, pgevt)
         if hasattr(self, 'relaxis_val_attr'):
             rpos = getattr(pgevt, self.relaxis_val_attr)
@@ -980,14 +978,14 @@ If no components are given, reset in all components.
             self.rel[c] = 0
 
     def normalise (self):
-        """:meth:`Input.normalise`."""
+        """:inherit:"""
         self.reset()
         self.pos = (0,) * (self.components // 2)
         self._held = [False] * self.components
 
 
 class MouseAxis (RelAxisInput):
-    """:class:`RelAxisInput` subclass representing both mouse axes.
+    """Represents both mouse axes.
 
 MouseAxis([bdy][, thresholds], *mods)
 
