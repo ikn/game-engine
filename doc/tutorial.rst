@@ -317,13 +317,8 @@ different inputs to do the same thing.  Let's use the following:
 
 This supports the ``WASD`` keys for a number of keyboard layouts, and the
 analogue sticks on all connected gamepads (for an Xbox 360 controller and any
-other controller with analogue sticks bound to the same axes).  For the
-gamepads to work, we need a little more code (just standard Pygame stuff) in
-the ``init`` method::
-
-    pg.joystick.init()
-    for i in xrange(pg.joystick.get_count()):
-        pg.joystick.Joystick(i).init()
+other controller with analogue sticks bound to the same axes).  Gamepads are
+initialised automatically.
 
 How about supporting mouse input too?  The obvious control scheme is to move
 any clicked tile to the missing tile if it's next to it.  To support both left-

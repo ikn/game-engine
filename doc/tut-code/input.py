@@ -19,10 +19,6 @@ class Conf (object):
 
 class Puzzle (engine.game.World):
     def init (self):
-        # initialise gamepads
-        pg.joystick.init()
-        for i in xrange(pg.joystick.get_count()):
-            pg.joystick.Joystick(i).init()
         # register input handlers
         eh = self.evthandler
         eh.load('controls')
