@@ -4,9 +4,8 @@ import os
 if os.name == 'nt':
     # for Windows freeze support
     import pygame._view
-from game import engine
 
-from game.level import Level as entry_world
+from game import engine, EntryWorld
 
 if __name__ == '__main__':
     engine.init()
@@ -42,14 +41,14 @@ if __name__ == '__main__':
             args = ', '.join(repr(arg) for arg in args)
             if args:
                 args += ', '
-            code = 'engine.game.run(entry_world, {0}t = options.time)'
+            code = 'engine.game.run(EntryWorld, {0}t = options.time)'
             run(code.format(args), options.profile_file, locals())
             Stats(options.profile_file).strip_dirs() \
                 .sort_stats(options.sort_stats).print_stats(options.num_stats)
             os.unlink(options.profile_file)
         else:
-            engine.game.run(entry_world, *args, t = options.time)
+            engine.game.run(EntryWorld, *args, t = options.time)
     else:
-        engine.game.run(entry_world, *args)
+        engine.game.run(EntryWorld, *args)
 
     engine.quit()
