@@ -1323,28 +1323,23 @@ state*.
         return g
 
     def view (self):
-        parent_cls = type(self)
+        """Return a 'view' to this graphic.
 
-        class GraphicView (parent_cls):
-            """'View' to a :class:`Graphic` (:class:`Graphic` subclass).
-
-GraphicView(graphic)
-
-:arg graphic: the :class:`Graphic` (or subclass) instance to provide a wrapper
-            for.
-
-This is a wrapper around a graphic that allows assigning a different position
-and visibility (:attr:`Graphic.visible`, :attr:`Graphic.layer`, etc.) without
-affecting the original graphic (or any other wrappers).
+This is a wrapper around the graphic that allows assigning a different position
+and visibility (:attr:`visible`, :attr:`layer`, etc.) without affecting the
+original graphic (or any other wrappers).  It is a subclass of this graphic's
+class.
 
 Changes to the image represented by either the wrapper or the original graphic
 affect both instances.  This includes both transformations and changes to the
 original surface.
 
-``graphic``'s class may not define a ``child`` property.
+This may not be used on subclasses that define a ``child`` property.
 
 """
+        parent_cls = type(self)
 
+        class GraphicView (parent_cls):
             is_view = True
             _faked_attrs = ('_rect', 'last_rect', '_postrot_rect',
                             '_last_postrot_rect', '_manager', 'visible',
