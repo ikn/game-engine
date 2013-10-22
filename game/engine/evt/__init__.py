@@ -47,6 +47,53 @@ TODO:
     button confirm DOWN
         [next]
 
+    [MP example]
+
+button pause DOWN
+    kbd ESCAPE
+    pad button 1
+
+axis2 moveK1
+    left kbd LEFT
+    right kbd RIGHT
+    up kbd UP
+    down kbd DOWN
+axis2 moveK2
+    left kbd a
+    right kbd d
+    up kbd w
+    down kbd s
+axis2 moveC
+    left right pad <x> axis 0
+    up down pad <x> axis 1 .1
+axis2 imoveC
+    left right pad <x> axis 0
+    down up pad <x> axis 1 .1
+
+button fire1
+    kbd rctrl
+button fire2
+    kbd space
+button fire3
+    pad button 0
+
+scheme play
+    # must have the same number of options in each field
+    move moveK1 moveK2 moveC # if no more args, take everything this prefixes, and sort
+    fire fire1 fire2 fire3 # or could do this; here, order is fixed
+
+----
+
+eh['pause'].cb(pause)
+# call function move() with the player from players above followed by
+# (horizontal, vertical) axis positions (added via scheme 'play')
+eh['move'].cb(move)
+# create n_players control schemes with priorities favouring gamepad over WASD
+# over arrow keys
+# players is list of ({action: action_id}, {device_var: device})
+# priorities are high to low; omitted ones don't get used
+players = eh['play'].distribute(n_players, 'C', 'K2', 'K1')
+
 ---NODOC---
 
 """

@@ -284,6 +284,7 @@ however, and transformations are only applied in
         self._gm_dirty = False
         self._overlay = None
         self._fade_id = None
+        self.fading = False
         #: ``{layer: graphics}`` dict, where ``graphics`` is a set of the
         #: graphics in layer ``layer``, each as taken by :meth:`add`.
         self.graphics = {}
@@ -483,12 +484,14 @@ persists; set :attr:`overlay` to ``None`` to remove it.
         self._fade_id = self.scheduler.interp(
             get_val, (self._overlay, 'colour'), *args, **kw
         )
+        self.fading = True
 
     def cancel_fade (self):
         """Cancel any currently running fade and remove the overlay."""
         if self._fade_id is not None:
             self.scheduler.rm_timeout(self._fade_id)
             self._fade_id = None
+            self.fading = False
             self.overlay = None
 
     def dirty (self, *rects):
