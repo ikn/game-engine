@@ -513,6 +513,9 @@ events.
 """
         for i in self.inputs:
             i.normalise()
+        for es in (self._named_evts.itervalues(), self.evts):
+            for e in es:
+                e._changed = True
 
     def monitor_deadzones (self, *deadzones):
         """Not implemented."""
