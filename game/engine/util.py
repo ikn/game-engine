@@ -30,6 +30,7 @@ dd(default[, items], **kwargs) -> default_dict
 :return: the created ``defaultdict``.
 
 """
+    items = items.copy()
     items.update(kwargs)
     return defaultdict(lambda: default, items)
 
