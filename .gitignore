@@ -1,7 +1,7 @@
-build/*
-bak/*
+/build/
+/bak/
 *.so
 py_ver
 *.py[co]
-__pycache__
-doc/_build/*
+__pycache__/
+/doc/_build/
