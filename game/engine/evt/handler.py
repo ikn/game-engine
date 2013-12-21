@@ -81,9 +81,19 @@ add(*evts, **named_evts) -> unnamed
 Arguments are any number of events.  Keyword arguments define named events with
 the key as the name.  An event can be a
 :class:`BaseEvent <engine.evt.evts.BaseEvent>` instance, or a sequence of
-Pygame event IDs and functions to create a
-:class:`BaseEvent <engine.evt.evts.BaseEvent>` that listens for the given
-Pygame events and has the functions as callbacks.
+Pygame event IDs and functions to create an
+:class:`Event <engine.evt.evts.BaseEvent>` that listens for the given
+Pygame events and has the functions as callbacks.  For example,
+
+::
+
+    handler.add(
+        (pygame.KEYDOWN, f1, f2),
+        (f3, pygame.KEYDOWN, f4, pygame.KEYUP)
+    )
+
+will register callbacks ``f1`` and ``f2`` for keydown events, and ``f3`` and
+``f4`` for both ``keydown`` and ``keyup`` events.
 
 :return: a list of added unnamed events (positional arguments) (possibly
          created in this call).
@@ -372,17 +382,13 @@ Raises ``KeyError`` if any arguments are missing.
 
 domains(*domains) -> evts
 
-:return: ``(unnamed, named)``---a list of unnamed events and ``{name: event}``
-         for named events.
-
 """
-        unnamed = []
-        named = {}
+        evts = []
         for domain in domains:
             if domain is None:
                 raise KeyError(domain)
-            items.extend(self._evts_by_domain[domain]) # raises KeyError
-        return (unnamed, named)
+            evts.extend(self._evts_by_domain[domain]) # raises KeyError
+        return evts
 
     def _load_evts (self, evts, domain):
         # load events as parsed from config file

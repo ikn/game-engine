@@ -1,5 +1,7 @@
 """Event classes for connecting inputs with callbacks."""
 
+import sys
+
 import pygame as pg
 
 from ..util import wrap_fn
@@ -405,6 +407,8 @@ events are registered within a frame.
                 modes |= item
             else:
                 inps.append(item)
+        if not modes:
+            print >> sys.stderr, 'warning: no modes passed to Button event'
         Event.__init__(self, *inps)
         #: A bitwise-OR of all button modes passed to the constructor.
         self.modes = modes
