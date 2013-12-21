@@ -944,11 +944,21 @@ Missing items are ignored.
         return self
 
     def pause (self):
-        """Pause the counter, if running."""
+        """Pause the counter, if running.
+
+pause() -> self
+
+"""
         if self._timer_id is not None:
             self._scheduler.pause_timeout(self._timer_id)
+        return self
 
     def unpause (self):
-        """Unpause the counter, if paused."""
+        """Unpause the counter, if paused.
+
+unpause() -> self
+
+"""
         if self._timer_id is not None:
             self._scheduler.unpause_timeout(self._timer_id)
+        return self

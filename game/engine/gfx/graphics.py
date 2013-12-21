@@ -543,14 +543,24 @@ If a sequence is already being played, that sequence is canceled.
         return self
 
     def pause (self):
-        """Pause the currently running sequence, if any."""
+        """Pause the currently running sequence, if any.
+
+pause() -> self
+
+"""
         if self.playing is not None:
             self._get_sched().pause_timeout(self._timer_id)
+        return self
 
     def unpause (self):
-        """Unpause the currently running sequence, if paused."""
+        """Unpause the currently running sequence, if paused.
+
+unpause() -> self
+
+"""
         if self.playing is not None:
             self._get_sched().unpause_timeout(self._timer_id)
+        return self
 
     def stop (self, n_queued=0):
         """Stop the currently running sequence, if any.
