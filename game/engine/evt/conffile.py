@@ -488,10 +488,10 @@ parse(config) -> parsed
             if words[0] in evts_by_name:
                 # new event: create and add current event
                 if evt_cls is not None:
-                    parsed[evt_name] = evt_cls(*args)
+                    parsed[evt_name] = evt_cls(*args, **kwargs)
                 evt_cls, evt_name, args, kwargs = _parse_evthead(lnum, words)
                 if evt_name in parsed:
-                    raise ValueError('line {0}: duplicate event name: \'{0}\''
+                    raise ValueError('line {0}: duplicate event name: \'{1}\''
                                      .format(lnum, evt_name))
                 scalable = evt_cls.name in ('relaxis', 'relaxis2')
             else:
