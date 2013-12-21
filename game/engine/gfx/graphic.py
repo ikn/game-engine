@@ -3,6 +3,7 @@
 ---NODOC---
 
 TODO:
+ - a solution to the rotation problem (jaggy edges if they were the surface borders)
  - use subsurface for crop transform (but requires rect to be within surface)
  - GraphicView probably doesn't work if in different manager - need to have own _dirty?
  - something that wraps a Graphic to be a copy of it, like Animation does, and has .graphic setter
