@@ -259,7 +259,7 @@ Note that when an animation is playing and the image changes,
 
 For example, to play the frames in a spritemap consisting of a single row::
 
-    Animation(Spritemap('map.png', 32)).add('run', frame_time=.1).play('run')
+    Animation(Spritemap('map.png', 4)).add('run', frame_time=.1).play('run')
 
 """
     def __init__ (self, imgs, pos=(0, 0), layer=0, scheduler=None,

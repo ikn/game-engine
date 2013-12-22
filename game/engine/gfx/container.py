@@ -229,7 +229,7 @@ Note that graphics need not be added to a :class:`GraphicsManager` individually
 Raises ``KeyError`` for missing graphics.
 
 """
-        gm = self._gm
+        gm = self._manager
         for g in graphics:
             del self._graphics[g]
             if gm is not None:

@@ -239,15 +239,12 @@ Each entity passed may also be a sequence of entities to add.
             if hasattr(e, '__len__') and hasattr(e, '__getitem__'):
                 entities.extend(e)
             else:
-                all_entities.add(e)
                 if e.world is not None:
                     e.world.rm(e)
-                elif e.graphics.manager is not None:
-                    # has no world, so manager was explicitly set, so don't
-                    # change it
-                    pass
-                else:
+                if e.graphics.manager is None:
                     e.graphics.manager = self.graphics
+                # else manager was explicitly set, so don't change it
+                all_entities.add(e)
                 e.world = self
                 e.added()
 

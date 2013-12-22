@@ -522,9 +522,9 @@ class InfiniteGrid (object):
 
 Grid(tile_size, gap=0)
 
-:arg tile_size: ``(tile_width, tile_height)`` integers giving the size of every
+:arg tile_size: ``(tile_width, tile_height)`` numbers giving the size of every
                 tile, or a single number for square tiles.
-:arg gap: ``(col_gap, row_gap)`` integers giving the gap between columns and
+:arg gap: ``(col_gap, row_gap)`` numbers giving the gap between columns and
           rows respectively, or a single number for the same gap in both cases.
 
 The grid expands in all directions, so ``col`` and ``row`` arguments to methods
