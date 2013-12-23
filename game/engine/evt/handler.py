@@ -8,6 +8,26 @@ from .evts import BaseEvent, Event
 from . import conffile
 
 
+def _check_mods (i, mods):
+    # check if input's required modifiers are active
+    this_mods = i.mods
+    for device in inputs.mod_devices[i.device]:
+        for device_id in set((i.device_id, True)):
+            for m in mods.get(device, {}).get(device_id, ()):
+                # mod matches if it's the same button
+                # as the input itself
+                if m == i:
+                    yield True
+                    continue
+                # or if it's held in exactly this
+                # input's components
+                if m in this_mods:
+                    # only have one component
+                    yield m.held(i)[0] and m._held.count(True) == 1
+                else:
+                    yield not any(m._held)
+
+
 class EventHandler (object):
     """Handles events.
 
@@ -323,13 +343,20 @@ Raises ``KeyError`` if any arguments are missing.
 
         for pgevt in pgevts:
             # find matching inputs
-            inps = all_inputs
-            while isinstance(inps, tuple):
-                attr, inps = inps
-                val = getattr(pgevt, attr) if hasattr(pgevt, attr) \
-                                           else inputs.UNFILTERABLE
-                inps = inps[val if val is inputs.UNFILTERABLE or val in inps
-                                else inputs.UNFILTERABLE]
+            sources = [all_inputs]
+            inps = []
+            while sources:
+                source = sources.pop()
+                if isinstance(source, tuple):
+                    attr, filtered = source
+                    if hasattr(pgevt, attr):
+                        val = getattr(pgevt, attr)
+                        if val in filtered:
+                            sources.append(filtered[val])
+                    sources.append(filtered[inputs.UNFILTERABLE])
+                else:
+                    inps.append(source)
+            inps = set().union(*inps)
             # check all modifiers are active
             for i in inps:
                 args = ()
@@ -339,28 +366,7 @@ Raises ``KeyError`` if any arguments are missing.
                         # mods have no mods, so always match
                         args = (True,)
                     else:
-                        this_mods = i.mods
-
-                        def check_mods ():
-                            for device in inputs.mod_devices[i.device]:
-                                for device_id in set((i.device_id, True)):
-                                    for m in (mods.get(device, {})
-                                              .get(device_id, ())):
-                                        # mod matches if it's the same button
-                                        # as the input itself
-                                        if m == i:
-                                            yield True
-                                            continue
-                                        # or if it's held in exactly this
-                                        # input's components
-                                        if m in this_mods:
-                                            # only have one component
-                                            yield (m.held(i)[0] and
-                                                   m._held.count(True) == 1)
-                                        else:
-                                            yield not any(m._held)
-
-                        args = (all(check_mods()),)
+                        args = (all(_check_mods(i, mods)),)
                 else:
                     is_mod = False
                 # careful: mods have no event
