@@ -7,23 +7,19 @@ from .util import ir
 class Entity (object):
     """A thing that exists in the world.
 
-Entity(x=0, y=0)
-
-Arguments are passed to
-:class:`GraphicsGroup <engine.gfx.container.GraphicsGroup>` when creating
-:attr:`graphics`.
+Entity()
 
 Currently, an entity is just a container of graphics.
 
 """
 
-    def __init__ (self, x=0, y=0):
+    def __init__ (self):
         #: The :class:`World <engine.game.World>` this entity is in.  This is
         #: set by the world when the entity is added or removed.
         self.world = None
         #: :class:`GraphicsGroup <engine.gfx.container.GraphicsGroup>`
-        #: containing the entity's graphics.
-        self.graphics = GraphicsGroup(x, y)
+        #: containing the entity's graphics, with ``x=0``, ``y=0``.
+        self.graphics = GraphicsGroup()
 
     def added (self):
         """Called whenever the entity is added to a world.

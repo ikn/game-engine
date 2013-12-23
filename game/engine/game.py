@@ -45,7 +45,7 @@ class _ClassProperty (property):
 class World (object):
     """A world base class; to be subclassed.
 
-World(scheduler, evthandler)
+World(scheduler, evthandler, resources)
 
 :arg scheduler: the :class:`sched.Scheduler <engine.sched.Scheduler>` instance
                 this world should use for timing.
@@ -121,7 +121,7 @@ speed, it may mean the draw rate is dropping to :data:`conf.MIN_FPS`.)
 """
         return 1 / self._avg_draw_time
 
-    def init (self):
+    def init (self, *args, **kwargs):
         """Called when this first becomes the active world (before
 :meth:`select`).
 
