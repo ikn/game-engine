@@ -4,11 +4,11 @@ import sys
 
 import pygame as pg
 
-#: A value that an :class:`Input` cannot filter for.  If you want to filter for
-#: ``None``, you may change this in the module, but make sure to do so before
-#: creating any :class:`EventHandler <engine.evt.handler.EventHandler>`
-#: instances, and never after.
-UNFILTERABLE = None
+class _Unfilterable (object):
+    pass
+
+#: A value that an :class:`Input` cannot filter for.
+UNFILTERABLE = _Unfilterable()
 
 #: ``{device: allowed_mod_devices}`` for :class:`ButtonInput` instances.  An
 #: input for :attr:`device <Input.device>` ``device`` may only have modifiers
@@ -168,9 +168,6 @@ filter(attr, *vals, refilter = False) -> self
 :arg vals: allowed values of the given attribute for filtered events.
 :arg refilter: if ``True``, replace previous filtering by ``attr`` with the
                given ``vals``, else add to the values already filtered by.
-
-Note that due to the implementation, there is a value that cannot be filtered
-for: :data:`UNFILTERABLE`.
 
 """
         refilter = kw.get('refilter', False)

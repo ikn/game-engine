@@ -12,6 +12,7 @@ TODO:
     - .update_from from_disk=True should call Graphic.reload() on graphics
  - tiled graphic
     - graphic form is like Tilemap's tile_graphic
+    - takes multiple rects to cover all of them with edges matching up
  - particle system
  - *Grid take (tiled graphic)/(args thereto) instead of just colour for bg
 
