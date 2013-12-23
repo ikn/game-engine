@@ -764,7 +764,9 @@ transformation, where:
 
 - ``sfc`` is the resulting pygame Surface.
 - ``dirty`` is a corresponding definition of changed areas in the resulting
-  surface.
+  surface - everything that changed since 'last time', which is the result
+  after the last time the transform was performed, or the result before the
+  transform is performed, if it hasn't been performed before.
 
 ``src`` should never be altered, but may be returned as ``sfc`` if the
 transform does nothing.  Possible modes of operation are:
@@ -1005,9 +1007,6 @@ If successful, all transformations are reapplied afterwards, if any.
             return (w, h)
 
         w, h = parse_args(w, h, scale)
-        if w == start_w and h == start_h:
-            # transform does nothing
-            return (src, dirty)
         new_dirty = True
         if dirty is not True and last_args is not None:
             if (w, h) == parse_args(*last_args):
@@ -1023,6 +1022,11 @@ If successful, all transformations are reapplied afterwards, if any.
                     # but do full transform
                 else:
                     return (dest, False)
+
+        if w == start_w and h == start_h:
+            # transform does nothing
+            return (src, new_dirty if last_args is None else True)
+
         # full transform
         return (self.scale_fn(src, (w, h)), new_dirty)
 
@@ -1094,9 +1098,6 @@ rescale_both(scale=1) -> self
     def _crop (self, src, dest, dirty, last_args, rect):
         start = src.get_rect()
         rect = Rect(rect)
-        if start == rect:
-            # no cropping occurs
-            return (src, dirty)
         if dirty is not True and last_args is not None:
             if Rect(last_args[0]) == rect:
                 # same size as last time
@@ -1114,6 +1115,11 @@ rescale_both(scale=1) -> self
                     return (dest, new_dirty)
                 else:
                     return (dest, False)
+
+        if start == rect:
+            # no cropping occurs
+            return (src, dirty if last_args is None else True)
+
         # do a full transform
         if start.contains(rect) and not has_alpha(src):
             new_sfc = pg.Surface(rect.size)
@@ -1148,8 +1154,6 @@ crop(rect) -> self
         return (mods, src_sz)
 
     def _flip (self, src, dest, dirty, last_args, x=False, y=False):
-        if not x and not y:
-            return (src, dirty)
         if dirty is not True and last_args is not None and last_args == (x, y):
             if dirty:
                 # check if a partial transform would be quicker
@@ -1175,6 +1179,11 @@ crop(rect) -> self
                     return (dest, new_dirty)
             else:
                 return (dest, False)
+
+        if not x and not y:
+            # transform does nothing
+            return (src, dirty if last_args is None else True)
+
         # do a full transform
         new_sfc = pg.transform.flip(src, x, y)
         return (new_sfc, True)
@@ -1207,11 +1216,15 @@ flip(x = False, y = False) -> self
 
     def _tint (self, src, dest, dirty, last_args, colour):
         colour = normalise_colour(colour)
-        if colour == (255, 255, 255, 255):
-            return (src, dirty)
         if (dirty is False and last_args is not None and
             normalise_colour(last_args[0]) == colour):
             return (dest, False)
+
+        if colour == (255, 255, 255, 255):
+            # transform does nothing
+            return (src, dirty if last_args is None else True)
+
+        # full transform
         if not has_alpha(src):
             src = src.convert_alpha()
         new_sfc = pg.Surface(src.get_size()).convert_alpha()
@@ -1261,17 +1274,17 @@ opacify(opacity) -> self
         return ((apply_fn, undo_fn), src_sz)
 
     def _rotate (self, src, dest, dirty, last_args, angle):
-        if abs(angle) < self.rotate_threshold:
-            # transform does nothing
-            return (src, dirty)
-        w, h = src.get_size()
-        cx, cy = w / 2., h / 2.
         if not dirty and last_args is not None:
             # if last_angle == angle, then surface size didn't change, so
             # neither did the centre point
             if abs(angle - last_args[0]) < self.rotate_threshold:
                 # no change to result
                 return (dest, False)
+
+        if abs(angle) < self.rotate_threshold:
+            # transform does nothing
+            return (src, dirty if last_args is None else True)
+
         # do a full transform
         # if not already alpha and we might end up with borders, convert to
         # alpha
