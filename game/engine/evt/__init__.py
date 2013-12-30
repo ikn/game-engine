@@ -8,6 +8,7 @@ TODO:
  - eh.set_{thresholds,bdys} like deadzones (but also allow global, and same with deadzones)
     - make them setters
     - think of a nicer system for it (some sort of InputFilter, then {filter: value}?)
+ - Event.disable()/enable()
 
     [config]
  - can do (per-device, per-device_id/var or global) deadzones/thresholds/bdy (can already do per-input, right?)
@@ -17,6 +18,7 @@ TODO:
     - save to the homedir one
 
     [FUTURE]
+ - eh.postpone(), Event.postpone()
  - eh.detect_pads() (make sure to re-initialise already-initialised ones)
  - Scheme [NOTE]
  - generalised input areas

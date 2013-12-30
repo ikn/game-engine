@@ -10,6 +10,7 @@ TODO:
         - note that any graphics passed have their managers removed (and so mustn't be locked)
     - should provide tile setters/getters
     - .update_from from_disk=True should call Graphic.reload() on graphics
+    - only prerender tiles as requested
  - tiled graphic
     - graphic form is like Tilemap's tile_graphic
     - takes multiple rects to cover all of them with edges matching up
