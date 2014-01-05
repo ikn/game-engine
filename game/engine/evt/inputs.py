@@ -1010,9 +1010,23 @@ MouseAxis([bdy][, thresholds], *mods)
         return self._str('')
 
 
-class mod:
-    """Contains objects that act as specific keyboard modifiers."""
-    CTRL = (_SneakyMultiKbdKey(pg.KMOD_CTRL, pg.K_LCTRL, pg.K_RCTRL))
-    SHIFT = (_SneakyMultiKbdKey(pg.KMOD_SHIFT, pg.K_LSHIFT, pg.K_RSHIFT))
-    ALT = (_SneakyMultiKbdKey(pg.KMOD_ALT, pg.K_LALT, pg.K_RALT))
-    META = (_SneakyMultiKbdKey(pg.KMOD_META, pg.K_LMETA, pg.K_RMETA))
+class _mod (object):
+    @property
+    def CTRL (self):
+        return _SneakyMultiKbdKey(pg.KMOD_CTRL, pg.K_LCTRL, pg.K_RCTRL)
+
+    @property
+    def SHIFT (self):
+        return _SneakyMultiKbdKey(pg.KMOD_SHIFT, pg.K_LSHIFT, pg.K_RSHIFT)
+
+    @property
+    def ALT (self):
+        return _SneakyMultiKbdKey(pg.KMOD_ALT, pg.K_LALT, pg.K_RALT)
+
+    @property
+    def META (self):
+        return _SneakyMultiKbdKey(pg.KMOD_META, pg.K_LMETA, pg.K_RMETA)
+
+#: Contains objects that act as specific keyboard modifiers: CTRL, SHIFT, ALT,
+#: META.
+mod = _mod()
