@@ -403,7 +403,8 @@ play_snd(base_id, volume=1)
         # load sound, and make a copy so we can play/stop instances separately
         # (without managing channels, at least)
         snd = self.resources.snd(base_id + '.ogg')
-        snd = pg.mixer.Sound(snd.get_buffer())
+        snd = pg.mixer.Sound(snd.get_buffer()
+                             if hasattr(snd, 'get_buffer') else snd.get_raw())
         # store sound, and stop oldest if necessary
         playing = self._sounds.setdefault(alias, [])
         if alias in conf.MAX_SOUNDS:
