@@ -8,6 +8,3 @@ class Conf (object):
     WINDOW_TITLE = ''
     #WINDOW_ICON = os.path.join(conf.IMG_DIR, 'icon.png')
     RES_W = (960, 540)
-
-
-conf.add(Conf)
