@@ -278,7 +278,7 @@ interp_shake(centre, amplitude = 1, threshold = 0, signed = True) -> f
 def interp_round (get_val, do_round = True):
     """Round the output of an existing interpolation function to integers.
 
-interp_round(get_val, round_val = True) -> f
+interp_round(get_val, do_round=True) -> f
 
 :arg get_val: the existing function.
 :arg do_round: determines which values to round.  This is in the form of the
@@ -676,8 +676,8 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
           ``set_val``, or a function to call without arguments.  If the
           function returns a (non-``None``) value, ``set_val`` is called with
           it.
-:arg round_val: whether to round the value(s) (see :func:`interp_round` for
-                details).
+:arg round_val: whether to round the value(s) (see :func:`interp_round`
+                `do_round` argument for details).
 :arg multi_arg: whether values should be interpreted as lists of arguments to
                 pass to ``set_val`` instead of a single argument.
 :arg resolution: 'framerate' to update the value at.  If not given, the value
