@@ -683,7 +683,10 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
               interpolation will be canceled.  The ``interp_*`` functions in
               this module can be used to construct such functions.
 :arg set_val: a function called with the current value to set it.  This may
-              also be an ``(obj, attr)`` tuple to do ``obj.attr = val``.
+              also be an ``(obj, attr)`` tuple to do ``obj.attr = val``.  In
+              the second form, ``attr`` may be a sequence of attribute names
+              corresponding to the sequence of values returned from
+              ``get_val`` to set.
 :arg t_max: if time becomes larger than this, cancel the interpolation.
 :arg bounds: a function that takes the value returned from ``get_val`` and
              checks if it is outside of some boundaries, and returns the
@@ -701,7 +704,7 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
                 `do_round` argument for details).
 :arg multi_arg: whether values should be interpreted as lists of arguments to
                 pass to ``set_val`` instead of a single argument.  If
-                ``set_val`` is ``(obj, attr)``, it can be treated as a
+                ``set_val`` is ``(obj, attr)``, it is the same as a
                 one-argument function.
 :arg resolution: 'framerate' to update the value at.  If not given, the value
                  is set every frame it changes; if given, this sets an upper
@@ -718,7 +721,13 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
             get_val = interp_round(get_val, round_val)
         if not callable(set_val):
             obj, attr = set_val
-            set_val = lambda val: setattr(obj, attr, val)
+            if isinstance(attr, basestring):
+                set_val = lambda val: setattr(obj, attr, val)
+            else:
+                # attr is a sequence of attributes
+                def set_val (vals):
+                    for a, val in zip(attr, vals):
+                        setattr(obj, a, val)
 
         def timeout_cb ():
             if resolution is not None:
@@ -779,7 +788,8 @@ in a set amount of time.
 interp_simple(obj, attr, target, t[, end_cb], round_val = False) -> timeout_id
 
 :arg obj: vary an attribute of this object.
-:arg attr: the attribute name of ``obj`` to vary.
+:arg attr: the attribute name of ``obj`` to vary, or a sequence of attributes
+           to set (if ``target`` is also a sequence).
 :arg target: a target value, in the same form as the current value in the given
              attribute (see :func:`call_in_nest`).
 :arg t: the amount of time to take to reach the target value, in seconds.
