@@ -37,7 +37,7 @@ alt + F4: exit
     LICENSING
 
 Source code in game/engine/ is available under the LGPL version 3 (included in
-`LICENSE-engine').
+'LICENSE-engine').
 
 Source code outside of game/engine is available under the 3-clause BSD license
-(included in `LICENSE').
+(included in 'LICENSE').

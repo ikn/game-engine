@@ -172,10 +172,12 @@ interp_linear(*waypoints) -> f
     return g.send
 
 
-def interp_target (v0, target, damp, freq = 0, speed = 0, threshold = 0):
+def interp_target (v0, target, damp, freq=0, speed=0, threshold=0,
+                   divisor=None):
     """Move towards a target.
 
-interp_target(v0, target, damp, freq = 0, speed = 0, threshold = 0) -> f
+interp_target(v0, target, damp, freq=0, speed=0, threshold=0, divisor=None)
+    -> f
 
 :arg v0: the initial value (a structure of numbers like arguments to
          :func:`call_in_nest`).  Elements which are not numbers are ignored.
@@ -188,6 +190,10 @@ interp_target(v0, target, damp, freq = 0, speed = 0, threshold = 0) -> f
 :arg threshold: stop when within this distance of ``target``; in the same form
                 as ``v0``.  If ``None``, never stop.  If varying more than one
                 number, only stop when every number is within its threshold.
+:arg divisor: if given, use values of ``target`` and ``v0`` that are nearest to
+              each other, modulo this number (has the same form as ``v0``; use
+              ``None`` to do nothing) --  eg. use ``2 * pi`` for angles in
+              radians.
 
 :return: a function that returns position given the current time.
 
@@ -195,7 +201,22 @@ interp_target(v0, target, damp, freq = 0, speed = 0, threshold = 0) -> f
     if v0 == target: # nothing to do
         return lambda t: None
 
-    def get_phase (v0, target, sped):
+    def modulo_v0 (v0, divisor):
+        return v0 if divisor is None else v0 % divisor
+
+    def find_nearest (v0, target, divisor):
+        if divisor is None:
+            return target
+        else:
+            target %= divisor
+            alt_target = target + divisor
+            return (target if abs(target - v0) <= abs(alt_target - v0)
+                           else alt_target)
+
+    v0 = modulo_v0(v0, divisor)
+    target = find_nearest(v0, target, divisor)
+
+    def get_phase (v0, target, speed):
         if freq == 0 or not isinstance(v0, (int, float)) or v0 == target:
             return 0
         else:
@@ -679,7 +700,9 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
 :arg round_val: whether to round the value(s) (see :func:`interp_round`
                 `do_round` argument for details).
 :arg multi_arg: whether values should be interpreted as lists of arguments to
-                pass to ``set_val`` instead of a single argument.
+                pass to ``set_val`` instead of a single argument.  If
+                ``set_val`` is ``(obj, attr)``, it can be treated as a
+                one-argument function.
 :arg resolution: 'framerate' to update the value at.  If not given, the value
                  is set every frame it changes; if given, this sets an upper
                  limit on the number of times per second the value may updated.
