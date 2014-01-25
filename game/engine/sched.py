@@ -552,16 +552,18 @@ it does not necessarily reflect real time.
 class Scheduler (Timer):
     """Frame-based event scheduler.
 
-Scheduler(fps = 60)
+Scheduler(fps=60)
 
 :arg fps: frames per second to aim for.
 
 """
 
-    def __init__ (self, fps = 60):
+    def __init__ (self, fps=60):
         Timer.__init__(self, fps)
         self._cbs = {}
         self._max_id = 0
+        self._interps = {}
+        self._interp_timers = {}
 
     def run (self, seconds = None, frames = None):
         """Start the scheduler.
@@ -625,9 +627,14 @@ Missing IDs are ignored.
 
 """
         cbs = self._cbs
+        interps = self._interps
+        interp_timers = self._interp_timers
         for i in ids:
             if i in cbs:
                 del cbs[i]
+                if i in interps:
+                    interp_timers[interps[i]].remove(i)
+                    del interps[i]
 
     def pause_timeout (self, *ids):
         """Pause the timeouts with the given identifiers."""
@@ -667,16 +674,16 @@ Missing IDs are ignored.
                         total = data[2] is None
                         data[total] += data[total + 2]
                     elif i in cbs: # else removed in above call
-                        del cbs[i]
+                        self.rm_timeout(i)
             # else paused
 
-    def interp (self, get_val, set_val, t_max = None, bounds = None,
-                end = None, round_val = False, multi_arg = False,
-                resolution = None):
+    def interp (self, get_val, set_val, t_max=None, bounds=None, end=None,
+                round_val=False, multi_arg=False, resolution=None,
+                override=True):
         """Vary a value over time.
 
-interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
-       multi_arg = False[, resolution]) -> timeout_id
+interp(get_val, set_val[, t_max][, bounds][, end], round_val=False,
+       multi_arg=False[, resolution], override=True) -> timeout_id
 
 :arg get_val: a function called with the elapsed time in seconds to obtain the
               current value.  If this function returns ``None``, the
@@ -711,6 +718,11 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
                  limit on the number of times per second the value may updated.
                  The current value of :attr:`fps <Timer.fps>` (which may change
                  over the interpolation) also puts an upper limit on the rate.
+:arg override: whether to override (abort) previous interpolations with the
+               same ``set_val``.  This works for identical functions, and
+               ``(obj, attr)`` for the identical objects and the exact same
+               sets of attributes (since ``attr`` can be a sequence).  The
+               ``end`` action for aborted interpolations is not called.
 
 :return: an identifier that can be passed to :meth:`rm_timeout` to remove the
         callback that continues the interpolation.  In this case ``end`` is not
@@ -719,12 +731,16 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
 """
         if round_val:
             get_val = interp_round(get_val, round_val)
-        if not callable(set_val):
+        if callable(set_val):
+            key = set_val
+        else:
             obj, attr = set_val
             if isinstance(attr, basestring):
+                key = (obj, attr)
                 set_val = lambda val: setattr(obj, attr, val)
             else:
                 # attr is a sequence of attributes
+                key = (obj, frozenset(attr))
                 def set_val (vals):
                     for a, val in zip(attr, vals):
                         setattr(obj, a, val)
@@ -776,16 +792,26 @@ interp(get_val, set_val[, t_max][, bounds][, end], round_val = False,
                 else:
                     yield True
 
-        return self.add_timeout(timeout_cb().next, frames=1)
+        timeout_id = self.add_timeout(timeout_cb().next, frames=1)
 
-    def interp_simple (self, obj, attr, target, t, end_cb = None,
-                       round_val = False):
+        if override and key in self._interp_timers:
+            self.rm_timeout(*self._interp_timers[key])
+            assert (key not in self._interp_timers,
+                    'rm_timeout should\'ve removed other interpolations')
+        self._interp_timers.setdefault(key, []).append(timeout_id)
+        self._interps[timeout_id] = key
+
+        return timeout_id
+
+    def interp_simple (self, obj, attr, target, t, end_cb=None,
+                       round_val=False, override=True):
         """A simple version of :meth:`interp`.
 
 Varies an object's attribute linearly from its current value to a target value
 in a set amount of time.
 
-interp_simple(obj, attr, target, t[, end_cb], round_val = False) -> timeout_id
+interp_simple(obj, attr, target, t[, end_cb], round_val=False, override=True)
+    -> timeout_id
 
 :arg obj: vary an attribute of this object.
 :arg attr: the attribute name of ``obj`` to vary, or a sequence of attributes
@@ -796,6 +822,10 @@ interp_simple(obj, attr, target, t[, end_cb], round_val = False) -> timeout_id
 :arg end_cb: a function to call when the target value has been reached.
 :arg round_val: whether to round the value(s) (see :func:`interp_round` for
                 details).
+:arg override: whether to override (abort) previous interpolations with the
+               same ``obj`` and ``attr``.  This works for the exact same sets
+               of attributes (since ``attr`` can be a sequence).  ``end_cb``
+               is not called for aborted interpolations.
 
 :return: an identifier that can be passed to :meth:`rm_timeout` to remove the
         callback that continues the interpolation.  In this case ``end_cb`` is
@@ -803,8 +833,8 @@ interp_simple(obj, attr, target, t[, end_cb], round_val = False) -> timeout_id
 
 """
         get_val = interp_linear(getattr(obj, attr), (target, t))
-        return self.interp(get_val, (obj, attr), end = end_cb,
-                           round_val = round_val)
+        return self.interp(get_val, (obj, attr), end=end_cb,
+                           round_val=round_val, override=override)
 
     def _interp_locked (self, interp_fn, *args, **kwargs):
         # HACK: Python 2 closures aren't great
@@ -823,7 +853,8 @@ interp_simple(obj, attr, target, t[, end_cb], round_val = False) -> timeout_id
 interpolation.
 
 With each successive call, the current interpolation is aborted and a new one
-started.
+started.  (For most cases, just passing the ``override`` argument to
+:meth:`interp` should suffice.)
 
 The wrapper is partially applied using the positional and keyword arguments
 passed to this function.  Typical usage is as follows::
