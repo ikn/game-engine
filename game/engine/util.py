@@ -1,3 +1,4 @@
+# coding=utf-8
 """A number of utility functions."""
 
 from random import random, randrange
@@ -173,6 +174,101 @@ colour in a string (``'#rgb'``, ``'#rrggbb'``, ``'#rgba'``, ``'#rrggbbaa'``
         r, g, b = c[:3]
         a = 255 if len(c) < 4 else c[3]
     return (r, g, b, a)
+
+
+def call_in_nest (f, *args):
+    """Collapse a number of similar data structures into one.
+
+Used in ``interp_*`` functions.
+
+call_in_nest(f, *args) -> result
+
+:arg f: a function to call with elements of ``args``.
+:arg args: each argument is a data structure of nested lists with a similar
+           format.
+
+:return: a new structure in the same format as the given arguments with each
+         non-list object the result of calling ``f`` with the corresponding
+         objects from each arg.
+
+For example::
+
+    >>> f = lambda n, c: str(n) + c
+    >>> arg1 = [1, 2, 3, [4, 5], []]
+    >>> arg2 = ['a', 'b', 'c', ['d', 'e'], []]
+    >>> call_in_nest(f, arg1, arg2)
+    ['1a', '2b', '3c', ['4d', '5e'], []]
+
+One argument may have a list where others do not.  In this case, those that do
+not have the object in that place passed to ``f`` for each object in the
+(possibly further nested) list in the argument that does.  For example::
+
+    >>> call_in_nest(f, [1, 2, [3, 4]], [1, 2, 3], 1)
+    [f(1, 1, 1), f(2, 2, 1), [f(3, 3, 1),  f(4, 3, 1)]]
+
+However, in arguments with lists, all lists must be the same length.
+
+"""
+    # Rect is a sequence but isn't recognised as collections.Sequence, so test
+    # this way
+    is_list = [(hasattr(arg, '__len__') and hasattr(arg, '__getitem__') and
+                not isinstance(arg, basestring))
+               for arg in args]
+    if any(is_list):
+        n = len(args[is_list.index(True)])
+        # listify non-list args (assume all lists are the same length)
+        args = (arg if this_is_list else [arg] * n
+                for this_is_list, arg in zip(is_list, args))
+        return [call_in_nest(f, *inner_args) for inner_args in zip(*args)]
+    else:
+        return f(*args)
+
+
+# better for smaller numbers of points
+def _bezier_recursive (t, *pts):
+    if len(pts) > 3:
+        return ((1 - t) * _bezier_recursive(t, *pts[:-1]) +
+                t * _bezier_recursive(t, *pts[1:]))
+    elif len(pts) == 3:
+        a, b, c = pts
+        ti = 1 - t
+        return ti * ti * a + 2 * t * ti * b + t * t * c
+    elif len(pts) == 2:
+        return (1 - t) * pts[0] + t * pts[1]
+    else:
+        return pts[0]
+
+
+# better for larger numbers of points
+def _bezier_flat (t, *pts):
+    n_pts = n = len(pts) - 1
+    ti = 1 - t
+    b = 0
+    choose = 1
+
+    # generate terms in pairs
+    for i in xrange(n_pts // 2 + 1):
+        b += choose * ti ** n * t ** i * pts[i]
+        if i != n: # else this is the 'middle' term, which has no pair
+            b += choose * ti ** i * t ** n * pts[n]
+        choose = choose * n // (i + 1)
+        n -= 1
+    return b
+
+
+def bezier (t, *pts):
+    """Compute a 1D Bézier curve point.
+
+:arg t: curve parameter.
+:arg pts: points defining the curve.
+
+"""
+    if len(pts) >= 5: # empirical
+        return _bezier_flat(t, *pts)
+    elif pts:
+        return _bezier_recursive(t, *pts)
+    else:
+        raise ValueError('expected at least one point')
 
 
 # random

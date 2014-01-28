@@ -1,3 +1,4 @@
+# coding=utf-8
 """Event scheduler and interpolation."""
 
 from time import time
@@ -9,7 +10,7 @@ from functools import partial
 from pygame.time import wait
 
 from .conf import conf
-from .util import ir
+from .util import ir, call_in_nest, bezier
 
 
 def _match_in_nest (obj, x):
@@ -25,54 +26,6 @@ x: object to compare to  (not a list or tuple).
         return all(_match_in_nest(o, x) == x for o in obj)
     else:
         return obj == x
-
-
-def call_in_nest (f, *args):
-    """Collapse a number of similar data structures into one.
-
-Used in ``interp_*`` functions.
-
-call_in_nest(f, *args) -> result
-
-:arg f: a function to call with elements of ``args``.
-:arg args: each argument is a data structure of nested lists with a similar
-           format.
-
-:return: a new structure in the same format as the given arguments with each
-         non-list object the result of calling ``f`` with the corresponding
-         objects from each arg.
-
-For example::
-
-    >>> f = lambda n, c: str(n) + c
-    >>> arg1 = [1, 2, 3, [4, 5], []]
-    >>> arg2 = ['a', 'b', 'c', ['d', 'e'], []]
-    >>> call_in_nest(f, arg1, arg2)
-    ['1a', '2b', '3c', ['4d', '5e'], []]
-
-One argument may have a list where others do not.  In this case, those that do
-not have the object in that place passed to ``f`` for each object in the
-(possibly further nested) list in the argument that does.  For example::
-
-    >>> call_in_nest(f, [1, 2, [3, 4]], [1, 2, 3], 1)
-    [f(1, 1, 1), f(2, 2, 1), [f(3, 3, 1),  f(4, 3, 1)]]
-
-However, in arguments with lists, all lists must be the same length.
-
-"""
-    # Rect is a sequence but isn't recognised as collections.Sequence, so test
-    # this way
-    is_list = [(hasattr(arg, '__len__') and hasattr(arg, '__getitem__') and
-                not isinstance(arg, basestring))
-               for arg in args]
-    if any(is_list):
-        n = len(args[is_list.index(True)])
-        # listify non-list args (assume all lists are the same length)
-        args = (arg if this_is_list else [arg] * n
-                for this_is_list, arg in zip(is_list, args))
-        return [call_in_nest(f, *inner_args) for inner_args in zip(*args)]
-    else:
-        return f(*args)
 
 
 def _cmp_structure (x, y):
@@ -98,7 +51,8 @@ interp_linear(*waypoints) -> f
 :arg waypoints: each is ``(v, t)`` to set the value to ``v`` at time ``t``.
                 ``t`` can be omitted for any but the last waypoint: the first
                 is ``0``, and other gaps are filled in with equal spacing.
-                ``v`` is like the arguments taken by :func:`call_in_nest`, and
+                ``v`` is like the arguments taken by
+                :func:`call_in_nest <engine.game.util.call_in_nest>`, and
                 we interpolate for each number in the nested list structure of
                 ``v``.  Some objects in the ``v`` structures may be
                 non-numbers, in which case they will not be varied (maybe your
@@ -106,7 +60,7 @@ interp_linear(*waypoints) -> f
                 objects may be ``None`` to always use the initial value in that
                 position.
 
-:return: a function for which ``f(t) = v`` for every waypoint ``(t, v)``, with
+:return: a function for which ``f(t) = v`` for every waypoint ``(v, t)``, with
          intermediate values linearly interpolated between waypoints.
 
 """
@@ -172,6 +126,36 @@ interp_linear(*waypoints) -> f
     return g.send
 
 
+def interp_bezier (*pts, **kwargs):
+    """Interpolate along a Bézier curve.
+
+interp_bezier(*pts[, transform_t]) -> f
+
+:arg pts: points to use in constructing the curve, each with the same nested
+          sequence form as taken by
+          :func:`call_in_nest <engine.game.util.call_in_nest>`.
+:arg transform_t: function to use to transform the time before computing the
+                  curve point.
+
+:return: the interpolation function.
+
+"""
+    transform_t = kwargs.get('transform_t')
+    if isinstance(transform_t, (int, float)):
+        scale = transform_t
+        transform_t = lambda t: scale * t
+
+    def get_val (t):
+        if transform_t is not None:
+            t = transform_t(t)
+        if t is None or t > 1:
+            return None
+        else:
+            return call_in_nest(bezier, t, *pts)
+
+    return get_val
+
+
 def interp_target (v0, target, damp, freq=0, speed=0, threshold=0,
                    divisor=None):
     """Move towards a target.
@@ -180,7 +164,8 @@ interp_target(v0, target, damp, freq=0, speed=0, threshold=0, divisor=None)
     -> f
 
 :arg v0: the initial value (a structure of numbers like arguments to
-         :func:`call_in_nest`).  Elements which are not numbers are ignored.
+         :func:`call_in_nest <engine.game.util.call_in_nest>`).  Elements which
+         are not numbers are ignored.
 :arg target: the target value (has the same form as ``v0``).
 :arg damp: rate we move towards the target (``> 0``).
 :arg freq: if ``damp`` is small, oscillation around ``target`` can occur, and
@@ -260,8 +245,9 @@ def interp_shake (centre, amplitude = 1, threshold = 0, signed = True):
 interp_shake(centre, amplitude = 1, threshold = 0, signed = True) -> f
 
 :arg centre: the value to shake about; a nested list (a structure of numbers
-             like arguments to :func:`call_in_nest`).  Elements which are not
-             numbers are ignored.
+             like arguments to
+             :func:`call_in_nest <engine.game.util.call_in_nest>`).  Elements
+             which are not numbers are ignored.
 :arg amplitude: a number to multiply the value by.  This can be a function that
                 takes the elapsed time in seconds to vary in time.  Has the
                 same form as ``centre`` (return value does, if a function).
@@ -304,7 +290,8 @@ interp_round(get_val, do_round=True) -> f
 :arg get_val: the existing function.
 :arg do_round: determines which values to round.  This is in the form of the
                values ``get_val`` returns, a structure of lists and booleans
-               corresponding to each number (see :func:`call_in_nest`).
+               corresponding to each number (see
+               :func:`call_in_nest <engine.game.util.call_in_nest>`).
 
 :return: the ``get_val`` wrapper that rounds the returned value.
 
@@ -817,7 +804,8 @@ interp_simple(obj, attr, target, t[, end_cb], round_val=False, override=True)
 :arg attr: the attribute name of ``obj`` to vary, or a sequence of attributes
            to set (if ``target`` is also a sequence).
 :arg target: a target value, in the same form as the current value in the given
-             attribute (see :func:`call_in_nest`).
+             attribute (see
+             :func:`call_in_nest <engine.game.util.call_in_nest>`).
 :arg t: the amount of time to take to reach the target value, in seconds.
 :arg end_cb: a function to call when the target value has been reached.
 :arg round_val: whether to round the value(s) (see :func:`interp_round` for
