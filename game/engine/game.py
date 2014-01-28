@@ -163,7 +163,7 @@ This receives the extra arguments passed in constructing the world through the
 
     def _update (self):
         """Called by the game to update."""
-        for e in self.entities:
+        for e in list(self.entities):
             e.update()
         self.update()
 
