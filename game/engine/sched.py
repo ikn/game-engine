@@ -937,6 +937,9 @@ Arguments are as taken by :class:`Countdown`.
 """
         return Countdown(self, t, autoreset)
 
+    def counter (self, limit=None):
+        return Counter(self, limit)
+
 
 class Countdown (object):
     """A simple way of counting down to an event.
@@ -951,8 +954,6 @@ Countdown(scheduler, t, autoreset=False)
 
 An instance is boolean ``True`` if the countdown has finished, else ``False``.
 The initial state is finished---use :meth:`reset` to start the countdown.
-
-An instance is boolean ``True`` if the countdown has finished, else ``False``.
 
 See also :meth:`Scheduler.countdown`.
 
@@ -1013,6 +1014,131 @@ Starts counting down even if the countdown wasn't already running.
         """Stop counting down and set the finished state to ``False``.
 
 cancel() -> self
+
+"""
+        if self._timer_id is not None:
+            self._scheduler.rm_timeout(self._timer_id)
+            self._timer_id = None
+            self._finished = False
+        return self
+
+    def finish (self):
+        """Stop counting down and set the finished state to ``True``.
+
+finish() -> self
+
+"""
+        self.cancel()
+        self._finished = True
+        return self
+
+    def cb (self, *cbs):
+        """Add any number of callbacks to :attr:`cbs`.
+
+cb(*cbs) -> self
+
+Callbacks take no arguments.
+
+"""
+        self.cbs.update(cbs)
+        return self
+
+    def rm_cbs (self, *cbs):
+        """Remove any number of callbacks from :attr:`cbs`.
+
+rm_cbs(*cbs) -> self
+
+Missing items are ignored.
+
+"""
+        self.cbs.difference_update(cbs)
+        return self
+
+    def pause (self):
+        """Pause the countdown, if running.
+
+pause() -> self
+
+"""
+        if self._timer_id is not None:
+            self._scheduler.pause_timeout(self._timer_id)
+        return self
+
+    def unpause (self):
+        """Unpause the countdown, if paused.
+
+unpause() -> self
+
+"""
+        if self._timer_id is not None:
+            self._scheduler.unpause_timeout(self._timer_id)
+        return self
+
+
+class Counter (object):
+    """A simple way of keeping track of time.
+
+Counter(scheduler[, limit])
+
+:arg scheduler: :class:`Scheduler` instance to use for timing.
+:arg limit: if given, stop the counter once it reaches this many seconds.
+
+An instance is boolean ``True`` if the counter has reached ``limit``, else
+``False``.  The initial state is finished---use :meth:`reset` to start the
+counter.
+
+See also :meth:`Scheduler.countdown`.
+
+"""
+
+    def __init__ (self, scheduler, limit=None):
+        self._scheduler = scheduler
+        #: How far the counter has counted, in seconds.
+        self.t = 0
+        #: As passed to the constructor, or ``None``.
+        self.limit = limit
+        #: ``set`` of functions to call when the counter reaches :attr:`limit`.
+        self.cbs = set()
+        self._timer_id = None
+        self._finished = True
+
+    def __nonzero__ (self):
+        return self._finished
+
+    def _update (self):
+        # called every frame
+        self.t += self._scheduler.frame
+
+        if self.limit is not None and self.t >= self.limit:
+            self.t = self.limit
+            self._finished = True
+            for cb in self.cbs:
+                cb()
+            return False
+        else:
+            return True
+
+    def reset (self):
+        """Start counting from ``0`` again.
+
+reset() -> self
+
+Starts counting even if the counter wasn't already running.
+
+"""
+        if self._timer_id is not None:
+            self._scheduler.rm_timeout(self._timer_id)
+        self.t = 0
+        self._finished = False
+        self._timer_id = self._scheduler.add_timeout(self._update, frames=1)
+        return self
+
+    def cancel (self):
+        """Stop counting down and set the finished state to ``False``.
+
+cancel() -> self
+
+:attr:`t` is not changed.
 
 """
         if self._timer_id is not None:
