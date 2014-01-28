@@ -412,6 +412,64 @@ value if you can easily do so.
     return g.send
 
 
+def interp_combine (combine, *get_vals):
+    """Combine multiple interpolation functions.
+
+:arg combine: combination function that takes the results from the
+              interpolation functions as arguments.
+:arg get_vals: any number of interpolation functions.
+
+Ignores all non-number parts of each result (results may be arbitrarily nested
+sequences).  Finishes when all interpolation functions return ``None``.
+
+:return: interpolation function that combines results.
+
+"""
+    def get_val (t):
+        vals = [g(t) for g in get_vals]
+        if all(v is None for v in vals):
+            return None
+        return call_in_nest(combine, *vals)
+
+    return get_val
+
+
+def interp_sum (*get_vals):
+    """Sum over multiple interpolation functions.
+
+:arg get_vals: any number of interpolation functions.
+
+Ignores all non-number parts of each result (results may be arbitrarily nested
+sequences).  Finishes when all interpolation functions return ``None``.
+
+:return: interpolation function that sums over results.
+
+"""
+    def add (*vals):
+        vals = [v for v in vals if isinstance(v, (int, float))]
+        return sum(vals, 0)
+
+    return interp_combine(add, *get_vals)
+
+
+def interp_avg (*get_vals):
+    """Average over multiple interpolation functions.
+
+:arg get_vals: any number of interpolation functions.
+
+Ignores all non-number parts of each result (results may be arbitrarily nested
+sequences).  Finishes when all interpolation functions return ``None``.
+
+:return: interpolation function that averages over results.
+
+"""
+    def avg (*vals):
+        safe_vals = [v for v in vals if isinstance(v, (int, float))]
+        return sum(safe_vals, 0.) / len(vals) if vals else 0
+
+    return interp_combine(avg, *get_vals)
+
+
 class Timer (object):
     """Frame-based timer.
 
