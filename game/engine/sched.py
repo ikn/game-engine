@@ -926,22 +926,22 @@ passed to this function.  Typical usage is as follows::
         """Like :meth:`interp_locked`, but wraps :meth:`interp_simple`."""
         return self._interp_locked(self.interp_simple, *args, **kwargs)
 
-    def counter (self, t, autoreset=False):
-        """Create and return a :class:`Counter` that uses this instance for
+    def countdown (self, t, autoreset=False):
+        """Create and return a :class:`Countdown` that uses this instance for
 timing.
 
-counter(t, autoreset=False) -> new_counter
+countdown(t, autoreset=False) -> new_countdown
 
-Arguments are as taken by :class:`Counter`.
+Arguments are as taken by :class:`Countdown`.
 
 """
-        return Counter(self, t, autoreset)
+        return Countdown(self, t, autoreset)
 
 
-class Counter (object):
+class Countdown (object):
     """A simple way of counting down to an event.
 
-Counter(scheduler, t, autoreset=False)
+Countdown(scheduler, t, autoreset=False)
 
 :arg scheduler: :class:`Scheduler` instance to use for timing.
 :arg t: how long a countdown lasts, in seconds.
@@ -954,7 +954,7 @@ The initial state is finished---use :meth:`reset` to start the countdown.
 
 An instance is boolean ``True`` if the countdown has finished, else ``False``.
 
-See also :meth:`Scheduler.counter`.
+See also :meth:`Scheduler.countdown`.
 
 """
 
@@ -1054,7 +1054,7 @@ Missing items are ignored.
         return self
 
     def pause (self):
-        """Pause the counter, if running.
+        """Pause the countdown, if running.
 
 pause() -> self
 
@@ -1064,7 +1064,7 @@ pause() -> self
         return self
 
     def unpause (self):
-        """Unpause the counter, if paused.
+        """Unpause the countdown, if paused.
 
 unpause() -> self
 
