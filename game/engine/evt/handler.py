@@ -224,6 +224,21 @@ Raises ``KeyError`` if any arguments are missing.
             else:
                 raise KeyError(evt)
 
+    def cb (self, pos_cbs={}, **kw_cbs):
+        """Attach callbacks to named events.
+
+Each dict has keys as event names and values as callback functions or sequences
+of callback functions.  For example::
+
+    evthandler.cb({'jump': jump}, walk=[e.walk for e in entities])
+
+"""
+        for evt_cbs in (pos_cbs, kw_cbs):
+            for evt_name, cbs in evt_cbs.iteritems():
+                if callable(cbs):
+                    cbs = [cbs]
+                self[evt_name].cb(*cbs)
+
     def _prefilter (self, filtered, filters, i):
         attr, filtered = filtered
         filters = dict(filters)
@@ -373,6 +388,7 @@ Raises ``KeyError`` if any arguments are missing.
                 if i.handle(pgevt, *args) and not is_mod:
                     for evt in i.evts:
                         evt._changed = True
+
         # call callbacks
         by_domain = self._evts_by_domain
         for domains in ((None,), self.active_domains):
@@ -509,8 +525,9 @@ See :attr:`Input.device_var <engine.evt.inputs.Input.device_var>` and
 
     def grab (self, cb, *types):
         """Not implemented."""
-        # grabs next 'on'-type event from given devices/types and passes it to cb
-        # types are device name or (device, type_name)
+        # grabs next button-type input from given devices/types and passes it to cb
+        # types are device name or (device, type_name) (see inputs_by_name)
+        # need to be able to track _every_ button-type input, so, eg. axes can be used
         pass
 
     def normalise (self):

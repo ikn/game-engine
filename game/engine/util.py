@@ -11,9 +11,9 @@ from pygame import Rect
 
 # be sure to change util.rst
 __all__ = ('dd', 'takes_args', 'wrap_fn', 'ir', 'sum_pos', 'pos_in_rect',
-           'normalise_colour', 'randsgn','rand0', 'weighted_rand',
-           'align_rect', 'position_sfc', 'convert_sfc', 'combine_drawn',
-           'blank_sfc', 'Grid', 'InfiniteGrid')
+           'normalise_colour', 'call_in_nest', 'bezier', 'randsgn', 'rand0',
+           'weighted_rand', 'align_rect', 'position_sfc', 'convert_sfc',
+           'combine_drawn', 'blank_sfc', 'Grid', 'InfiniteGrid')
 
 
 # abstract

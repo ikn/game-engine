@@ -284,23 +284,25 @@ This implementation does nothing.
 
 
 class BasicInput (Input):
-    """An input that handles Pygame events of a single type.
+    """An input that handles raw Pygame events.
 
-BasicInput(pgevt)
+BasicInput(*pgevts)
 
-:arg pgevt: Pygame event ID to listen for.
+:arg pgevts: Pygame event IDs to listen for.
 
 """
 
-    def __init__ (self, pgevt):
-        #: Pygame event ID as passed to the constructor.
-        self.pgevt = pgevt
-        Input.__init__(self, pgevt)
+    def __init__ (self, *pgevts):
+        #: Pygame event IDs as passed to the constructor.
+        self.pgevts = pgevts
+        Input.__init__(self, *pgevts)
         # stored Pygame events, used by Event
         self._pgevts = []
 
     def __str__ (self):
-        return self._str(pg.event.event_name(self.pgevt).upper())
+        return self._str(
+            ', '.join(map(pg.event.event_name, self.pgevts)).upper()
+        )
 
     def handle (self, pgevt):
         """:inherit:"""
@@ -349,9 +351,7 @@ which restricts allowed devices of modifiers.
         self.used_components = {}
         Input.__init__(self)
         self.provides['button'] = True
-        if hasattr(self, 'button_attr'):
-            if button is None:
-                raise TypeError('expected button argument')
+        if hasattr(self, 'button_attr') and button is not None:
             self.filter(self.button_attr, button)
         #: The button ID this input represents, as taken by the constructor.
         self.button = button
@@ -487,7 +487,7 @@ component ``0`` for Pygame events with IDs in this list, and up on component
 class KbdKey (ButtonInput):
     """Keyboard key.
 
-The ``button`` argument is required, and is the key code.
+:arg key: the key code (required).
 
 """
 

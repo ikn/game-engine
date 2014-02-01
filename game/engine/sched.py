@@ -52,8 +52,8 @@ interp_linear(*waypoints) -> f
                 ``t`` can be omitted for any but the last waypoint: the first
                 is ``0``, and other gaps are filled in with equal spacing.
                 ``v`` is like the arguments taken by
-                :func:`call_in_nest <engine.game.util.call_in_nest>`, and
-                we interpolate for each number in the nested list structure of
+                :func:`call_in_nest <engine.util.call_in_nest>`, and we
+                interpolate for each number in the nested list structure of
                 ``v``.  Some objects in the ``v`` structures may be
                 non-numbers, in which case they will not be varied (maybe your
                 function takes another argument you don't want to vary);
@@ -133,7 +133,7 @@ interp_bezier(*pts[, transform_t]) -> f
 
 :arg pts: points to use in constructing the curve, each with the same nested
           sequence form as taken by
-          :func:`call_in_nest <engine.game.util.call_in_nest>`.
+          :func:`call_in_nest <engine.util.call_in_nest>`.
 :arg transform_t: function to use to transform the time before computing the
                   curve point.
 
@@ -164,8 +164,8 @@ interp_target(v0, target, damp, freq=0, speed=0, threshold=0, divisor=None)
     -> f
 
 :arg v0: the initial value (a structure of numbers like arguments to
-         :func:`call_in_nest <engine.game.util.call_in_nest>`).  Elements which
-         are not numbers are ignored.
+         :func:`call_in_nest <engine.util.call_in_nest>`).  Elements which are
+         not numbers are ignored.
 :arg target: the target value (has the same form as ``v0``).
 :arg damp: rate we move towards the target (``> 0``).
 :arg freq: if ``damp`` is small, oscillation around ``target`` can occur, and
@@ -246,8 +246,8 @@ interp_shake(centre, amplitude = 1, threshold = 0, signed = True) -> f
 
 :arg centre: the value to shake about; a nested list (a structure of numbers
              like arguments to
-             :func:`call_in_nest <engine.game.util.call_in_nest>`).  Elements
-             which are not numbers are ignored.
+             :func:`call_in_nest <engine.util.call_in_nest>`).  Elements which
+             are not numbers are ignored.
 :arg amplitude: a number to multiply the value by.  This can be a function that
                 takes the elapsed time in seconds to vary in time.  Has the
                 same form as ``centre`` (return value does, if a function).
@@ -291,7 +291,7 @@ interp_round(get_val, do_round=True) -> f
 :arg do_round: determines which values to round.  This is in the form of the
                values ``get_val`` returns, a structure of lists and booleans
                corresponding to each number (see
-               :func:`call_in_nest <engine.game.util.call_in_nest>`).
+               :func:`call_in_nest <engine.util.call_in_nest>`).
 
 :return: the ``get_val`` wrapper that rounds the returned value.
 
@@ -863,7 +863,7 @@ interp_simple(obj, attr, target, t[, end_cb], round_val=False, override=True)
            to set (if ``target`` is also a sequence).
 :arg target: a target value, in the same form as the current value in the given
              attribute (see
-             :func:`call_in_nest <engine.game.util.call_in_nest>`).
+             :func:`call_in_nest <engine.util.call_in_nest>`).
 :arg t: the amount of time to take to reach the target value, in seconds.
 :arg end_cb: a function to call when the target value has been reached.
 :arg round_val: whether to round the value(s) (see :func:`interp_round` for

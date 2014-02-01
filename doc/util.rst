@@ -13,6 +13,8 @@ Abstract
 .. autofunction:: engine.util.sum_pos
 .. autofunction:: engine.util.pos_in_rect
 .. autofunction:: engine.util.normalise_colour
+.. autofunction:: engine.util.call_in_nest
+.. autofunction:: engine.util.bezier
 
 Random
 ------

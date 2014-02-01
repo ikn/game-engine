@@ -4,6 +4,7 @@
 
 TODO:
     [ESSENTIAL]
+ - if an input is in multiple events in a handler, removing one event removes the input, breaking the other
  - eh.grab (and maybe have grab toggle for getting all input for a while)
  - eh.set_{thresholds,bdys} like deadzones (but also allow global, and same with deadzones)
     - make them setters

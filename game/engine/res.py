@@ -1,16 +1,5 @@
 """Resource loading and caching."""
 
-"""
-
-TODO:
- - limits:
-    - .limits: {type: amount}
-    - .priorities: {pool: priority} - for determining what to unload if reach limits
-    - .set_limits(**{type: amount}) - None for no limit
-    - in .load(), drop least frequently+recently used resources from cache if go over limits (print warnings if this happens often)
-
-"""
-
 import pygame as pg
 
 from .conf import conf

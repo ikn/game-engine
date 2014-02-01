@@ -192,7 +192,7 @@ input_components = None)`` tuples.
  - ``evt_components`` is a sequence of the component indices (or a single
    component index) of this event that this input provides data for.  Defaults
    to every component, in order.  Instead of indices, components can also be
-   names from :data:``evt_component_names``.
+   names from :data:`evt_component_names`.
  - ``input_components`` is a sequence of the component indices of (or a single
    component index) of the input to match up to ``evt_components``.  Defaults
    to every component of the input, in order.
