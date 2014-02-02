@@ -3,6 +3,7 @@
 ---NODOC---
 
 TODO:
+ - Animation: rework to use Graphic callbacks
  - Tilemap:
     - should change if given Graphics change (tile_types), like Animation
         - graphic.require(tilemap)

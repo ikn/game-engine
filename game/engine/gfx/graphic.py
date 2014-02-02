@@ -122,6 +122,10 @@ correspond to builtin transforms (see :meth:`transform`).
         self._orig_dirty = False # where original surface is changed
         # where final surface is changed; gets used (and reset) by manager
         self._dirty = []
+        # {cb: evts}
+        self._cbs = {}
+        # {evt: cbs}
+        self._evts = {}
 
     def __getitem__ (self, i):
         if isinstance(i, slice):
@@ -159,6 +163,7 @@ When setting this, the surface should be already converted for blitting.
         if size != old_sfc.get_size():
             self.size_changed(size)
         self._orig_dirty = True
+        self._call_cbs('change orig', old_sfc, sfc)
 
     @property
     def surface (self):
@@ -781,6 +786,8 @@ If creating and returning a new surface, it should already be converted for
 blitting.
 
 """
+        old_final_size = self._rect.size
+
         # add to/reorder transforms list, and queue for transforming later
         t_ks = self.transforms
         q = self._queued_transforms
@@ -852,6 +859,10 @@ blitting.
                 # apply modifier, then reapply following modifiers
                 apply_fn(self)
                 self._apply_transforms(i, src_sz != dest_sz, False)
+
+        final_size = self._rect.size
+        if final_size != old_final_size:
+            self._call_cbs('resize', old_final_size, final_size)
         return self
 
     def retransform (self, transform_fn):
@@ -927,16 +938,23 @@ to call when :attr:`orig_sfc` will change, but will not be set until
 is determined by :attr:`anchor`.
 
 """
+        old_final_size = self._rect.size
         got_transforms = bool(self.transforms)
         if got_transforms:
             self._undo_transforms(0)
         # compute offset due to anchor
+        old_size = self.size
         old_ox, old_oy = pos_in_rect(self.anchor, self._rect)
         new_ox, new_oy = pos_in_rect(self.anchor, size)
         x, y = self._rect.topleft
         self._rect = Rect((x + old_ox - new_ox, y + old_oy - new_oy), size)
         if got_transforms:
             self._apply_transforms(0, True)
+
+        self._call_cbs('resize orig', old_size, size)
+        final_size = self._rect.size
+        if final_size != old_final_size:
+            self._call_cbs('resize', old_final_size, final_size)
 
     def _load_img (self, fn, force_load = False):
         # load image from disk/cache
@@ -1394,6 +1412,7 @@ as dirty.  If none are given, the whole of the graphic is flagged.
 """
         dirty = [Rect(r) for r in rects] if rects else True
         self._orig_dirty = combine_drawn(self._orig_dirty, dirty)
+        self._call_cbs('draw orig')
 
     def render (self):
         """Update the final surface.
@@ -1418,6 +1437,7 @@ surface.
         else:
             i = len(t_ks)
         # apply transforms
+        orig_final_sfc = self._surface
         before_rot = sfc = self._orig_sfc
         passed_rot = False
         for j, fn in enumerate(t_ks):
@@ -1493,6 +1513,10 @@ surface.
             self._rect = r = Rect(self._rect.topleft, before_rot.get_size())
             self._postrot_rect = pr = r.move(self._rot_offset)
             pr.size = sfc.get_size()
+            if sfc != orig_final_sfc:
+                self._call_cbs('change', orig_final_sfc, sfc)
+            else:
+                self._call_cbs('draw')
 
     def _pre_draw (self):
         """Called by
@@ -1503,7 +1527,7 @@ drawing."""
         if self._rect != self.last_rect:
             dirty = True
             self._postrot_rect = Rect(
-                self._rect.move(self._rot_offset).topleft, 
+                self._rect.move(self._rot_offset).topleft,
                 self._postrot_rect.size
             )
         if self.blit_flags != self._last_blit_flags:
@@ -1541,3 +1565,81 @@ Should never alter any state that is not internal to the graphic.
             blit(sfc, r, r.move(offset), self.blit_flags)
         self._last_postrot_rect = pr
         self.last_rect = self._rect
+
+    def cb (self, cb, *evts):
+        """Register a callback for a number of events.
+
+cb(cb, *evts) -> self
+
+:arg cb: callback function; it is called with the event name followed by
+         event-specific arguments.  If this callback was already registered,
+         the previous set of events specified is overridden.
+:arg evts: event names to register the callback for; if none are given, it is
+           called for all event types.
+
+Event types:
+
+draw
+    The content of :attr:`surface` changed without the surface itself changing.
+
+    Arguments: surface.
+draw orig
+    The content of :attr:`orig_sfc` changed without the surface itself
+    changing.
+
+    Arguments: surface.
+change
+    :attr:`surface` changed to a different surface.
+
+    Arguments: old surface, new surface.
+change orig
+    :attr:`orig_sfc` changed to a different surface.
+
+    Arguments: old surface, new surface.
+resize
+    :attr:`surface` changed to a different surface with a different size.
+
+    Arguments: old size, new size (both ``(width, height)``).
+resize orig
+    :attr:`orig_sfc` changed to a different surface with a different size.
+
+    Arguments: old size, new size (both ``(width, height)``).
+
+"""
+        self.rm_cbs(cb)
+        self._cbs[cb] = evts if evts else None
+        if not evts:
+            evts = (None,)
+        all_evts = self._evts
+        for evt in evts:
+            all_evts.setdefault(evt, set()).add(cb)
+        return self
+
+    def rm_cbs (self, *cbs):
+        """Remove any number of callbacks registered with events.
+
+rm_cbs(*cbs) -> self
+
+Missing items are ignored.
+
+"""
+        all_cbs = self._cbs
+        all_evts = self._evts
+        for cb in cbs:
+            if cb in all_cbs:
+                evts = all_cbs[cb]
+                del all_cbs[cb]
+                if evts is None:
+                    evts = (evts,)
+                for evt in evts:
+                    all_evts[evt].remove(cb)
+                    if not all_evts[evt]:
+                        del all_evts[evt]
+        return self
+
+    def _call_cbs (self, evt, *args):
+        """Call callbacks registered for the given event."""
+        for cb in self._evts.get(evt, set()).union(
+            self._evts.get(None, set())
+        ):
+            cb(evt, *args)
