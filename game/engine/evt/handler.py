@@ -14,14 +14,13 @@ def _check_mods (i, mods):
     for device in inputs.mod_devices[i.device]:
         for device_id in set((i.device_id, True)):
             for m in mods.get(device, {}).get(device_id, ()):
-                # mod matches if it's the same button
-                # as the input itself
+                # mod matches if it's the same button as the input itself
                 if m == i:
                     yield True
                     continue
-                # or if it's held in exactly this
-                # input's components
-                if m in this_mods:
+                # or if it's held in exactly this input's components
+                # 'm in this_mods' uses __eq__, but we need identity
+                if any(m is n for n in this_mods):
                     # only have one component
                     yield m.held(i)[0] and m._held.count(True) == 1
                 else:

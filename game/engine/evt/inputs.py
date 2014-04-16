@@ -514,19 +514,17 @@ class _SneakyMultiKbdKey (KbdKey):
     # KbdKey wrapper to handle multiple keys, for use as a modifier (held if
     # any key is held) - only for module.mod
 
-    def __init__ (self, button, *buttons):
+    def __init__ (self, name, button, *buttons):
+        # `button` isn't a real key
         KbdKey.__init__(self, buttons[0])
+        self._name = name
         self.filter(self.button_attr, *buttons[1:])
-        self.button = button
         self._keys = buttons
         # track each key's held state
         self._held_multi = dict.fromkeys(buttons, False)
 
     def _btn_name (self):
-        # grab name from attribute name in module.mod
-        for attr, val in vars(mod).iteritems():
-            if val is self:
-                return attr
+        return self._name
 
     _mod_btn_name = _btn_name
 
@@ -1013,19 +1011,20 @@ MouseAxis([bdy][, thresholds], *mods)
 class _mod (object):
     @property
     def CTRL (self):
-        return _SneakyMultiKbdKey(pg.KMOD_CTRL, pg.K_LCTRL, pg.K_RCTRL)
+        return _SneakyMultiKbdKey('CTRL', pg.KMOD_CTRL, pg.K_LCTRL, pg.K_RCTRL)
 
     @property
     def SHIFT (self):
-        return _SneakyMultiKbdKey(pg.KMOD_SHIFT, pg.K_LSHIFT, pg.K_RSHIFT)
+        return _SneakyMultiKbdKey('SHIFT', pg.KMOD_SHIFT, pg.K_LSHIFT,
+                                  pg.K_RSHIFT)
 
     @property
     def ALT (self):
-        return _SneakyMultiKbdKey(pg.KMOD_ALT, pg.K_LALT, pg.K_RALT)
+        return _SneakyMultiKbdKey('ALT', pg.KMOD_ALT, pg.K_LALT, pg.K_RALT)
 
     @property
     def META (self):
-        return _SneakyMultiKbdKey(pg.KMOD_META, pg.K_LMETA, pg.K_RMETA)
+        return _SneakyMultiKbdKey('META', pg.KMOD_META, pg.K_LMETA, pg.K_RMETA)
 
 #: Contains objects that act as specific keyboard modifiers: CTRL, SHIFT, ALT,
 #: META.
