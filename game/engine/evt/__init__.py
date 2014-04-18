@@ -19,13 +19,18 @@ TODO:
     - save to the homedir one
 
     [FUTURE]
+ - UI buttons (+ other controls?)
+    - are ButtonInput
+    - have any number of moveable 'cursors' in eh, with .click(), .move_by(), .move_to
+        - can attach to relaxis events
+    - region: InputRect, InputArea subclass
+    - have a ButtonInput for cursors being in a region (specialised subclasses for mice, etc.)
+        - UI button is this combined with another ButtonInput (eg. mouse click)
+            - have input combiners
+    - how to use in cfg (since they might be dynamic, and use input combiners)?
  - eh.postpone(), Event.postpone()
  - eh.detect_pads() (make sure to re-initialise already-initialised ones)
  - Scheme [NOTE]
- - generalised input areas
-    - define a rect (InputRect, InputArea subclass), has .click(cb(event_type), events_bitmask), .hover(cb(in/out))
-    - have any number of moveable 'cursors' in eh, with .click(), .move_by(), .move_to, and can attach these areas to all/a subset of them
-    - can easily attach some event types to these?  (.click(btn_evt_arg=None), .move_by(relaxis2_evt_arg=None), .move_to(axis2_evt_arg=None))
  - tools for editing/typing text
  - input recording and playback (allow white/blacklisting by domain/registered event name)
  - eh.*monitor_deadzones
