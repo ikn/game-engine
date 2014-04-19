@@ -4,17 +4,19 @@
 
 TODO:
     [ESSENTIAL]
- - if an input is in multiple events in a handler, removing one event removes the input, breaking the other
+ - BUG: button events don't really do the right thing
+    - should track real held state from held state of all inputs, and only send up/down if it actually changes
+ - BUG: input normalisation doesn't work (button held state)
+ - state that inputs/events should only have one parent (maybe protect against it)
  - eh.grab (and maybe have grab toggle for getting all input for a while)
  - eh.set_{thresholds,bdys} like deadzones (but also allow global, and same with deadzones)
     - make them setters
     - think of a nicer system for it (some sort of InputFilter, then {filter: value}?)
+    - or just have .find_inputs then user can do it manually?
  - Event.disable()/enable()
-
-    [config]
- - can do (per-device, per-device_id/var or global) deadzones/thresholds/bdy (can already do per-input, right?)
+ - config: can do (per-device, per-device_id/var or global) deadzones/thresholds/bdy (can already do per-input, right?)
  - conffile.generate{,_s}, eh.save{,_s}
- - domain filenames
+ - config: domain filenames
     - try loading from a homedir one first, then fall back to the distributed one
     - save to the homedir one
 
@@ -30,17 +32,18 @@ TODO:
     - how to use in cfg (since they might be dynamic, and use input combiners)?
  - eh.postpone(), Event.postpone()
  - eh.detect_pads() (make sure to re-initialise already-initialised ones)
- - Scheme [NOTE]
+ - Scheme
  - tools for editing/typing text
  - input recording and playback (allow white/blacklisting by domain/registered event name)
  - eh.*monitor_deadzones
  - a way to register new input/event types (consider module data structures)
     - document using __str__ backends
-    - working with config
+    - working with config (evts/inputs have .args_from_config(*words))
  - joy ball (seems like RelAxisInput, but need a pad with a ball to test)
     - or maybe just do it and include a warning
 
     [config]
+ - support for events as inputs
  - input groups for having the same inputs in different events, eg.
 
     [next]

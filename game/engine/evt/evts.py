@@ -6,6 +6,7 @@ import pygame as pg
 
 from ..util import wrap_fn
 from . import inputs
+from .inputs import Input
 
 class bmode:
     """Contains :class:`Button` modes."""
@@ -26,7 +27,7 @@ evt_component_names = {
 }
 
 
-class BaseEvent (object):
+class BaseEvent (Input):
     """Abstract event base class.
 
 Subclasses must implement methods :meth:`Event.add`, :meth:`Event.rm`, and
@@ -37,20 +38,34 @@ either :meth:`Event.gen_cb_args` or :meth:`respond`.
     #: Like :attr:`Input.components <engine.evt.inputs.Input.components>`---the
     #: number of components the event can handle.
     components = 0
+    device = 'evt'
 
     def __init__ (self):
-        #: Containing :class:`EventHandler <engine.evt.handler.EventHandler>`,
-        #: or ``None``.
-        self.eh = None
+        Input.__init__(self)
+        self._eh = None
         #: dict whose keys are functions to call on input.
         # values are wrappers to call
         self.cbs = {}
+        self._changed = False
+
+    def __str__ (self):
+        return '<{0}>'.format(type(self).__name__)
+
+    @property
+    def eh (self):
+        """Containing :class:`EventHandler <engine.evt.handler.EventHandler>`,
+or ``None``."""
+        return self._eh or Input.eh.fget(self)
+
+    @eh.setter
+    def eh (self, eh):
+        self._eh = eh
 
     def _parse_input (self, i):
         # normalise the form of an input as taken by Event.add
         components = self.components
         # work out components and perform checks
-        if isinstance(i, inputs.Input):
+        if isinstance(i, Input):
             if i.components != components:
                 raise ValueError(
                     '{0} got a non-{1}-component input but no component '
@@ -93,8 +108,8 @@ either :meth:`Event.gen_cb_args` or :meth:`respond`.
             if ic < 0 or ic >= i.components:
                 raise ValueError('{0} has no component {1}'.format(i, ic))
         if len(evt_components) != len(input_components):
-            raise ValueError('component mismatch: {0}'
-                                .format(i, evt_components, input_components))
+            raise ValueError('component mismatch: {0}: cannot map {2} to {1}'
+                             .format(i, evt_components, input_components))
         return (i, evt_components, input_components)
 
     def cb (self, *cbs):
@@ -135,6 +150,12 @@ Called by the containing
 called every time the handler is updated (which should happen every frame).
 
 """
+        for i in self.inputs:
+            if isinstance(i, BaseEvent):
+                this_changed = i._changed or changed
+                i._changed = False
+                i.respond(this_changed)
+
         cbs = self.cbs.values()
         for args in self.gen_cb_args(changed):
             for cb in cbs:
@@ -142,7 +163,7 @@ called every time the handler is updated (which should happen every frame).
 
     # dummy methods that inputs use
 
-    def down (self, i, component):
+    def inp_down (self, i, component):
         """Used by subclasses to handle
 :class:`ButtonInput <engine.evt.inputs.ButtonInput>` instances.
 
@@ -152,7 +173,7 @@ called every time the handler is updated (which should happen every frame).
 """
         pass
 
-    def up (self, i, component):
+    def inp_up (self, i, component):
         """Used by subclasses to handle
 :class:`ButtonInput <engine.evt.inputs.ButtonInput>` instances.
 
@@ -210,10 +231,14 @@ If there is a mismatch in numbers of components, ``ValueError`` is raised.
                 raise TypeError('input {0} passed to {1} is invalid'
                                 .format(i, type(self).__name__))
             # add if not already added
-            if self not in i.evts:
+            evt = i.evt
+            if evt is not self:
+                if evt is not None:
+                    raise RuntimeError('an input should not be added to more '
+                                       'than one event')
                 self_add(i, (evt_components, input_components))
                 new_inputs.append(i)
-                i.evts.add(self)
+                i.evt = self
                 if hasattr(i, 'used_components'):
                     i.used_components[self] = input_components
                 if eh_add is not None:
@@ -230,10 +255,10 @@ ignores missing items.
         self_rm = self.inputs.__delitem__
         eh_rm = None if self.eh is None else self.eh._rm_inputs
         for i in inps:
-            if self in i.evts:
+            if i.evt is self:
                 assert i in self.inputs
                 self_rm(i)
-                i.evts.remove(self)
+                i.evt = None
                 if hasattr(i, 'used_components'):
                     del i.used_components[self]
                 if eh_rm is not None:
@@ -288,20 +313,13 @@ possibly wrapping it.
 
     @property
     def inputs (self):
-        inps = set()
-        for evt in self.evts:
-            inps.update(evt.inputs)
-        return inps
+        return set().union(*(evt.inputs for evt in self.evts))
 
-    @property
-    def eh (self):
-        return self._eh
-
-    @eh.setter
+    @BaseEvent.eh.setter
     def eh (self, eh):
         # make events have the same handler, so inputs can let it know about
         # filtering changes
-        self._eh = eh
+        BaseEvent.eh.fset(self, eh)
         for evt in self.evts:
             evt.eh = eh
 
@@ -364,8 +382,9 @@ the first argument.
                 yield (i,) + tuple(args)
 
 
-class Button (Event):
-    """Button event.
+class Button (Event, inputs.ButtonInput):
+    """Button event.  Also acts as a
+:class:`ButtonInput <engine.evt.inputs.ButtonInput>`.
 
 Button(*items[, initial_delay][, repeat_delay][, dbl_click_time])
 
@@ -410,6 +429,7 @@ events are registered within a frame.
         if not modes:
             print >> sys.stderr, 'warning: no modes passed to Button event'
         Event.__init__(self, *inps)
+        inputs.ButtonInput.__init__(self)
         #: A bitwise-OR of all button modes passed to the constructor.
         self.modes = modes
         self._downevts = self._upevts = 0
@@ -435,12 +455,13 @@ events are registered within a frame.
         """:inherit:"""
         return i.provides['button']
 
-    def down (self, i, component):
+    def inp_down (self, i, component):
         """:inherit:"""
         if component in self.inputs[i][1]:
             self._downevts += 1
+            inputs.ButtonInput.down(self)
 
-    def up (self, i, component):
+    def inp_up (self, i, component):
         """:inherit:"""
         if component in self.inputs[i][1]:
             self._upevts += 1
@@ -448,6 +469,7 @@ events are registered within a frame.
             if (self.modes & bmode.REPEAT and
                 not any(i.held(self)[0] for i in self.inputs)):
                 self._repeating = False
+            inputs.ButtonInput.up(self)
 
     def gen_cb_args (self, changed):
         """:inherit:"""
@@ -459,6 +481,7 @@ events are registered within a frame.
         if not changed and not held and not self._can_dbl_click:
             # nothing to do
             return
+
         # construct callback argument
         evts = {}
         downevts = self._downevts
@@ -567,8 +590,15 @@ as being (left, up, right, down).  ``axis`` corresponds to the x or y axis
                    tuple(args[1:]))
 
 
-class Axis (Event):
-    """Axis event.
+class Axis (Event, inputs.AxisInput):
+    """Axis event.  Also acts as an
+:class:`AxisInput <engine.evt.inputs.AxisInput>`.
+
+Axis(*inps[, thresholds])
+
+:arg inps: inputs as taken by :class:`Event`.
+:arg thresholds: to act as a button input, as taken by
+                 :class:`AxisInput <engine.evt.inputs.AxisInput>`.
 
 The magnitude of the axis position for a button is ``1`` if it is held, else
 ``0``.
@@ -581,9 +611,10 @@ over each registered input and restricting to ``-1 <= x <= 1``).
     name = 'axis'
     components = 2
 
-    def __init__ (self, *inps):
+    def __init__ (self, *inps, **kw):
         Event.__init__(self, *inps)
-        self._pos = 0
+        inputs.AxisInput.__init__(self, thresholds=kw.get('thresholds'))
+        self._evt_pos = 0
 
     def input_valid (self, i):
         """:inherit:"""
@@ -609,11 +640,17 @@ over each registered input and restricting to ``-1 <= x <= 1``).
                         if ic in used_components and i._held[ic]:
                             pos += 2 * evt_components[c] - 1
             # clamp to [-1, 1]
-            self._pos = pos = min(1, max(-1, pos))
+            self._evt_pos = pos = min(1, max(-1, pos))
         else:
             # use previous position
-            pos = self._pos
+            pos = self._evt_pos
         yield (pos,)
+
+    def respond (self, changed):
+        """:inherit:"""
+        BaseEvent.respond(self, changed)
+        if changed:
+            self.axis_motion(0, self._evt_pos)
 
 
 class Axis2 (MultiEvent):
@@ -638,8 +675,16 @@ two axes.
         yield (pos,)
 
 
-class RelAxis (Event):
-    """Relative axis event.
+class RelAxis (Event, inputs.RelAxisInput):
+    """Relative axis event.  Also acts as a
+:class:`RelAxisInput <engine.evt.inputs.RelAxisInput>`.
+
+RelAxis(*inps[, bdy][, thresholds])
+
+:arg inps: inputs as taken by :class:`Event`.
+:arg bdy: to act as an axis input, as taken by
+          :class:`RelAxisInput <engine.evt.inputs.RelAxisInput>`.
+:arg thresholds: as taken by :class:`AxisInput <engine.evt.inputs.AxisInput>`.
 
 Each input is scaled by a positive number (see :meth:`add` for details).
 
@@ -653,10 +698,12 @@ registered with this event.
     name = 'relaxis'
     components = 2
 
-    def __init__ (self, *inps):
+    def __init__ (self, *inps, **kw):
         #: ``{scale: input}`` (see :meth:`add`).
         self.input_scales = {}
         Event.__init__(self, *inps)
+        inputs.RelAxisInput.__init__(self, bdy=kw.get('bdy'),
+                                     thresholds=kw.get('thresholds'))
 
     def add (self, *inps):
         """:meth:`Event.add`.
@@ -671,9 +718,9 @@ calling callbacks.
         real_inputs = []
         scale = self.input_scales
         for i in inps:
-            if isinstance(i, inputs.Input):
+            if isinstance(i, Input):
                 i = (i,)
-            if isinstance(i[0], inputs.Input):
+            if isinstance(i[0], Input):
                 i = (1,) + tuple(i)
             if i[0] < 0:
                 raise ValueError("input scaling must be non-negative.")
@@ -720,6 +767,7 @@ calling callbacks.
                         this_rel += 2 * evt_components[c] - 1
             rel += this_rel * scale[i]
         if rel:
+            self.relaxis_motion(0, rel)
             yield (rel,)
 
 
@@ -738,9 +786,9 @@ relative axes.
         MultiEvent.__init__(self, inps)
 
     def _parse_input (self, i):
-        if isinstance(i, inputs.Input):
+        if isinstance(i, Input):
             i = (i,)
-        if isinstance(i[0], inputs.Input):
+        if isinstance(i[0], Input):
             return MultiEvent._parse_input(self, i)
         else:
             scale = i[0]

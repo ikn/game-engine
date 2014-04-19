@@ -8,25 +8,6 @@ from .evts import BaseEvent, Event
 from . import conffile
 
 
-def _check_mods (i, mods):
-    # check if input's required modifiers are active
-    this_mods = i.mods
-    for device in inputs.mod_devices[i.device]:
-        for device_id in set((i.device_id, True)):
-            for m in mods.get(device, {}).get(device_id, ()):
-                # mod matches if it's the same button as the input itself
-                if m == i:
-                    yield True
-                    continue
-                # or if it's held in exactly this input's components
-                # 'm in this_mods' uses __eq__, but we need identity
-                if any(m is n for n in this_mods):
-                    # only have one component
-                    yield m.held(i)[0] and m._held.count(True) == 1
-                else:
-                    yield not any(m._held)
-
-
 class EventHandler (object):
     """Handles events.
 
@@ -76,9 +57,6 @@ Some notes:
         #: (``pygame.event.set_grab``).
         self.autocentre_mouse = False
 
-    def __str__ (self):
-        return '<EventHandler object at {0}>'.format(hex(id(self)))
-
     def __contains__ (self, item):
         return (item in self._named_evts or item in self.evts or
                 item in self._named_evts.itervalues())
@@ -111,7 +89,7 @@ Pygame events and has the functions as callbacks.  For example,
         (f3, pygame.KEYDOWN, f4, pygame.KEYUP)
     )
 
-will register callbacks ``f1`` and ``f2`` for keydown events, and ``f3`` and
+will register callbacks ``f1`` and ``f2`` for ``keydown`` events, and ``f3`` and
 ``f4`` for both ``keydown`` and ``keyup`` events.
 
 :return: a list of added unnamed events (positional arguments) (possibly
@@ -133,12 +111,12 @@ will register callbacks ``f1`` and ``f2`` for keydown events, and ``f3`` and
             domain = None
         if domain not in by_domain:
             # domain doesn't exist yet
-            by_domain[domain] = []
+            by_domain[domain] = set()
             if domain is not None:
                 self.active_domains.add(domain)
         for evts in (((None, evt) for evt in evts), named_evts.iteritems()):
             for name, evt in evts:
-                if not isinstance(evt, BaseEvent): # NOTE: also Scheme
+                if not isinstance(evt, BaseEvent):
                     # got (possibly mixed) list of pgevts/cbs: create event
                     pgevts = []
                     cbs = []
@@ -156,7 +134,7 @@ will register callbacks ``f1`` and ``f2`` for keydown events, and ``f3`` and
                             if not by_domain[prev_domain]:
                                 del by_domain[prev_domain]
                             evt._domain = domain
-                            by_domain[domain].append(evt)
+                            by_domain[domain].add(evt)
                         prev_name = evt._regname
                         if name != prev_name:
                             # change registered name
@@ -179,7 +157,7 @@ will register callbacks ``f1`` and ``f2`` for keydown events, and ``f3`` and
                     evt._changed = False
                     evt._domain = domain
                     evt._regname = name
-                    by_domain[domain].append(evt)
+                    by_domain[domain].add(evt)
                     if name is None:
                         unnamed.add(evt)
                         new_unnamed.append(evt)
@@ -291,7 +269,11 @@ of callback functions.  For example::
 
     def _add_inputs (self, *inps):
         mods = self._mods
-        for i in inps:
+        inps = list(inps)
+        while inps:
+            i = inps.pop()
+            if isinstance(i, BaseEvent):
+                inps.extend(i.inputs)
             if i in self.inputs:
                 # already added (might happen if events share an input)
                 continue
@@ -370,23 +352,12 @@ of callback functions.  For example::
                     sources.append(filtered[inputs.UNFILTERABLE])
                 else:
                     inps.append(source)
-            inps = set().union(*inps)
-            # check all modifiers are active
-            for i in inps:
-                args = ()
-                if isinstance(i, inputs.ButtonInput):
-                    is_mod = i.is_mod
-                    if is_mod:
-                        # mods have no mods, so always match
-                        args = (True,)
-                    else:
-                        args = (all(_check_mods(i, mods)),)
-                else:
-                    is_mod = False
-                # careful: mods have no event
-                if i.handle(pgevt, *args) and not is_mod:
-                    for evt in i.evts:
+            for i in set().union(*inps):
+                if i.handle(pgevt) and i.evt is not None:
+                    evt = i.evt
+                    while evt is not None:
                         evt._changed = True
+                        evt = evt.evt
 
         # call callbacks
         by_domain = self._evts_by_domain
@@ -399,21 +370,20 @@ of callback functions.  For example::
                         evt.respond(changed)
 
     def domains (self, *domains):
-        """Get all events in the given domains.
+        """Get a set of all events in the given domains.
 
 domains(*domains) -> evts
 
 """
-        evts = []
+        evts = set()
         for domain in domains:
             if domain is None:
                 raise KeyError(domain)
-            evts.extend(self._evts_by_domain[domain]) # raises KeyError
+            evts.update(self._evts_by_domain[domain]) # raises KeyError
         return evts
 
     def _load_evts (self, evts, domain):
         # load events as parsed from config file
-        # NOTE: doesn't add events used in schemes - they _only_ go in the scheme
         if 'domain' in evts:
             raise ValueError('\'domain\' may not be used as an event name')
         evts['domain'] = domain
