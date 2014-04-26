@@ -3,12 +3,16 @@
 
 .. module:: util
 
+.. toctree::
+   :maxdepth: 2
+
+   util-cb
+   util-grid
+
 Abstract
 --------
 
 .. autofunction:: engine.util.dd
-.. autofunction:: engine.util.takes_args
-.. autofunction:: engine.util.wrap_fn
 .. autofunction:: engine.util.ir
 .. autofunction:: engine.util.sum_pos
 .. autofunction:: engine.util.pos_in_rect
@@ -31,9 +35,3 @@ Graphics
 .. autofunction:: engine.util.convert_sfc
 .. autofunction:: engine.util.combine_drawn
 .. autofunction:: engine.util.blank_sfc
-
-Layouts
--------
-
-.. autoclass:: engine.util.Grid
-.. autoclass:: engine.util.InfiniteGrid

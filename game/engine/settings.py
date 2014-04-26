@@ -11,7 +11,8 @@ from copy import deepcopy
 import json
 from collections import defaultdict
 
-from .util import dd, wrap_fn
+from .util import dd
+from .util.cb import wrap_fn
 
 
 class _JSONEncoder (json.JSONEncoder):

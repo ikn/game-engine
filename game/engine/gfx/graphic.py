@@ -1076,14 +1076,14 @@ rescale(w=1, h=1) -> self
     def resize_both (self, w=False, h=False):
         """Resize with constant aspect ratio.
 
-resize_both([w][, h]) -> self
+resize_both(w=False, h=False) -> self
 
 :arg w: the new width; pass only one of ``w`` and ``h``.
 :arg h: the new height.
 
 """
-        if w is False and h is False:
-            raise TypeError('expected only one of w or h')
+        if (w is False) + (h is False) != 1:
+            raise TypeError('expected exactly one of w or h')
         return self.resize(w, h)
 
     def rescale_both (self, scale=1):

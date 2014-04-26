@@ -96,7 +96,7 @@ implicit ``tuple``, so ``spritemap[(col, row)]`` works as well.)
         self.sprite_size = tuple(ss)
         # copy to separate surfaces
         self._sfcs = sfcs = []
-        tile_rect = util.Grid(ncells, ss, pad).tile_rect
+        tile_rect = util.grid.Grid(ncells, ss, pad).tile_rect
         mk_sfc = util.blank_sfc if util.has_alpha(img) else pg.Surface
         for i in xrange(nsprites):
             rect = tile_rect(i % ncols, i // ncols)

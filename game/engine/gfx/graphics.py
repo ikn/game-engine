@@ -658,10 +658,10 @@ Tilemap(grid, tile_data[, tile_types], pos=(0, 0), layer=0[, translate_type],
         cache_graphic=False, pool=conf.DEFAULT_RESOURCE_POOL,
         res_mgr=conf.GAME.resources)
 
-:arg grid: a :class:`util.Grid <engine.util.Grid>` defining the size and shape
-           of the tiles in the tilemap, or the ``tile_size`` argument to
-           :class:`util.Grid <engine.util.Grid>` to create a new one with
-           standard parameters.
+:arg grid: a :class:`util.grid.Grid <engine.util.grid.Grid>` defining the size
+           and shape of the tiles in the tilemap, or the ``tile_size`` argument
+           to :class:`util.grid.Grid <engine.util.grid.Grid>` to create a new
+           one with standard parameters.
 :arg tile_data: a way of determining the tile type ID for each ``(x, y)`` tile
     in the grid, which is any object.  This can be:
 
@@ -679,10 +679,10 @@ Tilemap(grid, tile_data[, tile_types], pos=(0, 0), layer=0[, translate_type],
           filename (may not contain whitespace) to load an image from, and use
           the ``(r, g, b[, a])`` colour tuples of the pixels in the surface as
           IDs;
-        - if ``grid`` is a :class:`util.Grid <engine.util.Grid>`: a function
-          that takes ``col`` and ``row`` arguments as column and row indices in
-          the grid, and returns the corresponding tile type ID; or
-        - if ``grid`` is not a :class:`util.Grid <engine.util.Grid>`:
+        - if ``grid`` is a :class:`util.grid.Grid <engine.util.grid.Grid>`: a
+          function that takes ``col`` and ``row`` arguments as column and row
+          indices in the grid, and returns the corresponding tile type ID; or
+        - if ``grid`` is not a :class:`util.grid.Grid <engine.util.grid.Grid>`:
           ``(get_tile_type, w, h)``, where get_tile_type is a function as
           defined previously, and ``w`` and ``h`` are the width and height of
           the grid, in tiles.
@@ -746,9 +746,9 @@ each tile type never changes.
         self._resource_manager = res_mgr
         self._tile_data, ncols, nrows = self._parse_data(tile_data, grid,
                                                          False)
-        if not isinstance(grid, gameutil.Grid):
-            grid = gameutil.Grid((ncols, nrows), grid)
-        #: The :class:`util.Grid <engine.util.Grid>` covered.
+        if not isinstance(grid, gameutil.grid.Grid):
+            grid = gameutil.grid.Grid((ncols, nrows), grid)
+        #: The :class:`util.grid.Grid <engine.util.grid.Grid>` covered.
         self.grid = grid
         # apply initial data
         Graphic.__init__(self, gameutil.blank_sfc(grid.size), pos, layer, pool,
@@ -792,7 +792,7 @@ each tile type never changes.
             # list of rows -> list of columns
             tile_data = zip(*tile_data)
         if callable(tile_data):
-            if not isinstance(grid, gameutil.Grid):
+            if not isinstance(grid, gameutil.grid.Grid):
                 raise ValueError('got function for tile_data, but grid is ' \
                                  'not a Grid instance')
             tile_data = (tile_data, grid.ncols, grid.nrows)
@@ -807,7 +807,8 @@ each tile type never changes.
         # now tile_data is a list of columns
         ncols = len(tile_data)
         nrows = len(tile_data[0])
-        if isinstance(grid, gameutil.Grid) and grid.ntiles != (ncols, nrows):
+        if (isinstance(grid, gameutil.grid.Grid) and
+            grid.ntiles != (ncols, nrows)):
             msg = 'tile_data has invalid dimensions: got {0}, expected {1}'
             raise ValueError(msg.format((ncols, nrows), grid.ntiles))
         translate_type = self._translate_type
@@ -898,11 +899,11 @@ each tile type never changes.
 
 
 class Grid (Graphic):
-    """Drawable wrapper for :class:`util.Grid <engine.util.Grid>`.
+    """Drawable wrapper for :class:`util.grid.Grid <engine.util.grid.Grid>`.
 
 Grid(grid, gap_colour='aaa', bg_colour='0000', pos=(0, 0), layer=0)
 
-:arg grid: a :class:`util.Grid <engine.util.Grid>` instance.
+:arg grid: a :class:`util.grid.Grid <engine.util.grid.Grid>` instance.
 :arg gap_colour: colour in-between tiles, as accepted by
                  :func:`engine.util.normalise_colour`; may have alpha.
 :arg bg_colour: colour within tiles, as accepted by
@@ -928,12 +929,13 @@ Grid(grid, gap_colour='aaa', bg_colour='0000', pos=(0, 0), layer=0)
 
 class InfiniteGrid (Graphic):
     """Drawable wrapper for
-:class:`util.InfiniteGrid <engine.util.InfiniteGrid>`.
+:class:`util.grid.InfiniteGrid <engine.util.grid.InfiniteGrid>`.
 
 InfiniteGrid(grid, rect, gap_colour='aaa', bg_colour='0000', pos=(0, 0),
              layer=0)
 
-:arg grid: a :class:`util.InfiniteGrid<engine.util.InfiniteGrid>` instance.
+:arg grid: a :class:`util.grid.InfiniteGrid<engine.util.grid.InfiniteGrid>`
+           instance.
 :arg rect: Pygame-style rect within ``grid`` to draw.
 :arg gap_colour: colour in-between tiles, as accepted by
                  :func:`engine.util.normalise_colour`; may have alpha.

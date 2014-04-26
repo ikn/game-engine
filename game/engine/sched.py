@@ -11,6 +11,7 @@ from pygame.time import wait
 
 from .conf import conf
 from .util import ir, call_in_nest, bezier
+from .util.cb import CbManager
 
 
 def _match_in_nest (obj, x):
@@ -883,7 +884,7 @@ interp_simple(obj, attr, target, t[, end_cb], round_val=False, override=True)
                            round_val=round_val, override=override)
 
     def _interp_locked (self, interp_fn, *args, **kwargs):
-        # HACK: Python 2 closures aren't great
+        # HACK: Python 2 closures are immutable
         timeout_id = [None]
 
         def interp (*args, **kwargs):
@@ -938,10 +939,18 @@ Arguments are as taken by :class:`Countdown`.
         return Countdown(self, t, autoreset)
 
     def counter (self, limit=None):
+        """Create and return a :class:`Counter` that uses this instance for
+timing.
+
+counter([limit]) -> new_counter
+
+Arguments are as taken by :class:`Counter`.
+
+"""
         return Counter(self, limit)
 
 
-class Countdown (object):
+class Countdown (CbManager):
     """A simple way of counting down to an event.
 
 Countdown(scheduler, t, autoreset=False)
@@ -955,17 +964,19 @@ Countdown(scheduler, t, autoreset=False)
 An instance is boolean ``True`` if the countdown has finished, else ``False``.
 The initial state is finished---use :meth:`reset` to start the countdown.
 
+This is a :class:`CbManager <engine.util.cb.CbManager>`; callbacks added are
+called when the countdown ends, and take no arguments.
+
 See also :meth:`Scheduler.countdown`.
 
 """
 
     def __init__ (self, scheduler, t, autoreset=False):
+        CbManager.__init__(self)
         self._scheduler = scheduler
         self._t = t
         #: As passed to the constructor.
         self.autoreset = autoreset
-        #: ``set`` of functions to call when the countdown ends.
-        self.cbs = set()
         self._timer_id = None
         self._finished = True
 
@@ -992,8 +1003,7 @@ Changing this resets the countdown (if running).
         if not self.autoreset:
             self._timer_id = None
             self._finished = True
-        for cb in self.cbs:
-            cb()
+        self.call()
         return self.autoreset
 
     def reset (self):
@@ -1032,28 +1042,6 @@ finish() -> self
         self._finished = True
         return self
 
-    def cb (self, *cbs):
-        """Add any number of callbacks to :attr:`cbs`.
-
-cb(*cbs) -> self
-
-Callbacks take no arguments.
-
-"""
-        self.cbs.update(cbs)
-        return self
-
-    def rm_cbs (self, *cbs):
-        """Remove any number of callbacks from :attr:`cbs`.
-
-rm_cbs(*cbs) -> self
-
-Missing items are ignored.
-
-"""
-        self.cbs.difference_update(cbs)
-        return self
-
     def pause (self):
         """Pause the countdown, if running.
 
@@ -1075,7 +1063,7 @@ unpause() -> self
         return self
 
 
-class Counter (object):
+class Counter (CbManager):
     """A simple way of keeping track of time.
 
 Counter(scheduler[, limit])
@@ -1087,18 +1075,20 @@ An instance is boolean ``True`` if the counter has reached ``limit``, else
 ``False``.  The initial state is finished---use :meth:`reset` to start the
 counter.
 
-See also :meth:`Scheduler.countdown`.
+This is a :class:`CbManager <engine.util.cb.CbManager>`; callbacks added are
+called when the counter reacher :attr:`limit`, and take no arguments.
+
+See also :meth:`Scheduler.counter`.
 
 """
 
     def __init__ (self, scheduler, limit=None):
+        CbManager.__init__(self)
         self._scheduler = scheduler
         #: How far the counter has counted, in seconds.
         self.t = 0
         #: As passed to the constructor, or ``None``.
         self.limit = limit
-        #: ``set`` of functions to call when the counter reaches :attr:`limit`.
-        self.cbs = set()
         self._timer_id = None
         self._finished = True
 
@@ -1112,8 +1102,7 @@ See also :meth:`Scheduler.countdown`.
         if self.limit is not None and self.t >= self.limit:
             self.t = self.limit
             self._finished = True
-            for cb in self.cbs:
-                cb()
+            self.call()
             return False
         else:
             return True
@@ -1155,28 +1144,6 @@ finish() -> self
 """
         self.cancel()
         self._finished = True
-        return self
-
-    def cb (self, *cbs):
-        """Add any number of callbacks to :attr:`cbs`.
-
-cb(*cbs) -> self
-
-Callbacks take no arguments.
-
-"""
-        self.cbs.update(cbs)
-        return self
-
-    def rm_cbs (self, *cbs):
-        """Remove any number of callbacks from :attr:`cbs`.
-
-rm_cbs(*cbs) -> self
-
-Missing items are ignored.
-
-"""
-        self.cbs.difference_update(cbs)
         return self
 
     def pause (self):

@@ -4,7 +4,7 @@ import sys
 
 import pygame as pg
 
-from ..util import wrap_fn
+from ..util.cb import wrap_fn
 from . import inputs
 from .inputs import Input
 

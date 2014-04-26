@@ -58,7 +58,7 @@ class Puzzle (engine.game.World):
         self.missing = [missing // ny, missing % ny]
         imgs[missing] = (imgs[missing][0], None)
         # create grid for positioning
-        grid = util.Grid(conf.N_TILES, conf.TILE_SIZE, conf.TILE_GAP)
+        grid = util.grid.Grid(conf.N_TILES, conf.TILE_SIZE, conf.TILE_GAP)
         self.grid = grid
         # position graphics
         # and turn the tile list into a grid for easier access
