@@ -21,10 +21,10 @@ from pygame import Rect
 
 from ..conf import conf
 from ..util import (ir, pos_in_rect, align_rect, normalise_colour, has_alpha,
-                    blank_sfc, combine_drawn)
+                    blank_sfc, combine_drawn, Owned)
 
 
-class Graphic (object):
+class Graphic (Owned):
     """Something that can be drawn to the screen.
 
 Graphic(img, pos=(0, 0), layer=0, pool=conf.DEFAULT_RESOURCE_POOL,
@@ -65,6 +65,7 @@ correspond to builtin transforms (see :meth:`transform`).
 
     def __init__ (self, img, pos=(0, 0), layer=0,
                   pool=conf.DEFAULT_RESOURCE_POOL, res_mgr=None):
+        Owned.__init__(self, 1)
         self._resource_pool = pool
         self._resource_manager = res_mgr
         if isinstance(img, basestring):
@@ -99,8 +100,6 @@ correspond to builtin transforms (see :meth:`transform`).
         self._queued_transforms = {}
         #: Whether the graphic is completely opaque; do not change.
         self.opaque = not has_alpha(img)
-        self._manager = None
-        self._mgr_requires = False
         self._layer = layer
         #: When blitting the surface, this is passed as the ``special_flags``
         #: argument.
@@ -452,32 +451,19 @@ Defaults to ``2 * pi / 500``."""
     # other properties
 
     @property
-    def manager (self):
+    def owner (self):
         """The thing that 'owns' this graphic.
 
 This is usually a
 :class:`GraphicsManager <engine.gfx.container.GraphicsManager>` instance, or
-``None``, but may be any other object (only really useful with
-:meth:`require`).  If this object has ``'add'``, ``'rm'`` or ``'orig_size'``
-attributes, these must be implemented like in
+``None``, but may be any other object.  If this object has ``'add'``, ``'rm'``
+or ``'orig_size'`` attributes, these must be implemented like in
 :class:`GraphicsManager <engine.gfx.container.GraphicsManager>`.
 
 This property may be changed directly.
 
 """
-        return self._manager
-
-    @manager.setter
-    def manager (self, manager):
-        if manager is not self._manager and self._mgr_requires:
-            raise RuntimeError('tried to change manager on manager-locked '
-                               'graphic')
-        if hasattr(self._manager, 'rm'):
-            self._manager.rm(self)
-        if hasattr(self._manager, 'add'):
-            manager.add(self) # sets ._manager
-        else:
-            self._manager = manager
+        return Owned.owner.fget(self)
 
     @property
     def layer (self):
@@ -488,22 +474,12 @@ This property may be changed directly.
     def layer (self, layer):
         if layer != self._layer:
             # change layer in gm by removing, setting attribute, then adding
-            m = self._manager
+            m = self.owner
             if hasattr(m, 'rm'):
                 m.rm(self)
             self._layer = layer
             if hasattr(m, 'add'):
                 m.add(self)
-
-    def require (self, manager):
-        """Set :attr:`manager` to the given manager, and lock it.
-
-If the graphic's manager is locked, trying to change its manager raises
-RuntimeError.
-
-"""
-        self.manager = manager
-        self._mgr_requires = True
 
     # movement
 
@@ -536,16 +512,16 @@ move_by(dx = 0, dy = 0) -> self
         """Position this graphic within a rect.
 
 align(alignment = 0, pad = 0, offset = 0,
-      within = self.manager.orig_sfc.get_rect()) -> self
+      within = self.owner.orig_sfc.get_rect()) -> self
 
 All arguments are as taken by :func:`engine.util.align_rect`.
 
 """
         if within is None:
-            if not hasattr(self._manager, 'orig_size'):
-                raise TypeError('received no \'within\' argument and manager '
+            if not hasattr(self.owner, 'orig_size'):
+                raise TypeError('received no \'within\' argument and owner '
                                 'has no \'orig_size\' attribute')
-            within = Rect((0, 0), self._manager.orig_size)
+            within = Rect((0, 0), self.owner.orig_size)
         self.pos = align_rect(self._rect, within, alignment, pad, offset)
         return self
 
@@ -1334,9 +1310,8 @@ Also see :attr:`rot_anchor`.
     def snapshot (self, copy = True):
         """Return a copy of this graphic.
 
-The copy is shallow, which means the new graphic will not appear to be
-transformed, even if this one is, but will be an exact copy of the *current
-state*.
+The copy is shallow, which means the new graphic will not transform as this one
+does, but will be an exact copy of the *current state*.
 
 :arg copy: whether to copy the final surface of this graphic/initial surface of
            the returned graphic.  Since under some circumstances, this graphic
@@ -1374,9 +1349,12 @@ This may not be used on subclasses that define a ``child`` property.
 
         class GraphicView (parent_cls):
             is_view = True
-            _faked_attrs = ('_rect', 'last_rect', '_postrot_rect',
-                            '_last_postrot_rect', '_manager', 'visible',
-                            'was_visible', '_layer')
+            _faked_attrs = (
+                '_rect', 'last_rect', '_postrot_rect', '_last_postrot_rect',
+                'visible', 'was_visible', '_layer',
+                # Owned
+                'max_owners', '_on_full', '_owners'
+            )
 
             def __init__ (self, graphic):
                 #: The ``graphic`` argument taken by the constructor.
@@ -1385,7 +1363,7 @@ This may not be used on subclasses that define a ``child`` property.
                 self.child = graphic
                 for attr in self._faked_attrs:
                     setattr(self, attr, getattr(graphic, attr))
-                self._manager = None
+                Owned.__init__(self, 1)
 
             def __getattr__ (self, attr):
                 # existing attributes are returned without a call here

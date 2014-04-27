@@ -12,9 +12,9 @@ from . import cb, grid
 
 # be sure to change util.rst
 __all__ = ('dd', 'ir', 'sum_pos', 'pos_in_rect', 'normalise_colour',
-           'call_in_nest', 'bezier', 'randsgn', 'rand0', 'weighted_rand',
-           'align_rect', 'position_sfc', 'convert_sfc', 'combine_drawn',
-           'blank_sfc')
+           'call_in_nest', 'bezier', 'OwnError', 'Owned', 'randsgn', 'rand0',
+           'weighted_rand', 'align_rect', 'position_sfc', 'convert_sfc',
+           'combine_drawn', 'blank_sfc')
 
 
 # abstract
@@ -233,6 +233,130 @@ def bezier (t, *pts):
         return _bezier_recursive(t, *pts)
     else:
         raise ValueError('expected at least one point')
+
+
+class OwnError (RuntimeError):
+    """Raised when taking ownership of an :class:`Owned <engine.util.Owned>`
+instance fails."""
+
+    pass
+
+
+class Owned (object):
+    """Manage 'owners' of an object.
+
+Owned([max_owners], on_full='throw')
+
+:arg max_owners: the maximum number of owners that this object can have
+                 (greater than zero).
+:arg on_full: behaviour when taking ownership is attempted but the limited
+    specified by ``max_owners`` has been reached.  One of:
+
+        - ``'throw'``: raise an :class:`OwnError <engine.util.OwnError>`
+          exception.
+        - ``'ignore'``: don't add the owner.
+        - ``'replace'``: remove another owner (choice of owner to remove is
+          undefined).
+
+"""
+
+    def __init__ (self, max_owners=None, on_full='throw'):
+        #: As passed to the constructor.
+        self.max_owners = max_owners
+        if on_full not in ('throw', 'ignore', 'replace'):
+            raise ValueError('unknown value for on_full: {}'.format(on_full))
+        self._on_full = on_full
+        # {owner_id: release_cb}
+        self._owners = {}
+
+    @property
+    def max_owners (self):
+        """As passed to the constructor.
+
+Decreasing this value below the current number of owners does not cause owners
+to be removed.
+
+"""
+        return self._max_owners
+
+    @max_owners.setter
+    def max_owners (self, max_owners):
+        max_owners = int(max_owners)
+        if max_owners <= 0:
+            raise ValueError('max_owners must be greater than zero')
+        self._max_owners = max_owners
+
+    @property
+    def owners (self):
+        """Set-like container of owner identifiers as passed to
+:meth:`own <engine.util.Owned.own>`."""
+        return self._owners.viewkeys()
+
+    @property
+    def owner (self):
+        """Identifier for any single owner of this instance, or ``None``."""
+        try:
+            owner = next(self._owners.iterkeys())
+        except StopIteration:
+            owner = None
+        return owner
+
+    def own (self, owner_id, release_cb=None):
+        """Attempt to take ownership of this instance.
+
+own(owner_id[, release_cb]) -> success
+
+:arg owner_id: non-``None`` hashable identifier for the owner, used for later
+               removal.
+:arg release_cb: optional function to call when this owner is removed (through
+                 :meth:`release <engine.util.Owned.release>`, or by being
+                 replaced by another owner if this instance allows it).  This
+                 is called like ``release_cb(owned_instance, owner_id)``; if it
+                 is determined that the function cannot take any arguments, it
+                 is not given any.
+
+:return: whether the attempt succeeded.  If not,
+         :class:`OwnError <engine.util.OwnError>` may be raised instead,
+         depending on the ``on_full`` argument passed to the constructor.
+
+"""
+        if owner_id is None:
+            raise ValueError('owner_id cannot be None')
+        success = False
+        owners = self._owners
+        if release_cb is not None:
+            release_cb = cb.wrap_fn(release_cb)
+
+        if owner_id not in owners:
+            max_owners = self.max_owners
+
+            if max_owners is not None and len(owners) >= max_owners:
+                # reached owner limit
+                if self._on_full == 'throw':
+                    raise OwnError('{} already has the maximum number of '
+                                   'owners ({})'.format(self, max_owners))
+                elif self._on_full == 'replace':
+                    # len(owners) >= max_owners > 0, so this is safe
+                    self.release(next(owners.iterkeys()))
+                    owners[owner_id] = release_cb
+                    success = True
+                # else ignore: success = False
+
+            else:
+                owners[owner_id] = release_cb
+                success = True
+
+        return success
+
+    def release (self, owner_id):
+        """Relinquish ownership of this instance.
+
+:arg owner_id: identifier passed to :meth:`own <engine.util.Owned.own>`.
+
+"""
+        release_cb = self._owners.pop(owner_id, None)
+        if release_cb is not None:
+            release_cb(self, owner_id)
 
 
 # random

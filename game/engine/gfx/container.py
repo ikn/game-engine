@@ -264,7 +264,7 @@ GraphicsManager(scheduler[, sfc], pos=(0, 0), layer=0)
           nothing is drawn.  This becomes :attr:`orig_sfc` and can be changed
           using this attribute.
 
-Other arguments are as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`. 
+Other arguments are as taken by :class:`Graphic <engine.gfx.graphic.Graphic>`.
 Since this is a :class:`Graphic <engine.gfx.graphic.Graphic>` subclass, it can
 be added to other :class:`GraphicsManager` instances and supports
 transformations.  None of this can be done until the manager has a surface,
@@ -341,7 +341,7 @@ previous overlay from the :class:`GraphicsManager`.
         self._overlay = overlay
         if overlay is not None:
             # remove any current manager
-            overlay.manager = None
+            overlay.release(overlay.owner)
             # put in the reserved layer None (sorts less than any other object)
             overlay._layer = None
             # add to this manager
@@ -372,7 +372,7 @@ and returns a list of added graphics.
             else:
                 all_gs[l] = set((g,))
                 ls.add(l)
-            g._manager = self
+            g.own(self, lambda g, gm: self.rm(g))
             # don't draw over any possible previous location
             g.was_visible = False
         self._set_layers_from_set(ls)
@@ -394,7 +394,7 @@ Missing graphics are ignored.
                 if g in all_gs:
                     # remove from graphics
                     all_gs.remove(g)
-                    g._manager = None
+                    g.release(self)
                     # draw over previous location
                     if g.was_visible:
                         self.dirty(g._last_postrot_rect)

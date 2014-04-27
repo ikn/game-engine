@@ -6,9 +6,8 @@ TODO:
  - Animation: rework to use Graphic callbacks
  - Tilemap:
     - should change if given Graphics change (tile_types), like Animation
-        - graphic.require(tilemap)
-        - see Animation.render()
-        - note that any graphics passed have their managers removed (and so mustn't be locked)
+        - graphic.own(tilemap)
+        - use Graphic callbacks
     - should provide tile setters/getters
     - .update_from from_disk=True should call Graphic.reload() on graphics
     - only prerender tiles as requested
@@ -280,7 +279,7 @@ For example, to play the frames in a spritemap consisting of a single row::
             if isinstance(img, basestring):
                 img = load_img(img)
             elif isinstance(img, Graphic):
-                img.require(self)
+                img.own(self)
             gs.append(img)
         # graphics is non-empty due to the exception above
         self._graphic = 0
@@ -375,9 +374,10 @@ finished, if any.
     def _get_sched (self):
         s = self.scheduler
         if s is None:
-            if self._manager is None:
+            owner = self.owner
+            if owner is None:
                 raise RuntimeError('no scheduler is available')
-            s = self._manager.scheduler
+            s = owner.scheduler
         return s
 
     def _update_timer (self):

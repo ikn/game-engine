@@ -19,6 +19,8 @@ Abstract
 .. autofunction:: engine.util.normalise_colour
 .. autofunction:: engine.util.call_in_nest
 .. autofunction:: engine.util.bezier
+.. autoclass:: engine.util.OwnError
+.. autoclass:: engine.util.Owned
 
 Random
 ------
