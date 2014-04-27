@@ -49,8 +49,8 @@ class CbManager (object):
 
     @property
     def cbs (self):
-        """List of registered callback functions."""
-        return self._cbs.keys()
+        """Set-like container of registered callback functions."""
+        return self._cbs.viewkeys()
 
     def cb (self, *cbs):
         """Register callbacks.
@@ -102,9 +102,9 @@ produce the same hash value.
 
 """
 
-    #: Groups available to place callbacks in.  If methods are given any other
-    #: group identifier not in here, ``ValueError`` is raised.
-    groups = ()
+    #: Set of groups available to place callbacks in.  If methods are given any
+    #: other group identifier not in here, ``ValueError`` is raised.
+    groups = frozenset()
 
     def __init__ (self, groups=None):
         if groups is not None:
