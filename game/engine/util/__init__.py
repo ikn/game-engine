@@ -281,9 +281,10 @@ to be removed.
 
     @max_owners.setter
     def max_owners (self, max_owners):
-        max_owners = int(max_owners)
-        if max_owners <= 0:
-            raise ValueError('max_owners must be greater than zero')
+        if max_owners is not None:
+            max_owners = int(max_owners)
+            if max_owners <= 0:
+                raise ValueError('max_owners must be greater than zero')
         self._max_owners = max_owners
 
     @property

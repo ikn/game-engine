@@ -111,7 +111,7 @@ produce the same hash value.
             self.groups = groups
         # {group: manager}
         try:
-            self._cbs = dict((groups, CbManager()) for group in self.groups)
+            self._cbs = dict((group, CbManager()) for group in self.groups)
         except TypeError:
             raise TypeError('invalid callback groups specified: {}'
                 .format(self.groups))
@@ -137,7 +137,8 @@ If a callback is determined not to be able to take arguments, it is not passed
 any.
 
 """
-        return self._group(group).cb(*cbs)
+        self._group(group).cb(*cbs)
+        return self
 
     def rm_cbs (self, group, *cbs):
         """Remove any number of callbacks in a group from :attr:`cbs`.
@@ -147,7 +148,8 @@ rm_cbs(group, *cbs) -> self
 Missing items are ignored.
 
 """
-        return self._group(group).rm_cbs(*cbs)
+        self._group(group).rm_cbs(*cbs)
+        return self
 
     def call (self, group, *args, **kwargs):
         """Call all registered callbacks in a group with the given arguments.
