@@ -5,3 +5,8 @@ py_ver
 *.py[co]
 __pycache__/
 /doc/_build/
+
+/evt/
+/font/
+/img/
+/sound/

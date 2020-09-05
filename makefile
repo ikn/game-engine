@@ -25,6 +25,6 @@ clean: doc-clean
 doc-clean:
 	$(MAKE) -C doc/ clean
 
-distclean: clean
+distclean: clean doc-clean
 	find -regex '.*\.py[co]' -delete
 	find -regex '\(.*/\)?__pycache__' -delete
